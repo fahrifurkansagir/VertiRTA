@@ -1,0 +1,71 @@
+name: VertiBench-TR/EN Integrity & Co-Pilot ARM64 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "benchmarks/vertibench_tr_en/**"
+      - "ml/copilot/**"
+      - "core/stl/**"
+      - "core/copilot/**"
+      - "include/vertirta/stl/**"
+      - "include/vertirta/copilot/**"
+      - "tests/stl/**"
+      - "tests/copilot/**"
+      - "tests/python/**"
+      - "config/vertirta_dsl_v1.gbnf"
+      - ".github/workflows/vertibench_ci.yml"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  vertibench_arm64_gate:
+    name: "VertiBench Anti-Contamination (<0.15 Jaccard), Z3-GRPO & C++20 Co-Pilot (ARM64)"
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Build, Python & Z3 Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake g++-14 gcc-14 python3-pip python3-venv
+
+      - name: Install uv & Run Python Integrity, Z3-GRPO & Conformal Tests
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --python 3.11 --with pytest --with z3-solver --with pyyaml --with numpy \
+            pytest tests/python/test_vertibench_integrity.py \
+                   tests/python/test_grpo_rewards_and_config.py -v
+          uv run --python 3.11 --with z3-solver --with pyyaml \
+            python benchmarks/vertibench_tr_en/validate_vertibench.py --check-schema
+          bash -n ml/copilot/export_gguf.sh
+
+      - name: Build & Execute C++20 Zero-Heap STL & Co-Pilot Suites on ARM64
+        run: |
+          cmake -S . -B build-vertibench-arm64 -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON
+          cmake --build build-vertibench-arm64 --target \
+            test_stl_monitor_zero_heap \
+            test_dsl_and_synthesizer \
+            test_z3_verifier_and_repair \
+            test_llama_engine_and_renderer \
+            test_conformal_gate \
+            emit_smt2_cases
+          ctest --test-dir build-vertibench-arm64 \
+            -R "^(test_stl_monitor_zero_heap|test_dsl_and_synthesizer|test_z3_verifier_and_repair|test_llama_engine_and_renderer|test_conformal_gate)$" \
+            --output-on-failure
+
+      - name: Cross-Verify Emitted SMT-LIB2 Formulas in Real Microsoft Z3
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          VERTIRTA_EMIT_SMT2_BIN="$PWD/build-vertibench-arm64/tests/copilot/emit_smt2_cases" \
+            uv run --python 3.11 --with pytest --with z3-solver \
+            pytest tests/copilot/test_z3_smt2_crosscheck.py -v
