@@ -1,0 +1,30 @@
+# Local Antigravity / Agent rules (keep personal Obsidian paths out of public repo)
+.agents/
+
+# Build artifacts & CMake outputs
+build/
+out/
+*.o
+*.a
+*.so
+*.exe
+*.su
+*.ci
+
+# Python virtualenvs & caches
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large / ODbL geospatial & simulation raw data
+viz/geo/data/
+*.osm
+*.pbf
+*.parquet
+*.tif
+*.tiff
+*.vrt
+*.mcap
+*.vrta
