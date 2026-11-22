@@ -12,27 +12,21 @@
 #ifndef VERTIRTA_FORMAL_ESBMC_COMPAT_H
 #define VERTIRTA_FORMAL_ESBMC_COMPAT_H
 
+#ifdef __cplusplus
+#include <cmath>
+#include <cstdint>
+#else
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-#ifdef __ESBMC__
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-void __ESBMC_assume(bool cond);
-void __ESBMC_assert(bool cond, const char* msg);
-double nondet_double(void);
-float nondet_float(void);
-uint8_t nondet_uchar(void);
-unsigned int nondet_uint(void);
-int nondet_int(void);
-bool nondet_bool(void);
-#ifdef __cplusplus
-}
 #endif
 
+#if defined(VERTIRTA_ESBMC_ANALYSIS) || defined(__ESBMC__) || defined(__ESBMC)
+
+#define VERTIRTA_IS_ESBMC 1
+
+/* ESBMC v8.7 automatically pre-includes esbmc_intrinsics.h, which declares
+ * __ESBMC_assume, __ESBMC_assert, and nondet_{double,float,uchar,uint,int,bool}. */
 #define VERTIRTA_FORMAL_ASSUME(cond) __ESBMC_assume(cond)
 #define VERTIRTA_FORMAL_ASSERT(cond, msg) __ESBMC_assert((cond), (msg))
 
@@ -63,14 +57,22 @@ static inline unsigned int nondet_uint(void) { return 0u; }
 static inline int nondet_int(void) { return 0; }
 static inline bool nondet_bool(void) { return false; }
 
-#endif /* __ESBMC__ */
+#endif /* VERTIRTA_ESBMC_ANALYSIS || __ESBMC__ */
 
 static inline bool vertirta_is_finite_d(double x) {
-  return (x == x) && ((x - x) == 0.0);
+#ifdef __cplusplus
+  return std::isfinite(x);
+#else
+  return isfinite(x) != 0;
+#endif
 }
 
 static inline bool vertirta_is_finite_f(float x) {
-  return (x == x) && ((x - x) == 0.0f);
+#ifdef __cplusplus
+  return std::isfinite(x);
+#else
+  return isfinite(x) != 0;
+#endif
 }
 
 #endif /* VERTIRTA_FORMAL_ESBMC_COMPAT_H */

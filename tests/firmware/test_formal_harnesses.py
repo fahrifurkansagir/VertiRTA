@@ -18,7 +18,8 @@ HARNESSES: tuple[str, ...] = (
 
 def test_esbmc_harnesses_cli_flags_and_honest_do333_framing() -> None:
     root = Path("verification/formal/esbmc")
-    assert (root / "esbmc_compat.h").is_file(), "Missing shared ESBMC/concrete stub header"
+    compat = (root / "esbmc_compat.h").read_text(encoding="utf-8")
+    assert "VERTIRTA_ESBMC_ANALYSIS" in compat and "VERTIRTA_IS_ESBMC" in compat
 
     for harness in HARNESSES:
         hp = root / harness
@@ -56,6 +57,7 @@ def test_esbmc_harnesses_cli_flags_and_honest_do333_framing() -> None:
         "Supplemental Engineering Verification",
         "FM.A-7",
         "DO-330",
+        "VERTIRTA_ESBMC_ANALYSIS",
         "daqp_qp.cpp",
         "daqp_auxiliary_norec.c",
         "factorization.c",

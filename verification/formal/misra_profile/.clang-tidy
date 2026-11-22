@@ -37,7 +37,6 @@ Checks: >-
   readability-uppercase-literal-suffix
 WarningsAsErrors: ''
 HeaderFilterRegex: '(core/flight_core/include|firmware/(stm32h7_hitl|renode_cyphal)/include)/.*'
-AnalyzeTemporaryDtors: false
 FormatStyle: none
 CheckOptions:
   - key: bugprone-narrowing-conversions.PedanticMode

@@ -37,7 +37,8 @@ def test_formal_and_hil_workflow_pins_and_x86_64_esbmc_guard() -> None:
     assert "ubuntu-24.04-arm" in raw
     assert "1.17.0" in raw
     assert "14.2.Rel1" in raw
-    assert "linux-portable" in raw and "linux-arm64-portable" in raw
+    assert "linux-portable.tar.gz" in raw and "linux-arm64-portable.tar.gz" in raw
+    assert "linux-portable-dotnet" not in raw, "Renode v1.17.0 dropped -dotnet suffix from portable tarballs"
     assert "antmicro/renode-test-action" not in raw, "Use pinned portable .NET tarballs, not source builds"
 
     # Mandatory structural, veneer, isolation, cross-lane wiring, and public hygiene CI gates

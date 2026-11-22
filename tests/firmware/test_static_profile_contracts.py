@@ -22,6 +22,7 @@ def test_misra_aligned_profile_llvm22_cppcheck_and_5class_gap_register() -> None
     assert "bugprone-*" in checks
     assert "cert-*" in checks
     assert "hicpp-*" not in checks, "LLVM 22 2026 RFC deprecated hicpp-* module"
+    assert "AnalyzeTemporaryDtors" not in tidy, "Removed in modern clang-tidy (LLVM 18/22 rejects unknown key)"
 
     supp_path = root / "cppcheck_suppressions.txt"
     assert supp_path.is_file(), "Missing cppcheck_suppressions.txt"

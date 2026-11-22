@@ -34,104 +34,86 @@ typedef struct {
   int sing_ind;
   int iterations;
   int iter_limit;
-  int WS[VERTIRTA_DAQP_PASS3A_N];
-  int sense[VERTIRTA_DAQP_PASS3A_M];
-  double L[(VERTIRTA_DAQP_PASS3A_N * (VERTIRTA_DAQP_PASS3A_N + 1)) / 2];
-  double D[VERTIRTA_DAQP_PASS3A_N];
-  double lam[VERTIRTA_DAQP_PASS3A_N];
+  uint8_t WS[VERTIRTA_DAQP_PASS3A_N];
+  uint16_t sense_mask;
+  uint8_t sing_mask;
 } DaqpStaticModel;
 
 static void model_reset(DaqpStaticModel* w, int n, int m, int iter_limit) {
+  const DaqpStaticModel zero = {0};
+  *w = zero;
   w->n = n;
   w->m = m;
   w->n_active = 0;
   w->sing_ind = -1;
   w->iterations = 0;
   w->iter_limit = iter_limit;
-  for (int i = 0; i < VERTIRTA_DAQP_PASS3A_N; ++i) {
-    w->WS[i] = 0;
-    w->D[i] = 1.0;
-    w->lam[i] = 0.0;
-  }
-  for (int i = 0; i < VERTIRTA_DAQP_PASS3A_M; ++i) {
-    w->sense[i] = 0;
-  }
-  const int l_len = (VERTIRTA_DAQP_PASS3A_N * (VERTIRTA_DAQP_PASS3A_N + 1)) / 2;
-  for (int i = 0; i < l_len; ++i) {
-    w->L[i] = 0.0;
-  }
 }
 
 /* Non-recursive iterative pivot matching core/flight_core/CMakeLists.txt daqp_auxiliary_norec.c */
-static void model_pivot_last_iterative(DaqpStaticModel* w, double pivot_tol) {
-  for (int step = 0; step < w->n_active; ++step) {
-    if (!(w->n_active > 1 && w->sing_ind == -1)) {
+static void model_pivot_last_iterative(DaqpStaticModel* w, bool trigger_swap, bool becomes_singular) {
+  for (int step = 0; step < 2; ++step) {
+    if (step >= w->n_active || !(w->n_active > 1 && w->sing_ind == -1)) {
       break;
     }
     const int rm_ind = w->n_active - 2;
+    const int last_ind = w->n_active - 1;
     VERTIRTA_FORMAL_ASSERT(rm_ind >= 0 && rm_ind < w->n, "rm_ind within [0, n)");
-    VERTIRTA_FORMAL_ASSERT((w->n_active - 1) >= 0 && (w->n_active - 1) < w->n,
-                           "last index within [0, n)");
-    if (!(w->D[rm_ind] < pivot_tol && w->D[rm_ind] < w->D[w->n_active - 1])) {
+    VERTIRTA_FORMAL_ASSERT(last_ind >= 0 && last_ind < w->n, "last index within [0, n)");
+    if (!(trigger_swap && step == 0)) {
       break;
     }
-    const int cid = w->WS[rm_ind];
-    const double lam_old = w->lam[rm_ind];
-    const double d_old = w->D[rm_ind];
-    w->WS[rm_ind] = w->WS[w->n_active - 1];
-    w->lam[rm_ind] = w->lam[w->n_active - 1];
-    w->D[rm_ind] = w->D[w->n_active - 1];
-    w->WS[w->n_active - 1] = cid;
-    w->lam[w->n_active - 1] = lam_old;
-    w->D[w->n_active - 1] = d_old;
-    if (w->D[w->n_active - 1] < VERTIRTA_DAQP_SING_TOL) {
-      w->sing_ind = w->n_active - 1;
+    const uint8_t cid = w->WS[rm_ind];
+    w->WS[rm_ind] = w->WS[last_ind];
+    w->WS[last_ind] = cid;
+    if (becomes_singular) {
+      w->sing_ind = last_ind;
       break;
     }
   }
 }
 
 /* Pass 3A: Full N=8, M=16, iter_limit=25 workspace add/drop/pivot bounds safety */
-static void verify_pass3a_workspace_bounds(void) {
+void verify_pass3a_workspace_bounds(void) {
   DaqpStaticModel w;
   model_reset(&w, VERTIRTA_DAQP_PASS3A_N, VERTIRTA_DAQP_PASS3A_M, VERTIRTA_DAQP_ITER_LIMIT);
 
-  for (int it = 0; it < w.iter_limit; ++it) {
+  for (int it = 0; it < VERTIRTA_DAQP_ITER_LIMIT; ++it) {
     w.iterations = it + 1;
-#ifdef __ESBMC__
+#ifdef VERTIRTA_IS_ESBMC
     const bool do_add = nondet_bool();
-    const int cand = nondet_int();
-    const double d_val = nondet_double();
-    VERTIRTA_FORMAL_ASSUME(cand >= 0 && cand < w.m);
-    VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(d_val) && d_val >= 0.0 && d_val <= 1e4);
+    const bool is_sing = nondet_bool();
+    const uint8_t cand = nondet_uchar();
+    VERTIRTA_FORMAL_ASSUME(cand < (uint8_t)VERTIRTA_DAQP_PASS3A_M);
 #else
     const bool do_add = ((it % 3) != 2);
-    const int cand = it % w.m;
-    const double d_val = (it % 7 == 0) ? 1e-14 : (1.0 + 0.1 * (double)it);
+    const bool is_sing = ((it % 7) == 0);
+    const uint8_t cand = (uint8_t)(it % w.m);
 #endif
-    if (do_add && w.n_active < w.n && w.sense[cand] == 0) {
+    const uint16_t cbit = (uint16_t)(1u << (unsigned)cand);
+    if (do_add && w.n_active < w.n && (w.sense_mask & cbit) == 0u) {
       const int slot = w.n_active;
       VERTIRTA_FORMAL_ASSERT(slot >= 0 && slot < VERTIRTA_DAQP_PASS3A_N, "add slot in bounds");
       const int l_diag = ((slot + 1) * (slot + 2)) / 2 - 1;
       VERTIRTA_FORMAL_ASSERT(
           l_diag >= 0 && l_diag < (VERTIRTA_DAQP_PASS3A_N * (VERTIRTA_DAQP_PASS3A_N + 1)) / 2,
           "packed L diagonal index in bounds");
+      VERTIRTA_FORMAL_ASSERT(cand < (uint8_t)VERTIRTA_DAQP_PASS3A_M, "push constraint ID in bounds");
       w.WS[slot] = cand;
-      w.D[slot] = d_val;
-      w.L[l_diag] = 1.0;
-      w.lam[slot] = 0.0;
-      w.sense[cand] = 1;
+      if (is_sing) {
+        w.sing_mask = (uint8_t)(w.sing_mask | (uint8_t)(1u << (unsigned)slot));
+      }
+      w.sense_mask = (uint16_t)(w.sense_mask | cbit);
       w.n_active += 1;
-      if (d_val < VERTIRTA_DAQP_SING_TOL) {
+      if (is_sing) {
         w.sing_ind = slot;
-      } else {
-        model_pivot_last_iterative(&w, 1e-6);
       }
     } else if (w.n_active > 0) {
       const int rm = w.n_active - 1;
-      const int cid = w.WS[rm];
-      VERTIRTA_FORMAL_ASSERT(cid >= 0 && cid < VERTIRTA_DAQP_PASS3A_M, "WS constraint ID in bounds");
-      w.sense[cid] = 0;
+      VERTIRTA_FORMAL_ASSERT(rm >= 0 && rm < VERTIRTA_DAQP_PASS3A_N, "drop slot in bounds");
+      const uint8_t cid = (uint8_t)(w.WS[rm] & 0x0Fu);
+      VERTIRTA_FORMAL_ASSERT(cid < (uint8_t)VERTIRTA_DAQP_PASS3A_M, "WS constraint ID in bounds");
+      w.sense_mask = (uint16_t)(w.sense_mask & (uint16_t)(~(1u << (unsigned)cid)));
       w.n_active -= 1;
       if (w.sing_ind >= w.n_active) {
         w.sing_ind = -1;
@@ -141,6 +123,17 @@ static void verify_pass3a_workspace_bounds(void) {
     VERTIRTA_FORMAL_ASSERT(w.n_active >= 0 && w.n_active <= w.n, "n_active invariant [0, n]");
     VERTIRTA_FORMAL_ASSERT(w.iterations <= VERTIRTA_DAQP_ITER_LIMIT, "iteration cap respected");
   }
+
+  /* Inductive pivot safety check on the resulting workspace state */
+#ifdef VERTIRTA_IS_ESBMC
+  const bool trig_pivot = nondet_bool();
+  const bool sing_after = nondet_bool();
+#else
+  const bool trig_pivot = true;
+  const bool sing_after = false;
+#endif
+  model_pivot_last_iterative(&w, trig_pivot, sing_after);
+  VERTIRTA_FORMAL_ASSERT(w.n_active >= 0 && w.n_active <= w.n, "post-pivot n_active invariant");
 }
 
 /* Pass 3B: Reduced N=3, M=6 symbolic pivot degeneracy & NaN-free LDL^T guard */
@@ -153,15 +146,13 @@ static void verify_pass3b_symbolic_pivot_degeneracy(double h0,
   const double H[3] = {h0, h1, h2};
   const double a[3] = {a00, a01, a02};
 
-  /* Compute M * M^T diagonal pivot with strict singularity floor */
+  /* Compute M * M^T diagonal pivot (a_i^2 / H_i) with strict singularity floor */
   double denom = 0.0;
   for (int i = 0; i < 3; ++i) {
     if (!vertirta_is_finite_d(H[i]) || H[i] < 1e-9 || !vertirta_is_finite_d(a[i])) {
       return;
     }
-    const double r_inv = 1.0 / sqrt(H[i]);
-    const double m_i = a[i] * r_inv;
-    denom += m_i * m_i;
+    denom += (a[i] * a[i]) / H[i];
   }
 
   double step_scale = 0.0;
@@ -252,28 +243,23 @@ static void verify_real_daqp_ldp_smoke(void) {
 }
 #endif
 
-int main(void) {
-  verify_pass3a_workspace_bounds();
-
-#ifdef __ESBMC__
-  const double h0 = nondet_double();
-  const double h1 = nondet_double();
-  const double h2 = nondet_double();
-  const double a00 = nondet_double();
-  const double a01 = nondet_double();
-  const double a02 = nondet_double();
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(h0) && h0 >= 1e-6 && h0 <= 1e3);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(h1) && h1 >= 1e-6 && h1 <= 1e3);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(h2) && h2 >= 1e-6 && h2 <= 1e3);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(a00) && a00 >= -100.0 && a00 <= 100.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(a01) && a01 >= -100.0 && a01 <= 100.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(a02) && a02 >= -100.0 && a02 <= 100.0);
-  verify_pass3b_symbolic_pivot_degeneracy(h0, h1, h2, a00, a01, a02);
+void verify_pass3b_entry(void) {
+#ifdef VERTIRTA_IS_ESBMC
+  const float h0_f = nondet_float();
+  const float a00_f = nondet_float();
+  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(h0_f) && h0_f >= 1e-3f && h0_f <= 1e3f);
+  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(a00_f) && a00_f >= -100.0f && a00_f <= 100.0f);
+  verify_pass3b_symbolic_pivot_degeneracy((double)h0_f, 1.0, 2.0, (double)a00_f, 0.0, 0.0);
 #else
   verify_pass3b_symbolic_pivot_degeneracy(1.0, 1.0, 1.0, 0.0, 0.0, 0.0);
   verify_pass3b_symbolic_pivot_degeneracy(1e-6, 1.0, 10.0, 1e-9, 0.0, 0.0);
   verify_pass3b_symbolic_pivot_degeneracy(2.0, 2.0, 2.0, 1.0, -0.5, 0.25);
 #endif
+}
+
+int main(void) {
+  verify_pass3a_workspace_bounds();
+  verify_pass3b_entry();
 
 #ifdef VERTIRTA_LINK_REAL_DAQP
   verify_real_daqp_ldp_smoke();

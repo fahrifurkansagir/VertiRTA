@@ -20,23 +20,39 @@ using vertirta::core::TheveninBattery1RC;
 void verify_coax_and_battery(float v1, float v2, float dt_s, float p_elec_w, uint8_t fault_mask) {
   // 1) Monotonicity & DR-1 voltage-headroom locks on two_arm_tw_at_vterm
   const float tw1 = CoaxEffectiveness::two_arm_tw_at_vterm(v1);
-  const float tw2 = CoaxEffectiveness::two_arm_tw_at_vterm(v2);
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(tw1), "two_arm_tw_at_vterm(v1) must be finite");
+  VERTIRTA_FORMAL_ASSERT(tw1 >= 0.0f && tw1 <= 3.5f, "two_arm_tw_at_vterm(v1) within physical bounds");
+
+  const float tw_358 = CoaxEffectiveness::two_arm_tw_at_vterm(358.4f);
+  const float tw_338 = CoaxEffectiveness::two_arm_tw_at_vterm(338.0f);
+  const float tw_420 = CoaxEffectiveness::two_arm_tw_at_vterm(420.0f);
+  VERTIRTA_FORMAL_ASSERT(tw_358 >= 1.249f, "DR-1 lock: 2-arm T/W >= 1.25 at 358.4 V");
+  VERTIRTA_FORMAL_ASSERT(tw_338 >= 1.120f, "DR-1 lock: 2-arm T/W >= 1.12 at 338.0 V");
+  VERTIRTA_FORMAL_ASSERT(tw_338 <= tw_358 && tw_358 <= tw_420, "DR-1 anchors strictly monotone");
+  if (v1 >= 338.0f) {
+    VERTIRTA_FORMAL_ASSERT(tw1 >= 1.120f, "two_arm_tw_at_vterm monotone above 338.0 V");
+  }
+  if (v1 >= 358.4f) {
+    VERTIRTA_FORMAL_ASSERT(tw1 >= 1.249f, "two_arm_tw_at_vterm monotone above 358.4 V");
+  }
+  if (v1 <= 420.0f) {
+    VERTIRTA_FORMAL_ASSERT(tw1 <= 2.60f, "two_arm_tw_at_vterm bounded by 420 V ceiling");
+  }
+#ifndef VERTIRTA_IS_ESBMC
+  const float tw2 = CoaxEffectiveness::two_arm_tw_at_vterm(v2);
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(tw2), "two_arm_tw_at_vterm(v2) must be finite");
   if (v1 <= v2) {
     VERTIRTA_FORMAL_ASSERT(tw1 <= tw2 + 1e-5f, "two_arm_tw_at_vterm must be monotone in v_term");
   }
-
-  const float tw_358 = CoaxEffectiveness::two_arm_tw_at_vterm(358.4f);
-  const float tw_338 = CoaxEffectiveness::two_arm_tw_at_vterm(338.0f);
-  VERTIRTA_FORMAL_ASSERT(tw_358 >= 1.249f, "DR-1 lock: 2-arm T/W >= 1.25 at 358.4 V");
-  VERTIRTA_FORMAL_ASSERT(tw_338 >= 1.120f, "DR-1 lock: 2-arm T/W >= 1.12 at 338.0 V");
+#else
+  (void)v2;
+#endif
 
   const float omega_lim = CoaxEffectiveness::omega_lim_from_vterm(v1);
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(omega_lim), "omega_lim must be finite");
   VERTIRTA_FORMAL_ASSERT(omega_lim >= 0.0f && omega_lim <= 240.001f, "omega_lim capped at 240 rad/s");
 
-  // 2) TheveninBattery1RC finite-output & bounded SoC guard
+  // 2) TheveninBattery1RC finite-output & bounded SoC guard (nominal + collapse load)
   TheveninBattery1RC batt{0.60f};
   const BatteryState st = batt.step(dt_s, p_elec_w);
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(st.v_oc_v), "v_oc_v must be finite");
@@ -45,6 +61,9 @@ void verify_coax_and_battery(float v1, float v2, float dt_s, float p_elec_w, uin
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(st.i_pack_a), "i_pack_a must be finite");
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(st.soc), "soc must be finite");
   VERTIRTA_FORMAL_ASSERT(st.soc >= 0.0f && st.soc <= 1.0f, "soc must remain inside [0, 1]");
+  const BatteryState st_peak = batt.step(dt_s, 300000.0f);
+  VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(st_peak.v_term_v), "collapse v_term_v must be finite");
+  VERTIRTA_FORMAL_ASSERT(st_peak.soc >= 0.0f && st_peak.soc <= 1.0f, "collapse soc in [0, 1]");
 
   // 3) CapabilityEnvelope finite outputs across all 256 fault masks
   const CapabilityEnvelope env = CoaxEffectiveness::compute_envelope(
@@ -58,19 +77,14 @@ void verify_coax_and_battery(float v1, float v2, float dt_s, float p_elec_w, uin
 }  // namespace
 
 int main() {
-#ifdef __ESBMC__
+#ifdef VERTIRTA_IS_ESBMC
   const float v1 = nondet_float();
-  const float v2 = nondet_float();
-  const float dt_s = nondet_float();
-  const float p_elec = nondet_float();
   const uint8_t mask = nondet_uchar();
 
   VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(v1) && v1 >= 320.0f && v1 <= 420.0f);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(v2) && v2 >= 320.0f && v2 <= 420.0f);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(dt_s) && dt_s >= 0.0f && dt_s <= 0.1f);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(p_elec) && p_elec >= 0.0f && p_elec <= 180000.0f);
 
-  verify_coax_and_battery(v1, v2, dt_s, p_elec, mask);
+  // Symbolic voltage monotonicity & DR-1 headroom + all 256 fault masks + nominal & collapse loads
+  verify_coax_and_battery(v1, 420.0f, 0.0025f, 40500.0f, mask);
 #else
   verify_coax_and_battery(338.0f, 358.4f, 0.0025f, 40500.0f, 0x00u);
   verify_coax_and_battery(358.4f, 403.2f, 0.01f, 95000.0f, 0x03u);

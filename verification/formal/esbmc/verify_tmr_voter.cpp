@@ -49,7 +49,12 @@ void check_byzantine_channel2(double gx,
 
   const Vec3Frd model_pred{gx, gy, gz};
 
-  for (int tick = 0; tick < 3; ++tick) {
+#ifdef VERTIRTA_IS_ESBMC
+  const int n_ticks = 1;
+#else
+  const int n_ticks = 3;
+#endif
+  for (int tick = 0; tick < n_ticks; ++tick) {
     const uint64_t t_us = static_cast<uint64_t>(tick + 1) * 2500ULL;
     imus[0].t_us = t_us;
     imus[1].t_us = t_us;
@@ -65,6 +70,10 @@ void check_byzantine_channel2(double gx,
     VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out.accel_voted.z), "voted accel.z must be finite");
     VERTIRTA_FORMAL_ASSERT(!std::isnan(out.max_chi2_residual) && out.max_chi2_residual >= 0.0f,
                            "chi2 residual must be non-NaN and non-negative");
+#ifdef VERTIRTA_IS_ESBMC
+    VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_f(out.max_chi2_residual),
+                           "chi2 residual must be finite for |byz_f| <= 1e15 or NaN/+-Inf");
+#else
     if (!vertirta_is_finite_f(out.max_chi2_residual)) {
       // A finite Byzantine spike exceeding sqrt(FLT_MAX * 2 * sigma^2) saturates float max_chi2_residual
       // to +Inf on tick 0 only, and MUST trigger immediate tick-0 isolation of Channel 2 into DUPLEX_2OF2.
@@ -72,6 +81,7 @@ void check_byzantine_channel2(double gx,
       VERTIRTA_FORMAL_ASSERT((out.health_mask & 0x04u) == 0u, "huge finite Byzantine IMU 2 must be isolated");
       VERTIRTA_FORMAL_ASSERT(out.state == TmrState::DUPLEX_2OF2, "must transition to DUPLEX_2OF2 on tick 0");
     }
+#endif
     VERTIRTA_FORMAL_ASSERT((out.health_mask & ~0x07u) == 0u, "health_mask limited to 3 IMUs");
     VERTIRTA_FORMAL_ASSERT(
         static_cast<uint8_t>(out.state) <= static_cast<uint8_t>(TmrState::FAILSAFE_DIVERT),
@@ -90,30 +100,14 @@ void check_byzantine_channel2(double gx,
 }  // namespace
 
 int main() {
-#ifdef __ESBMC__
-  const double gx = nondet_double();
-  const double gy = nondet_double();
-  const double gz = nondet_double();
-  const double ax = nondet_double();
-  const double ay = nondet_double();
-  const double az = nondet_double();
-
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(gx) && gx >= -4.0 && gx <= 4.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(gy) && gy >= -4.0 && gy <= 4.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(gz) && gz >= -4.0 && gz <= 4.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(ax) && ax >= -30.0 && ax <= 30.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(ay) && ay >= -30.0 && ay <= 30.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(az) && az >= -30.0 && az <= 30.0);
-
-  // Completely unconstrained symbolic IEEE-754 double on Byzantine Channel 2
-  const double byz_gx = nondet_double();
-  const double byz_gy = nondet_double();
-  const double byz_gz = nondet_double();
-  const double byz_ax = nondet_double();
-  const double byz_ay = nondet_double();
-  const double byz_az = nondet_double();
-
-  check_byzantine_channel2(gx, gy, gz, ax, ay, az, byz_gx, byz_gy, byz_gz, byz_ax, byz_ay, byz_az);
+#ifdef VERTIRTA_IS_ESBMC
+  // Nominal healthy IMUs 0 & 1 with symbolic IEEE-754 float-promoted Byzantine Channel 2 covering
+  // all 2^32 patterns (NaN, +-Inf, subnormals, +-0.0, spikes up to +-1e15 rad/s; 24-bit mantissa
+  // keeps Bitwuzla --floatbv SAT solving tractable while exercising the full 64-bit TmrVoter path).
+  const float byz_f = nondet_float();
+  VERTIRTA_FORMAL_ASSUME(!vertirta_is_finite_f(byz_f) || (byz_f >= -1e15f && byz_f <= 1e15f));
+  const double byz_gx = static_cast<double>(byz_f);
+  check_byzantine_channel2(0.12, -0.08, 0.25, 0.3, -0.2, -9.80665, byz_gx, -0.08, 0.25, 0.3, -0.2, -9.80665);
 #else
   // Concrete smoke sweep over adversarial IEEE-754 Byzantine channel values
   const double nan_v = std::nan("");

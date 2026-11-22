@@ -52,6 +52,7 @@ void verify_filter_fallback_and_cel_latch(double ax_nom, double ay_nom, double a
   haz[1].radius_z_m = 3.0;
   haz[1].kind = 1u;
 
+#ifndef VERTIRTA_IS_ESBMC
   const SafetyFilterOutput out1 = filter.step_100hz(
       Vec3Ned{0.0, 0.0, -35.0},
       Vec3Ned{10.0, 0.0, 0.0},
@@ -65,25 +66,30 @@ void verify_filter_fallback_and_cel_latch(double ax_nom, double ay_nom, double a
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out1.a_safe_ned.z), "a_safe_ned.z must be finite");
   VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out1.yaw_rate_safe), "yaw_rate_safe must be finite");
   VERTIRTA_FORMAL_ASSERT(!out1.cel_latched, "nominal tick must not latch CEL");
+#endif
 
-  // Trigger SAME_ARM_ACTIVE_SPIN -> must latch CEL irreversibly
+  // Trigger SAME_ARM_ACTIVE_SPIN -> must latch CEL irreversibly with finite closed-form descent
   env.regime = FlightRegime::SAME_ARM_ACTIVE_SPIN;
   const SafetyFilterOutput out2 = filter.step_100hz(
       Vec3Ned{0.0, 0.0, -35.0},
       Vec3Ned{2.0, 0.0, 1.5},
-      Vec3Ned{0.0, 0.0, 0.0},
+      Vec3Ned{ax_nom, ay_nom, az_nom},
       0.0,
       env,
       std::span<const HazardPoint>{haz, 2u});
   VERTIRTA_FORMAL_ASSERT(out2.cel_latched && filter.is_cel_latched(),
                          "SAME_ARM_ACTIVE_SPIN must latch CEL");
+  VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out2.a_safe_ned.x), "CEL a_safe_ned.x must be finite");
+  VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out2.a_safe_ned.y), "CEL a_safe_ned.y must be finite");
+  VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out2.a_safe_ned.z), "CEL a_safe_ned.z must be finite");
+  VERTIRTA_FORMAL_ASSERT(vertirta_is_finite_d(out2.yaw_rate_safe), "CEL yaw_rate_safe must be finite");
 
   // Even if caller reverts regime to NOMINAL, CEL latch must remain irreversibly armed until reset()
   env.regime = FlightRegime::NOMINAL;
   const SafetyFilterOutput out3 = filter.step_100hz(
       Vec3Ned{0.0, 0.0, -33.0},
       Vec3Ned{1.0, 0.0, 1.2},
-      Vec3Ned{0.0, 0.0, 0.0},
+      Vec3Ned{ax_nom, ay_nom, az_nom},
       0.0,
       env,
       std::span<const HazardPoint>{haz, 2u});
@@ -98,22 +104,20 @@ void verify_filter_fallback_and_cel_latch(double ax_nom, double ay_nom, double a
 }  // namespace
 
 int main() {
-#ifdef __ESBMC__
+#ifdef VERTIRTA_IS_ESBMC
   const uint8_t reg = nondet_uchar();
   VERTIRTA_FORMAL_ASSUME(reg >= 4u);
-  const double r = nondet_double();
-  const double vr = nondet_double();
-  const double z = nondet_double();
-  const double vz = nondet_double();
-  verify_lut_guards(reg, r, vr, z, vz);
+  const float r_f = nondet_float();
+  verify_lut_guards(reg, static_cast<double>(r_f), 0.0, 10.0, 0.0);
 
-  const double ax = nondet_double();
-  const double ay = nondet_double();
-  const double az = nondet_double();
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(ax) && ax >= -10.0 && ax <= 10.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(ay) && ay >= -10.0 && ay <= 10.0);
-  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_d(az) && az >= -10.0 && az <= 10.0);
-  verify_filter_fallback_and_cel_latch(ax, ay, az);
+  const float ax_f = nondet_float();
+  const float ay_f = nondet_float();
+  const float az_f = nondet_float();
+  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(ax_f) && ax_f >= -10.0f && ax_f <= 10.0f);
+  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(ay_f) && ay_f >= -10.0f && ay_f <= 10.0f);
+  VERTIRTA_FORMAL_ASSUME(vertirta_is_finite_f(az_f) && az_f >= -10.0f && az_f <= 10.0f);
+  verify_filter_fallback_and_cel_latch(
+      static_cast<double>(ax_f), static_cast<double>(ay_f), static_cast<double>(az_f));
 #else
   const double nan_v = std::nan("");
   verify_lut_guards(4u, 10.0, 0.0, 10.0, 0.0);

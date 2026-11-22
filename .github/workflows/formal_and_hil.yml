@@ -94,11 +94,11 @@ jobs:
           - arch: x86_64
             runner: ubuntu-24.04
             arm_host: x86_64
-            renode_tarball: renode-1.17.0.linux-portable-dotnet.tar.gz
+            renode_tarball: renode-1.17.0.linux-portable.tar.gz
           - arch: arm64
             runner: ubuntu-24.04-arm
             arm_host: aarch64
-            renode_tarball: renode-1.17.0.linux-arm64-portable-dotnet.tar.gz
+            renode_tarball: renode-1.17.0.linux-arm64-portable.tar.gz
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
       - name: Install Pinned Arm 14.2.Rel1 & Renode v1.17.0 .NET Portable Tarball (Zero Mono/GTK)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake g++ python3-pytest python3-yaml python3-pip curl xz-utils libicu-dev
+          sudo apt-get install -y ninja-build cmake g++ python3-dev python3-pytest python3-yaml python3-pip curl xz-utils libicu-dev
           curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-${{ matrix.arm_host }}-arm-none-eabi.tar.xz" \
             -o /tmp/arm-gnu-toolchain.tar.xz
           sudo mkdir -p /opt/arm-gnu-toolchain
@@ -116,7 +116,11 @@ jobs:
             -o /tmp/renode-portable.tar.gz
           sudo mkdir -p /opt/renode
           sudo tar -xzf /tmp/renode-portable.tar.gz -C /opt/renode --strip-components=1
-          echo "/opt/renode" >> "${GITHUB_PATH}"
+          RENODE_BIN_DIR="$(dirname "$(find /opt/renode -maxdepth 3 -name renode-test -type f | head -n 1)")"
+          echo "${RENODE_BIN_DIR}" >> "${GITHUB_PATH}"
+          if [ -f "${RENODE_BIN_DIR}/tests/requirements.txt" ]; then
+            pip3 install --break-system-packages -r "${RENODE_BIN_DIR}/tests/requirements.txt"
+          fi
 
       - name: Build Dual-Node Cyphal ELFs, Host Catch2 Suite & Execute Tier-1 Functional SIL
         run: |
