@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,12 +25,13 @@ jobs:
       - name: Install Build, Python & ARM Bare-Metal Toolchains
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build python3-pytest python3-yaml gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi
+          sudo apt-get install -y ninja-build cmake gcc-14 g++-14 python3-pytest python3-yaml gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi
 
-      - name: Run CI Gate Unit Tests & Architecture Isolation Gate (Sn1)
+      - name: Run CI Gate Unit Tests, Public Hygiene & Architecture Isolation Gate (Sn1)
         run: |
-          PYTHONPATH=. pytest tests/determinism/test_ci_gates.py -v
+          PYTHONPATH=. pytest tests/determinism/test_ci_gates.py tests/determinism/test_public_hygiene.py -v
           python3 scripts/ci/check_arch_isolation.py --repo-root . --out arch_isolation_report.json
+          python3 scripts/ci/check_public_hygiene.py --repo-root . --out public_hygiene_report.json
 
       - name: Build & Execute Isolated Zero-Heap Link Trap + Stack DAG (Host ARM64)
         run: |
@@ -52,6 +54,7 @@ jobs:
       - name: Cross-Compile libvertirta_flight_core for Cortex-M7 (<256KB Flash / <128KB RAM)
         run: |
           cmake --preset arm-cortex-m7 \
+            -DCMAKE_C_FLAGS="-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Werror" \
             -DCMAKE_CXX_FLAGS="-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Werror"
           cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
           python3 scripts/ci/check_no_heap_symbols.py \
@@ -98,7 +101,7 @@ jobs:
       - name: Install Build & Valgrind PMU-Fallback Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build valgrind python3-yaml
+          sudo apt-get install -y ninja-build cmake gcc-14 g++-14 valgrind python3-yaml
           sudo apt-get install -y linux-tools-common linux-tools-generic || true
 
       - name: Build Replay & Benchmark CLIs (Strictly Without malloc Wrapping)

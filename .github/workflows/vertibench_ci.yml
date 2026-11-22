@@ -16,6 +16,7 @@ on:
       - "config/vertirta_dsl_v1.gbnf"
       - ".github/workflows/vertibench_ci.yml"
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
