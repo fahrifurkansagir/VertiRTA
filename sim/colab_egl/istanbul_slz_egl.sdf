@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  VertiRTA Sensor-Only Colab G4 Gazebo Harmonic EGL World (SDF 1.9)
+  Corridor: Maltepe-Dragos-Kartal Coastal Strip (West of LTFJ J2 & LTBX CTR walls)
+  Datum Lock: 40.8860 N, 29.1880 E, 12.0 m AMSL (Kartal Coastal Vertiport; EGM2008 +36.7 m)
+  License Lock: Copernicus DEM GLO-30 open coastal terrain + 12 procedural blocks ONLY.
+                Zero OSM ODbL building footprints inside training-data world.
+  Canonical gz-sim-label-system IDs:
+    10 -> Safe_Flat_Ground (0)
+    20 -> Safe_Flat_Roof (1)
+    30 -> Hazard_Obstacle_Structure (2)
+    40 -> Hazard_Dynamic_Human_Vehicle (3)
+    50 -> Hazard_Water_Vegetation (4)
+   254 -> OOD_Synthetic_Outlier (254)
+-->
+<sdf version="1.9">
+  <world name="istanbul_coast">
+    <physics name="sensor_rig_kinematic" type="dart">
+      <max_step_size>0.01</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>100</real_time_update_rate>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <gravity>0 0 -9.80665</gravity>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>40.8860</latitude_deg>
+      <longitude_deg>29.1880</longitude_deg>
+      <elevation>12.0</elevation>
+      <heading_deg>0.0</heading_deg>
+    </spherical_coordinates>
+
+    <scene>
+      <ambient>0.55 0.58 0.62 1</ambient>
+      <background>0.68 0.80 0.92 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <light type="directional" name="marmara_sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 180 0 0 0</pose>
+      <diffuse>0.92 0.89 0.84 1</diffuse>
+      <specular>0.30 0.30 0.28 1</specular>
+      <direction>-0.35 0.28 -0.89</direction>
+    </light>
+
+    <!-- Copernicus GLO-30 Coastal Ground Surface & Asphalt Helipad (Label 10 -> Class 0) -->
+    <model name="copernicus_glo30_coastal_ground">
+      <static>true</static>
+      <link name="ground_link">
+        <visual name="asphalt_coastal_strip">
+          <geometry><plane><normal>0 0 1</normal><size>8000 8000</size></plane></geometry>
+          <material><ambient>0.28 0.30 0.32 1</ambient><diffuse>0.36 0.38 0.40 1</diffuse></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>10</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <model name="kartal_vertiport_helipad">
+      <static>true</static>
+      <pose>0 0 0.02 0 0 0</pose>
+      <link name="pad_link">
+        <visual name="pad_disc">
+          <geometry><cylinder><radius>15.0</radius><length>0.04</length></cylinder></geometry>
+          <material><ambient>0.22 0.24 0.26 1</ambient><diffuse>0.30 0.32 0.35 1</diffuse></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>10</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Marmara Sea Water Plane (Label 50 -> Class 4: Hazard_Water_Vegetation) -->
+    <model name="marmara_sea_plane">
+      <static>true</static>
+      <pose>-1200 -850 -0.2 0 0 0</pose>
+      <link name="sea_link">
+        <visual name="sea_surface">
+          <geometry><box><size>6000 1200 0.2</size></box></geometry>
+          <material><ambient>0.08 0.22 0.36 1</ambient><diffuse>0.12 0.30 0.48 1</diffuse><specular>0.65 0.65 0.70 1</specular></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>50</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!-- 12 Copernicus GLO-30 Procedural Coastal Blocks (Zero OSM ODbL Footprints) -->
+    <model name="coastal_block_01">
+      <static>true</static>
+      <pose>-60 40 0 0 0 0</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 9.0 0 0 0</pose><geometry><box><size>18.0 16.0 18.0</size></box></geometry><material><diffuse>0.72 0.70 0.66 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 18.2 0 0 0</pose><geometry><box><size>17.4 15.4 0.4</size></box></geometry><material><diffuse>0.54 0.55 0.56 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+        <visual name="parapet_n"><pose>0 7.9 18.7 0 0 0</pose><geometry><box><size>18.0 0.3 0.9</size></box></geometry><material><diffuse>0.65 0.65 0.63 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_02">
+      <static>true</static>
+      <pose>-140 85 0 0 0 0.15</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 11.0 0 0 0</pose><geometry><box><size>20.0 18.0 22.0</size></box></geometry><material><diffuse>0.70 0.67 0.63 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 22.2 0 0 0</pose><geometry><box><size>19.2 17.2 0.4</size></box></geometry><material><diffuse>0.52 0.53 0.55 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+        <visual name="hvac_unit"><pose>6.5 5.5 23.0 0 0 0</pose><geometry><box><size>2.2 1.8 1.2</size></box></geometry><material><diffuse>0.46 0.48 0.50 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_03">
+      <static>true</static>
+      <pose>-240 130 0 0 0 -0.10</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 8.0 0 0 0</pose><geometry><box><size>22.0 16.0 16.0</size></box></geometry><material><diffuse>0.76 0.72 0.68 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 16.2 0 0 0</pose><geometry><box><size>21.4 15.4 0.4</size></box></geometry><material><diffuse>0.56 0.56 0.54 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_04">
+      <static>true</static>
+      <pose>-380 210 0 0 0 0.25</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 10.0 0 0 0</pose><geometry><box><size>18.0 18.0 20.0</size></box></geometry><material><diffuse>0.68 0.66 0.62 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="pitched_tile_roof"><pose>0 0 21.5 0 0.28 0</pose><geometry><box><size>18.5 18.2 0.5</size></box></geometry><material><diffuse>0.62 0.28 0.20 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_05">
+      <static>true</static>
+      <pose>-560 320 0 0 0 0</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 12.0 0 0 0</pose><geometry><box><size>24.0 20.0 24.0</size></box></geometry><material><diffuse>0.74 0.72 0.70 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 24.2 0 0 0</pose><geometry><box><size>23.2 19.2 0.4</size></box></geometry><material><diffuse>0.50 0.52 0.54 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_06">
+      <static>true</static>
+      <pose>-780 480 0 0 0 -0.20</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 7.5 0 0 0</pose><geometry><box><size>19.0 17.0 15.0</size></box></geometry><material><diffuse>0.71 0.68 0.64 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 15.2 0 0 0</pose><geometry><box><size>18.2 16.2 0.4</size></box></geometry><material><diffuse>0.55 0.55 0.57 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_07">
+      <static>true</static>
+      <pose>-1050 690 0 0 0 0.12</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 14.0 0 0 0</pose><geometry><box><size>22.0 22.0 28.0</size></box></geometry><material><diffuse>0.66 0.67 0.70 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 28.2 0 0 0</pose><geometry><box><size>21.0 21.0 0.4</size></box></geometry><material><diffuse>0.48 0.50 0.52 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_08">
+      <static>true</static>
+      <pose>-1380 940 0 0 0 -0.08</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 9.5 0 0 0</pose><geometry><box><size>20.0 16.0 19.0</size></box></geometry><material><diffuse>0.75 0.73 0.68 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 19.2 0 0 0</pose><geometry><box><size>19.2 15.2 0.4</size></box></geometry><material><diffuse>0.53 0.54 0.55 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_09">
+      <static>true</static>
+      <pose>-1760 1240 0 0 0 0.05</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 11.5 0 0 0</pose><geometry><box><size>25.0 18.0 23.0</size></box></geometry><material><diffuse>0.69 0.68 0.65 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 23.2 0 0 0</pose><geometry><box><size>24.2 17.2 0.4</size></box></geometry><material><diffuse>0.51 0.52 0.53 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_10">
+      <static>true</static>
+      <pose>-2200 1620 0 0 0 -0.18</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 8.5 0 0 0</pose><geometry><box><size>18.0 18.0 17.0</size></box></geometry><material><diffuse>0.73 0.70 0.66 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 17.2 0 0 0</pose><geometry><box><size>17.2 17.2 0.4</size></box></geometry><material><diffuse>0.54 0.54 0.56 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_11">
+      <static>true</static>
+      <pose>-2740 2180 0 0 0 0.22</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 10.5 0 0 0</pose><geometry><box><size>21.0 19.0 21.0</size></box></geometry><material><diffuse>0.68 0.67 0.64 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 21.2 0 0 0</pose><geometry><box><size>20.2 18.2 0.4</size></box></geometry><material><diffuse>0.52 0.53 0.55 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <model name="coastal_block_12">
+      <static>true</static>
+      <pose>-3320 2780 0 0 0 -0.14</pose>
+      <link name="block_link">
+        <visual name="facade"><pose>0 0 13.0 0 0 0</pose><geometry><box><size>26.0 20.0 26.0</size></box></geometry><material><diffuse>0.70 0.69 0.67 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>30</label></plugin></visual>
+        <visual name="flat_terrace_roof"><pose>0 0 26.2 0 0 0</pose><geometry><box><size>25.2 19.2 0.4</size></box></geometry><material><diffuse>0.50 0.51 0.53 1</diffuse></material><plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>20</label></plugin></visual>
+      </link>
+    </model>
+
+    <!-- Coastal Park Vegetation Proxy (Label 50 -> Class 4) -->
+    <model name="coastal_park_trees">
+      <static>true</static>
+      <pose>-100 10 0 0 0 0</pose>
+      <link name="tree_link">
+        <visual name="canopy">
+          <pose>0 0 4.5 0 0 0</pose>
+          <geometry><sphere><radius>3.8</radius></sphere></geometry>
+          <material><diffuse>0.18 0.42 0.16 1</diffuse></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>50</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Dynamic Hazard Proxy: Rooftop Pedestrian & Service Vehicle (Label 40 -> Class 3) -->
+    <model name="rooftop_dynamic_hazard_proxy">
+      <static>false</static>
+      <pose>-60 40 19.3 0 0 0</pose>
+      <link name="hazard_link">
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <visual name="pedestrian_proxy">
+          <geometry><cylinder><radius>0.35</radius><length>1.75</length></cylinder></geometry>
+          <material><diffuse>0.85 0.25 0.15 1</diffuse></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>40</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!-- OOD Synthetic Outlier Proxy: Rooftop Tarp / Glare / Scaffolding (Label 254 -> OE) -->
+    <model name="rooftop_ood_tarp_proxy">
+      <static>false</static>
+      <pose>-140 85 22.55 0 0 0</pose>
+      <link name="ood_link">
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <visual name="blue_tarp">
+          <geometry><box><size>4.8 3.6 0.15</size></box></geometry>
+          <material><ambient>0.05 0.35 0.85 1</ambient><diffuse>0.10 0.48 0.96 1</diffuse><specular>0.80 0.80 0.85 1</specular></material>
+          <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label"><label>254</label></plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!--
+      Kinematic 2-Axis Gimbal Sensor Rig updated synchronously via /world/istanbul_coast/set_pose/blocking.
+      MUST remain <static>false</static> + <gravity>false</gravity> + <kinematic>true</kinematic> so
+      OGRE2 updates camera pose on every set_pose call without stale-frame freezing.
+      Sensor pose is identity in camera_link; ComputeGimbalQuaternionEnu(pitch_down_rad, yaw_rad)
+      aims the +X camera optical axis directly at the TLOF center (eliminating far-edge 5 m pad clipping
+      during 22 m AGL / 15 m radius orbit where atan2(20,22)-atan2(15,22) = 7.99 deg << 40 deg half-HFOV).
+    -->
+    <model name="vertirta_sensor_rig">
+      <static>false</static>
+      <pose>0 0 22.0 0 1.5707963 0</pose>
+      <link name="camera_link">
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <sensor name="slz_rgbd" type="rgbd_camera">
+          <pose>0 0 0 0 0 0</pose>
+          <topic>slz_rgbd</topic>
+          <always_on>1</always_on>
+          <update_rate>20</update_rate>
+          <visualize>false</visualize>
+          <camera>
+            <horizontal_fov>1.396263</horizontal_fov>
+            <image>
+              <width>512</width>
+              <height>512</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.5</near>
+              <far>180.0</far>
+            </clip>
+            <depth_camera>
+              <clip>
+                <near>0.5</near>
+                <far>150.0</far>
+              </clip>
+            </depth_camera>
+          </camera>
+        </sensor>
+
+        <sensor name="slz_semantic" type="segmentation">
+          <pose>0 0 0 0 0 0</pose>
+          <topic>slz_semantic</topic>
+          <always_on>1</always_on>
+          <update_rate>20</update_rate>
+          <visualize>false</visualize>
+          <camera>
+            <segmentation_type>semantic</segmentation_type>
+            <horizontal_fov>1.396263</horizontal_fov>
+            <image>
+              <width>512</width>
+              <height>512</height>
+            </image>
+            <clip>
+              <near>0.5</near>
+              <far>180.0</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+  </world>
+</sdf>
