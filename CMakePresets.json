@@ -1,6 +1,6 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "configurePresets": [
     {
       "name": "dev-linux-x64",
@@ -72,6 +72,7 @@
         "CMAKE_CXX_FLAGS": "-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os",
         "VERTIRTA_BUILD_COMPANION": "OFF",
         "VERTIRTA_BUILD_TESTS": "OFF",
+        "VERTIRTA_INSTALL": "OFF",
         "VERTIRTA_ENABLE_STRICT_FP": "ON"
       }
     }

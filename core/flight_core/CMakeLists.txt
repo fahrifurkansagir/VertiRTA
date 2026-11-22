@@ -157,12 +157,27 @@ add_library(vertirta_flight_core STATIC
   ${daqp_SOURCE_DIR}/src/factorization.c
 )
 add_library(vertirta::flight_core ALIAS vertirta_flight_core)
+add_library(VertiRTA::flight_core ALIAS vertirta_flight_core)
+set_target_properties(vertirta_flight_core PROPERTIES EXPORT_NAME flight_core)
 
 target_compile_features(vertirta_flight_core PUBLIC cxx_std_17)
-target_include_directories(vertirta_flight_core
+target_sources(vertirta_flight_core
   PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    FILE_SET HEADERS
+    BASE_DIRS include
+    FILES
+      include/vertirta/core/coax_envelope.hpp
+      include/vertirta/core/daqp_qp.hpp
+      include/vertirta/core/frames.hpp
+      include/vertirta/core/geodesy.hpp
+      include/vertirta/core/indi_wls.hpp
+      include/vertirta/core/math_utils.hpp
+      include/vertirta/core/motor_fdi.hpp
+      include/vertirta/core/sim_plant_6dof.hpp
+      include/vertirta/core/tmr_voter.hpp
+      include/vertirta/core/vrta_recorder.hpp
+)
+target_include_directories(vertirta_flight_core
   PRIVATE
     ${daqp_SOURCE_DIR}/include
 )

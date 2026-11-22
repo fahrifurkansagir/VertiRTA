@@ -1,0 +1,170 @@
+name: VertiRTA Productization, WASM & Python SDK CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wasm_flight_core:
+    name: Single-Threaded WASM Core (<150 KiB) & Host ABI Parity
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ python3
+
+      - name: Setup pinned Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "4.0.4"
+
+      - name: Build single-threaded flat-C WASM and enforce <= 153600 B cap
+        run: |
+          bash wasm/build_wasm.sh
+          WASM_BYTES="$(stat -c%s apps/vertigcs/public/wasm/libvertirta_flight_core.wasm)"
+          echo "Measured WASM size: ${WASM_BYTES} bytes (limit <= 153600)"
+          test "${WASM_BYTES}" -le 153600
+
+      - name: Verify zero threading/COI/embind artifacts in WASM bundle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          mjs = Path("apps/vertigcs/public/wasm/libvertirta_flight_core.mjs").read_text(encoding="utf-8", errors="ignore")
+          banned = ("SharedArray" + "Buffer", "coi" + "-serviceworker", "em" + "bind", "-p" + "thread")
+          for tok in banned:
+              assert tok not in mjs, f"Forbidden token {tok!r} found in WASM JS glue"
+          print("PASS: WASM glue free of threading/COI/embind tokens")
+          PY
+
+      - name: Compile and run host WASM ABI Catch2 parity tests under ASan/UBSan
+        run: |
+          cmake -S tests/wasm -B /tmp/vertirta_wasm_host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build /tmp/vertirta_wasm_host -j
+          ctest --test-dir /tmp/vertirta_wasm_host --output-on-failure
+
+      - name: Setup uv and run WASM contract tests
+        uses: astral-sh/setup-uv@v5
+      - run: uv run --no-project --python 3.12 --with pytest pytest tests/wasm/test_wasm_build_contracts.py -v
+
+  vertigcs_frontend:
+    name: VertiGCS (MapLibre v6 + Deck.gl v9.4) Vitest & Vite Bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/vertigcs/package-lock.json
+
+      - name: Install, test, and build VertiGCS
+        working-directory: apps/vertigcs
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+
+      - name: Verify dist bundle hygiene (no COI/SAB allocation or forbidden ports)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          dist_root = Path("apps/vertigcs/dist")
+          assert (dist_root / "index.html").is_file()
+          sab_tok = "SharedArray" + "Buffer"
+          banned_all = ("coi" + "-serviceworker", "new " + sab_tok, ":4173", ":4174", ":8765", ":9222", ":9223")
+          for p in dist_root.rglob("*"):
+              if p.is_file() and p.suffix in (".html", ".js", ".mjs", ".css"):
+                  txt = p.read_text(encoding="utf-8", errors="ignore")
+                  for tok in banned_all:
+                      assert tok not in txt, f"Forbidden token {tok!r} in {p}"
+                  is_worker_or_wasm = ("flight_sim.worker" in p.name) or ("wasm" in p.parts and p.suffix == ".mjs")
+                  if is_worker_or_wasm:
+                      assert sab_tok not in txt, f"Forbidden {sab_tok!r} in worker/wasm file {p}"
+          print("PASS: apps/vertigcs/dist verified clean")
+          PY
+
+      - name: Upload static VertiGCS bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertigcs-static-dist
+          path: apps/vertigcs/dist
+          retention-days: 14
+
+  python_sdk_and_cmake_install:
+    name: Relocatable CMake Install & nanobind Python SDK (cp312-abi3)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install CMake/Ninja/C++ toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++
+
+      - name: Build, install relocatable VertiRTA, and test external consumer
+        run: |
+          cmake -S . -B /tmp/vertirta_reloc_build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVERTIRTA_BUILD_COMPANION=OFF \
+            -DVERTIRTA_BUILD_TESTS=OFF \
+            -DVERTIRTA_INSTALL=ON
+          cmake --build /tmp/vertirta_reloc_build --target vertirta_flight_core -j
+          cmake --install /tmp/vertirta_reloc_build --prefix /tmp/vertirta_reloc_install
+          cmake -S tests/cmake -B /tmp/vertirta_consumer_build -G Ninja \
+            -DCMAKE_PREFIX_PATH=/tmp/vertirta_reloc_install
+          cmake --build /tmp/vertirta_consumer_build -j
+          ctest --test-dir /tmp/vertirta_consumer_build --output-on-failure
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build native nanobind wheel (cp312-abi3) and run SDK pytest suite
+        run: |
+          uv venv --python 3.12 /tmp/vertirta_sdk_venv
+          uv pip install --python /tmp/vertirta_sdk_venv/bin/python scikit-build-core nanobind pytest numpy gymnasium typer
+          uv pip install --python /tmp/vertirta_sdk_venv/bin/python --no-build-isolation --no-deps .
+          /tmp/vertirta_sdk_venv/bin/python -c "import vertirta; assert vertirta.get_backend_name() == 'cpp_nanobind', vertirta.get_backend_name(); print('Native backend verified:', vertirta.get_backend_name())"
+          VERTIRTA_REQUIRE_NATIVE=1 /tmp/vertirta_sdk_venv/bin/pytest tests/sdk/test_vertirta_sdk.py -v
+
+  docker_and_governance:
+    name: Hardened Docker Compose, Paper 1 RA-L & Public Hygiene Gates
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate hardened docker-compose.yml schema
+        run: docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run Docker, Paper 1 RA-L governance, and workflow contract tests
+        run: |
+          PYTHONPATH=. uv run --no-project --python 3.12 --with pytest --with pyyaml --with scipy --with numpy \
+            pytest tests/integration/test_docker_stack_contracts.py \
+                   docs/paper_ral/tests/ \
+                   tests/ci/test_product_and_wasm_workflow.py -v
+
+      - name: Enforce ASTM F3269 architecture isolation and public hygiene
+        run: |
+          python3 scripts/ci/check_arch_isolation.py --repo-root .
+          python3 scripts/ci/check_public_hygiene.py --repo-root .

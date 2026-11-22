@@ -1,0 +1,80 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "nanobind>=2.4"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "vertirta"
+version = "3.0.0"
+description = "VertiRTA — Deterministic eVTOL Coaxial-X8 Run-Time Assurance (RTA) C++17/20 & Gymnasium Python SDK"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "VertiRTA Contributors" }]
+keywords = ["evtol", "uam", "runtime-assurance", "control-barrier-functions", "gymnasium", "nanobind", "robotics"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Aerospace",
+]
+dependencies = [
+  "numpy>=1.26",
+  "gymnasium>=1.1",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pyyaml>=6.0",
+  "scipy>=1.12",
+]
+
+[project.scripts]
+vertirta = "vertirta.cli:app"
+
+[tool.scikit-build]
+cmake.version = ">=3.25"
+cmake.source-dir = "sdk/python"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["sdk/python/vertirta"]
+wheel.py-api = "cp312"
+sdist.include = [
+  "core/flight_core/**",
+  "sdk/python/**",
+  "cmake/**",
+  "config/vehicle_x8_240.yaml",
+  "config/istanbul_ltfj_airspace.yaml",
+  "LICENSE",
+]
+
+[tool.scikit-build.cmake.define]
+CMAKE_POSITION_INDEPENDENT_CODE = "ON"
+VERTIRTA_ENABLE_STRICT_FP = "ON"
+VERTIRTA_INSTALL = "OFF"
+
+[tool.uv]
+# Prevent `uv run --with ...` from auto-building the C++ extension inside non-SDK CI jobs;
+# wheel builds (`uv build`, `uv pip install .`, `cibuildwheel`) still use scikit-build-core.
+package = false
+
+[tool.cibuildwheel]
+build-frontend = "uv"
+build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*"]
+# Skip free-threaded cp313t/cp314t (incompatible with cp312-abi3 stable ABI), PyPy, musllinux, 32-bit
+skip = ["cp31?t-*", "pp*", "*-musllinux_*", "*-win32", "*-manylinux_i686"]
+environment = { VERTIRTA_REQUIRE_NATIVE = "1" }
+test-requires = ["pytest>=8.0", "numpy>=1.26", "gymnasium>=1.1", "typer>=0.12"]
+test-command = "pytest {project}/tests/sdk/test_vertirta_sdk.py -v"
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"

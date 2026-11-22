@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.22)
-project(VertiRTA VERSION 1.0.0 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.25)
+project(VertiRTA VERSION 3.0.0 LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)
@@ -7,6 +7,8 @@ include(FetchContent)
 option(VERTIRTA_BUILD_COMPANION "Build C++20 companion RTA target" ON)
 option(VERTIRTA_BUILD_TESTS "Build VertiRTA Catch2 unit tests" ON)
 option(VERTIRTA_ENABLE_STRICT_FP "Enforce IEEE-754 deterministic FP flags" ON)
+option(VERTIRTA_INSTALL "Generate relocatable VertiRTA CMake install & export rules" ON)
+option(VERTIRTA_BUILD_PYTHON "Build nanobind Python SDK extension module" OFF)
 
 set(VERTIRTA_STRICT_FP_FLAGS
   -fno-fast-math
@@ -73,4 +75,45 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
     add_subdirectory(tests/determinism)
   endif()
+endif()
+
+if(VERTIRTA_BUILD_PYTHON AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/python/CMakeLists.txt")
+  add_subdirectory(sdk/python)
+endif()
+
+if(VERTIRTA_INSTALL AND NOT CMAKE_CROSSCOMPILING AND TARGET vertirta_flight_core)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+
+  install(TARGETS vertirta_flight_core
+    EXPORT VertiRTAFlightCoreTargets
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    FILE_SET HEADERS DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  )
+
+  install(EXPORT VertiRTAFlightCoreTargets
+    FILE VertiRTAFlightCoreTargets.cmake
+    NAMESPACE VertiRTA::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/VertiRTA"
+  )
+
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VertiRTAConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/VertiRTAConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/VertiRTA"
+  )
+
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/VertiRTAConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}"
+    COMPATIBILITY SameMajorVersion
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/VertiRTAConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/VertiRTAConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/VertiRTA"
+  )
 endif()

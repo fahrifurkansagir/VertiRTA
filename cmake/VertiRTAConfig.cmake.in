@@ -1,0 +1,20 @@
+@PACKAGE_INIT@
+
+set(_vertirta_supported_components flight_core)
+
+foreach(_comp IN LISTS VertiRTA_FIND_COMPONENTS)
+  if(NOT _comp IN_LIST _vertirta_supported_components)
+    set(VertiRTA_FOUND FALSE)
+    set(VertiRTA_NOT_FOUND_MESSAGE "Unsupported VertiRTA component: ${_comp}")
+    return()
+  endif()
+endforeach()
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/VertiRTAFlightCoreTargets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/VertiRTAFlightCoreTargets.cmake")
+  set(VertiRTA_flight_core_FOUND TRUE)
+else()
+  set(VertiRTA_flight_core_FOUND FALSE)
+endif()
+
+check_required_components(VertiRTA)
