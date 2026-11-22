@@ -1,0 +1,115 @@
+#!/bin/sh
+#
+# @name Gazebo VertiRTA-X8-240 Coaxial eVTOL
+# @type Octorotor Coaxial X
+# @class Copter
+#
+# @maintainer VertiRTA Flight Controls <vertirta@aegis-vtol.local>
+#
+# PX4 v1.16 POSIX SITL Airframe (DR-1 Erratum #3 & DR-2 CEL Locks):
+#   VERTIRTA_USE_INDI=1 (default): launches rc.vertirta_apps (400 Hz mc_indi_wls_control)
+#       and suppresses stock mc_pos_control/mc_att_control/mc_rate_control/control_allocator.
+#   VERTIRTA_USE_INDI=0 (Gate-2 stock baseline): retains stock rc.mc_apps with CA_FAILURE_MODE=1.
+
+. ${R}etc/init.d/rc.mc_defaults
+
+PX4_SIMULATOR=${PX4_SIMULATOR:=gz}
+PX4_GZ_WORLD=${PX4_GZ_WORLD:=kartal_coast}
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=vertirta_x8_240}
+VERTIRTA_USE_INDI=${VERTIRTA_USE_INDI:=1}
+
+param set-default SIM_GZ_EN 1
+param set-default CA_AIRFRAME 0
+param set-default CA_ROTOR_COUNT 8
+param set-default CA_FAILURE_MODE 1
+
+# Coaxial X8 Geometry in PX4 FRD (+X Forward, +Y Right, +Z Down)
+# Upper rotors 0..3 (z = -0.175 m, k_T_u = 1.3809e-2 -> CT = 7.954, |KM| = 0.076)
+param set-default CA_ROTOR0_PX  0.955
+param set-default CA_ROTOR0_PY  0.955
+param set-default CA_ROTOR0_PZ -0.175
+param set-default CA_ROTOR0_CT  7.954
+param set-default CA_ROTOR0_KM  0.076
+
+param set-default CA_ROTOR1_PX -0.955
+param set-default CA_ROTOR1_PY -0.955
+param set-default CA_ROTOR1_PZ -0.175
+param set-default CA_ROTOR1_CT  7.954
+param set-default CA_ROTOR1_KM  0.076
+
+param set-default CA_ROTOR2_PX  0.955
+param set-default CA_ROTOR2_PY -0.955
+param set-default CA_ROTOR2_PZ -0.175
+param set-default CA_ROTOR2_CT  7.954
+param set-default CA_ROTOR2_KM -0.076
+
+param set-default CA_ROTOR3_PX -0.955
+param set-default CA_ROTOR3_PY  0.955
+param set-default CA_ROTOR3_PZ -0.175
+param set-default CA_ROTOR3_CT  7.954
+param set-default CA_ROTOR3_KM -0.076
+
+# Lower rotors 4..7 (z = +0.175 m, counter-rotating, eta_coax = 0.85 -> CT = 6.761, |KM| = 0.086)
+param set-default CA_ROTOR4_PX  0.955
+param set-default CA_ROTOR4_PY  0.955
+param set-default CA_ROTOR4_PZ  0.175
+param set-default CA_ROTOR4_CT  6.761
+param set-default CA_ROTOR4_KM -0.086
+
+param set-default CA_ROTOR5_PX -0.955
+param set-default CA_ROTOR5_PY -0.955
+param set-default CA_ROTOR5_PZ  0.175
+param set-default CA_ROTOR5_CT  6.761
+param set-default CA_ROTOR5_KM -0.086
+
+param set-default CA_ROTOR6_PX  0.955
+param set-default CA_ROTOR6_PY -0.955
+param set-default CA_ROTOR6_PZ  0.175
+param set-default CA_ROTOR6_CT  6.761
+param set-default CA_ROTOR6_KM  0.086
+
+param set-default CA_ROTOR7_PX -0.955
+param set-default CA_ROTOR7_PY  0.955
+param set-default CA_ROTOR7_PZ  0.175
+param set-default CA_ROTOR7_CT  6.761
+param set-default CA_ROTOR7_KM  0.086
+
+# Map normalized actuator_motors [0, 1] directly to physical rad/s [0, 240]
+# Locked ceiling: SIM_GZ_EC_MAX 240 rad/s across all 8 coaxial ESC channels
+param set-default SIM_GZ_EC_FUNC1 101; param set-default SIM_GZ_EC_MIN1 0; param set-default SIM_GZ_EC_MAX1 240
+param set-default SIM_GZ_EC_FUNC2 102; param set-default SIM_GZ_EC_MIN2 0; param set-default SIM_GZ_EC_MAX2 240
+param set-default SIM_GZ_EC_FUNC3 103; param set-default SIM_GZ_EC_MIN3 0; param set-default SIM_GZ_EC_MAX3 240
+param set-default SIM_GZ_EC_FUNC4 104; param set-default SIM_GZ_EC_MIN4 0; param set-default SIM_GZ_EC_MAX4 240
+param set-default SIM_GZ_EC_FUNC5 105; param set-default SIM_GZ_EC_MIN5 0; param set-default SIM_GZ_EC_MAX5 240
+param set-default SIM_GZ_EC_FUNC6 106; param set-default SIM_GZ_EC_MIN6 0; param set-default SIM_GZ_EC_MAX6 240
+param set-default SIM_GZ_EC_FUNC7 107; param set-default SIM_GZ_EC_MIN7 0; param set-default SIM_GZ_EC_MAX7 240
+param set-default SIM_GZ_EC_FUNC8 108; param set-default SIM_GZ_EC_MIN8 0; param set-default SIM_GZ_EC_MAX8 240
+
+# Multi-IMU EKF2 diversity & 400 Hz lockstep integration
+param set-default SENS_IMU_MODE 0
+param set-default EKF2_MULTI_IMU 3
+param set-default IMU_INTEG_RATE 400
+
+# Failure injection & CEL attitude-failsafe lock (DR-2 critical lock):
+# deferFailsafesSync(true, 60) does NOT inhibit PX4 attitude-limit failsafe termination,
+# so FD_FAIL_R=0 and FD_FAIL_P=0 MUST be set for SAME_ARM_DUAL_LOSS active-spin CEL.
+param set-default SYS_FAILURE_EN 1
+param set-default FD_FAIL_R 0
+param set-default FD_FAIL_P 0
+
+# Nominal T/W = 2.5 hover thrust prior & ROS 2 Jazzy uXRCE-DDS transport
+param set-default MPC_THR_HOVER 0.40
+param set-default COM_RCL_EXCEPT 4
+param set-default NAV_DLL_ACT 0
+param set-default UXRCE_DDS_SYNCT 1
+param set-default UXRCE_DDS_PRT 8888
+
+# Clean switch between VertiRTA 400 Hz INDI+WLS/TMR mode and stock PX4 baseline
+if [ "${VERTIRTA_USE_INDI}" = "1" ]; then
+	# Suppress rc.vehicle_setup -> rc.mc_apps so stock mc_pos/att/rate/allocator never start
+	set VEHICLE_TYPE none
+	. ${R}etc/init.d/rc.vertirta_apps
+else
+	# Gate-2 Day 8-9 stock PX4 baseline (VERTIRTA_USE_INDI=0)
+	set VEHICLE_TYPE mc
+fi

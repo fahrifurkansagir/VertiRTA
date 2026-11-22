@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VertiRTA-X8-240 Full-Scale Coaxial X8 eVTOL Model (Gazebo Harmonic / SDF 1.9)
+  Single-Source-of-Truth: config/vehicle_x8_240.yaml (Spec v1.2 + DR-1 Forensic Locks)
+  Frames: Gazebo FLU (+X Forward, +Y Left, +Z Up); PX4 FRD (+X Forward, +Y Right, +Z Down).
+  Rotor mapping (FLU):
+    Upper (+0.175 m): rotor_0 FR (+0.95459,-0.95459), rotor_1 RL (-0.95459,+0.95459),
+                      rotor_2 FL (+0.95459,+0.95459), rotor_3 RR (-0.95459,-0.95459)
+    Lower (-0.175 m): rotor_4 FR (+0.95459,-0.95459), rotor_5 RL (-0.95459,+0.95459),
+                      rotor_6 FL (+0.95459,+0.95459), rotor_7 RR (-0.95459,-0.95459)
+-->
+<sdf version="1.9">
+  <model name="vertirta_x8_240">
+    <pose>0 0 0.72 0 0 0</pose>
+
+    <link name="base_link">
+      <inertial>
+        <mass>240.0</mass>
+        <inertia>
+          <ixx>85.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>95.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>140.0</izz>
+        </inertia>
+      </inertial>
+
+      <!-- Compliant circular landing skid & fuselage collision geometry (r_skid = 0.70 m) -->
+      <collision name="fuselage_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box><size>1.10 0.90 0.70</size></box>
+        </geometry>
+      </collision>
+      <collision name="skid_ring_collision">
+        <pose>0 0 -0.66 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.70</radius><length>0.12</length></cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode><mu>0.85</mu><mu2>0.85</mu2></ode>
+          </friction>
+          <contact>
+            <ode><kp>1.5e5</kp><kd>1.2e3</kd><max_vel>0.5</max_vel></ode>
+          </contact>
+        </surface>
+      </collision>
+
+      <visual name="fuselage_visual">
+        <geometry>
+          <box><size>1.10 0.90 0.70</size></box>
+        </geometry>
+        <material>
+          <ambient>0.12 0.16 0.22 1</ambient>
+          <diffuse>0.18 0.24 0.34 1</diffuse>
+        </material>
+      </visual>
+      <visual name="arm_fr_rl_visual">
+        <pose>0 0 0 0 0 -0.785398</pose>
+        <geometry>
+          <box><size>2.70 0.10 0.10</size></box>
+        </geometry>
+        <material>
+          <ambient>0.08 0.08 0.08 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+      <visual name="arm_fl_rr_visual">
+        <pose>0 0 0 0 0 0.785398</pose>
+        <geometry>
+          <box><size>2.70 0.10 0.10</size></box>
+        </geometry>
+        <material>
+          <ambient>0.08 0.08 0.08 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+      <visual name="skid_ring_visual">
+        <pose>0 0 -0.66 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.70</radius><length>0.06</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.2 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- IMU 0 (400 Hz, ICM-42688-P class: 7.0e-4 rad/s gyro, 9.8e-3 m/s^2 accel) -->
+      <sensor name="imu_sensor_0" type="imu">
+        <always_on>1</always_on>
+        <update_rate>400</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.00070</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.00070</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.00070</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+
+      <!-- IMU 1 (400 Hz, ICM-45686 class: 9.4e-4 rad/s gyro, 9.8e-3 m/s^2 accel) -->
+      <sensor name="imu_sensor_1" type="imu">
+        <always_on>1</always_on>
+        <update_rate>400</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.00094</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.00094</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.00094</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0098</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+
+      <!-- IMU 2 (400 Hz, BMI088 class: 3.46e-3 rad/s gyro, 0.0222/0.0222/0.0264 m/s^2 accel) -->
+      <sensor name="imu_sensor_2" type="imu">
+        <always_on>1</always_on>
+        <update_rate>400</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.00346</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.00346</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.00346</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0222</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0222</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0264</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+
+      <!-- Dual Barometers (50 Hz, BMP388 / ICP20100 class: 3.0 Pa stddev) -->
+      <sensor name="air_pressure_sensor_0" type="air_pressure">
+        <always_on>1</always_on>
+        <update_rate>50</update_rate>
+        <air_pressure>
+          <pressure>
+            <noise type="gaussian"><mean>0</mean><stddev>3.0</stddev></noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+      <sensor name="air_pressure_sensor_1" type="air_pressure">
+        <always_on>1</always_on>
+        <update_rate>50</update_rate>
+        <air_pressure>
+          <pressure>
+            <noise type="gaussian"><mean>0</mean><stddev>3.0</stddev></noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+
+      <!-- GNSS & Magnetometer -->
+      <sensor name="navsat_sensor" type="navsat">
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+      </sensor>
+      <sensor name="magnetometer_sensor" type="magnetometer">
+        <always_on>1</always_on>
+        <update_rate>100</update_rate>
+        <magnetometer>
+          <x><noise type="gaussian"><mean>0</mean><stddev>0.0001</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0</mean><stddev>0.0001</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0</mean><stddev>0.0001</stddev></noise></z>
+        </magnetometer>
+      </sensor>
+    </link>
+
+    <!-- DR-1 Erratum #4/#7 Lock: Explicit lidar_link with gpu_lidar max=60.0 m + both gz_frame_id & frame_id -->
+    <link name="lidar_link">
+      <pose relative_to="base_link">0.55 0.0 -0.25 0 0.1745 0</pose>
+      <inertial>
+        <mass>0.01</mass>
+        <inertia>
+          <ixx>1.0e-5</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>1.0e-5</iyy><iyz>0</iyz><izz>1.0e-5</izz>
+        </inertia>
+      </inertial>
+      <visual name="lidar_housing_visual">
+        <geometry>
+          <cylinder><radius>0.055</radius><length>0.075</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.05 0.05 0.05 1</ambient>
+          <diffuse>0.12 0.12 0.12 1</diffuse>
+        </material>
+      </visual>
+      <!-- 16-beam 3D GPU LiDAR (10 Hz, 360x30 deg FOV, 60.0 m max range, 5,760 pts/scan) -->
+      <sensor name="lidar_3d_16beam" type="gpu_lidar">
+        <topic>/vertirta/lidar_16</topic>
+        <gz_frame_id>lidar_link</gz_frame_id>
+        <frame_id>lidar_link</frame_id>
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.26180</min_angle>
+              <max_angle>0.26180</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.8</min>
+            <max>60.0</max>
+            <resolution>0.02</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.03</stddev>
+          </noise>
+        </ray>
+      </sensor>
+    </link>
+    <joint name="lidar_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_link</child>
+    </joint>
+
+    <!-- Upper Rotors 0..3 (FLU z = +0.175 m, R = 0.75 m) -->
+    <link name="rotor_0">
+      <pose relative_to="base_link">0.954594 -0.954594 0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_0_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.15 0.65 0.90 0.55</diffuse></material></visual>
+    </link>
+    <joint name="rotor_0_joint" type="revolute"><parent>base_link</parent><child>rotor_0</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_1">
+      <pose relative_to="base_link">-0.954594 0.954594 0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_1_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.15 0.65 0.90 0.55</diffuse></material></visual>
+    </link>
+    <joint name="rotor_1_joint" type="revolute"><parent>base_link</parent><child>rotor_1</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_2">
+      <pose relative_to="base_link">0.954594 0.954594 0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_2_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.90 0.45 0.15 0.55</diffuse></material></visual>
+    </link>
+    <joint name="rotor_2_joint" type="revolute"><parent>base_link</parent><child>rotor_2</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_3">
+      <pose relative_to="base_link">-0.954594 -0.954594 0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_3_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.90 0.45 0.15 0.55</diffuse></material></visual>
+    </link>
+    <joint name="rotor_3_joint" type="revolute"><parent>base_link</parent><child>rotor_3</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <!-- Lower Rotors 4..7 (FLU z = -0.175 m, counter-rotating, dz_coax = 0.35 m) -->
+    <link name="rotor_4">
+      <pose relative_to="base_link">0.954594 -0.954594 -0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_4_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.90 0.45 0.15 0.45</diffuse></material></visual>
+    </link>
+    <joint name="rotor_4_joint" type="revolute"><parent>base_link</parent><child>rotor_4</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_5">
+      <pose relative_to="base_link">-0.954594 0.954594 -0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_5_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.90 0.45 0.15 0.45</diffuse></material></visual>
+    </link>
+    <joint name="rotor_5_joint" type="revolute"><parent>base_link</parent><child>rotor_5</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_6">
+      <pose relative_to="base_link">0.954594 0.954594 -0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_6_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.15 0.65 0.90 0.45</diffuse></material></visual>
+    </link>
+    <joint name="rotor_6_joint" type="revolute"><parent>base_link</parent><child>rotor_6</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <link name="rotor_7">
+      <pose relative_to="base_link">-0.954594 -0.954594 -0.175 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>2e-4</izz></inertia></inertial>
+      <visual name="rotor_7_vis"><geometry><cylinder><radius>0.75</radius><length>0.02</length></cylinder></geometry><material><diffuse>0.15 0.65 0.90 0.45</diffuse></material></visual>
+    </link>
+    <joint name="rotor_7_joint" type="revolute"><parent>base_link</parent><child>rotor_7</child><axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis></joint>
+
+    <!-- Single Model-Level Coaxial Propulsion + 1-RC Thevenin Sag System Plugin -->
+    <plugin filename="libvertirta_coaxial_propulsion.so" name="vertirta_gz::VertirtaCoaxialPropulsionSystem">
+      <k_t0>0.0138091</k_t0>
+      <k_q0>0.00104876</k_q0>
+      <eta_coax_hover>0.85</eta_coax_hover>
+      <swirl_recovery>0.96</swirl_recovery>
+      <j_r>0.135</j_r>
+      <rotor_radius>0.75</rotor_radius>
+      <coax_spacing>0.35</coax_spacing>
+      <tau_up>0.085</tau_up>
+      <tau_down>0.120</tau_down>
+      <tau_coast>0.424</tau_coast>
+      <alpha_max>487.7</alpha_max>
+      <omega_max>240.0</omega_max>
+      <ke_bus>1.36</ke_bus>
+      <r_eff>0.72</r_eff>
+      <command_topic>/model/vertirta_x8_240/command/motor_speed</command_topic>
+      <feedback_topic>/model/vertirta_x8_240/telemetry/motor_speed</feedback_topic>
+      <wind_topic>/vertirta/wind_world_enu</wind_topic>
+      <fault_mask_topic>/vertirta/fault/motor_mask</fault_mask_topic>
+    </plugin>
+  </model>
+</sdf>

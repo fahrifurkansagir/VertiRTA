@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# VertiRTA-X8-240 Flight Application Startup (sourced when VERTIRTA_USE_INDI=1)
+#
+# Replaces stock rc.mc_apps to eliminate dual-publisher contention on actuator_motors.
+# Stock multicopter controllers (mc_pos_control, mc_att_control, mc_rate_control,
+# and control_allocator) are intentionally excluded.
+
+# Core non-conflicting flight mode & landing state machines
+flight_mode_manager start
+land_detector start multicopter
+mc_hover_thrust_estimator start
+
+# Single integrated 400 Hz PX4-internal TMR + Reduced-Attitude INDI + f64/QR WLS + Motor FDI module
+mc_indi_wls_control start

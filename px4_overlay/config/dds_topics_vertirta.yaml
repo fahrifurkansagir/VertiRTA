@@ -1,0 +1,38 @@
+# PX4 v1.16 uXRCE-DDS topic overlay for VertiRTA-X8-240
+# Merge into PX4-Autopilot/src/modules/uxrce_dds_client/dds_topics.yaml
+# Transport: UDP :8888 (UXRCE_DDS_PRT=8888, UXRCE_DDS_SYNCT=1 monotonic sim clock)
+
+publications:
+  - topic: /fmu/out/vertirta_capability_envelope
+    type: px4_msgs::msg::VertirtaCapabilityEnvelope
+    rate_limit: 100
+
+  - topic: /fmu/out/vehicle_local_position
+    type: px4_msgs::msg::VehicleLocalPosition
+    rate_limit: 100
+
+  - topic: /fmu/out/vehicle_odometry
+    type: px4_msgs::msg::VehicleOdometry
+    rate_limit: 100
+
+  - topic: /fmu/out/vehicle_status
+    type: px4_msgs::msg::VehicleStatus
+
+  - topic: /fmu/out/estimator_status_flags
+    type: px4_msgs::msg::EstimatorStatusFlags
+
+  - topic: /fmu/out/battery_status
+    type: px4_msgs::msg::BatteryStatus
+
+subscriptions:
+  - topic: /fmu/in/vertirta_rta_setpoint
+    type: px4_msgs::msg::VertirtaRtaSetpoint
+
+  - topic: /fmu/in/vehicle_attitude_setpoint
+    type: px4_msgs::msg::VehicleAttitudeSetpoint
+
+  - topic: /fmu/in/vehicle_thrust_setpoint
+    type: px4_msgs::msg::VehicleThrustSetpoint
+
+  - topic: /fmu/in/vehicle_command
+    type: px4_msgs::msg::VehicleCommand

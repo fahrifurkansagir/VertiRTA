@@ -1,0 +1,207 @@
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.hpp b/src/modules/simulation/gz_bridge/GZBridge.hpp
+--- a/src/modules/simulation/gz_bridge/GZBridge.hpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.hpp
+@@ -34,4 +34,6 @@
+ #pragma once
+ 
++#include <array>
++#include <memory>
+ #include <px4_platform_common/atomic.h>
+ #include <px4_platform_common/module.h>
+@@ -78,4 +80,4 @@
+ 	void clockCallback(const gz::msgs::Clock &clock);
+-	void barometerCallback(const gz::msgs::FluidPressure &air_pressure);
+-	void imuCallback(const gz::msgs::IMU &imu);
++	void barometerCallback(int idx, const gz::msgs::FluidPressure &air_pressure);
++	void imuCallback(int idx, const gz::msgs::IMU &imu);
+ 	void navSatCallback(const gz::msgs::NavSat &navsat);
+@@ -112,6 +114,14 @@
+ 	uORB::PublicationMulti<sensor_mag_s> _sensor_mag_pub{ORB_ID(sensor_mag)};
+-	uORB::PublicationMulti<sensor_baro_s> _sensor_baro_pub{ORB_ID(sensor_baro)};
+-
+-	PX4Accelerometer _px4_accel{1310988}; // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
+-	PX4Gyroscope _px4_gyro{1310988};      // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
++	static constexpr int kNumImus = 3;
++	static constexpr int kNumBaros = 2;
++
++	std::array<uORB::PublicationMulti<sensor_baro_s>, kNumBaros> _sensor_baro_pubs{
++		uORB::PublicationMulti<sensor_baro_s>{ORB_ID(sensor_baro)},
++		uORB::PublicationMulti<sensor_baro_s>{ORB_ID(sensor_baro)}
++	};
++
++	// Part (a): 3x independent simulated IMUs with distinct DeviceIds (bus 1, addr 1..3),
++	// inheriting native PX4Gyroscope/PX4Accelerometer failure_injection::process().
++	std::array<std::unique_ptr<PX4Accelerometer>, kNumImus> _px4_accels{};
++	std::array<std::unique_ptr<PX4Gyroscope>, kNumImus> _px4_gyros{};
+ 	uORB::PublicationMulti<sensor_gps_s> _sensor_gps_pub{ORB_ID(sensor_gps)};
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.cpp b/src/modules/simulation/gz_bridge/GZBridge.cpp
+--- a/src/modules/simulation/gz_bridge/GZBridge.cpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.cpp
+@@ -115,4 +115,5 @@
+ 	// Wait for lockstep Gazebo clock startup
+-	const int sleep_count_limit = 1000;
++	// Part (c): Raise lockstep timeout 1000 -> 5000 (5 s) for ogre2 gpu_lidar shader compilation
++	const int sleep_count_limit = 5000;
+ 	int sleep_count = 0;
+ 	while (!_clock_received && sleep_count < sleep_count_limit) {
+@@ -148,14 +149,54 @@
+ 	// Air pressure (barometer)
+-	std::string air_pressure_topic = "/world/" + _world_name + "/model/" + _model_name + "/link/base_link/sensor/air_pressure_sensor/air_pressure";
+-	if (!_node.Subscribe(air_pressure_topic, &GZBridge::barometerCallback, this)) {
+-		PX4_ERR("failed to subscribe to %s", air_pressure_topic.c_str());
+-		return PX4_ERROR;
+-	}
+-
+-	// IMU
+-	std::string imu_topic = "/world/" + _world_name + "/model/" + _model_name + "/link/base_link/sensor/imu_sensor/imu";
+-	if (!_node.Subscribe(imu_topic, &GZBridge::imuCallback, this)) {
+-		PX4_ERR("failed to subscribe to %s", imu_topic.c_str());
+-		return PX4_ERROR;
++	// Part (b): Dual barometer subscriptions (air_pressure_sensor_0..1) with legacy idx 0 fallback
++	for (int idx = 0; idx < kNumBaros; ++idx) {
++		const std::string baro_topic =
++			"/world/" + _world_name + "/model/" + _model_name +
++			"/link/base_link/sensor/air_pressure_sensor_" + std::to_string(idx) + "/air_pressure";
++		std::function<void(const gz::msgs::FluidPressure &)> baro_cb =
++			[this, idx](const gz::msgs::FluidPressure &msg) { barometerCallback(idx, msg); };
++		if (!_node.Subscribe(baro_topic, baro_cb)) {
++			PX4_ERR("failed to subscribe to %s", baro_topic.c_str());
++			return PX4_ERROR;
++		}
++	}
++	{
++		const std::string legacy_baro =
++			"/world/" + _world_name + "/model/" + _model_name +
++			"/link/base_link/sensor/air_pressure_sensor/air_pressure";
++		std::function<void(const gz::msgs::FluidPressure &)> legacy_baro_cb =
++			[this](const gz::msgs::FluidPressure &msg) { barometerCallback(0, msg); };
++		_node.Subscribe(legacy_baro, legacy_baro_cb);
++	}
++
++	// Part (a) & (b): 3x PX4Gyroscope/PX4Accelerometer with distinct DeviceIds + imu_sensor_0..2
++	for (int idx = 0; idx < kNumImus; ++idx) {
++		device::Device::DeviceId dev_id{};
++		dev_id.devid_s.bus_type = device::Device::DeviceBusType_SIMULATION;
++		dev_id.devid_s.bus = 1;
++		dev_id.devid_s.address = static_cast<uint8_t>(idx + 1);
++		dev_id.devid_s.devtype = DRV_IMU_DEVTYPE_SIM;
++
++		_px4_accels[idx] = std::make_unique<PX4Accelerometer>(dev_id.devid);
++		_px4_gyros[idx] = std::make_unique<PX4Gyroscope>(dev_id.devid);
++		_px4_accels[idx]->set_scale(1.0f);
++		_px4_gyros[idx]->set_scale(1.0f);
++
++		const std::string imu_topic =
++			"/world/" + _world_name + "/model/" + _model_name +
++			"/link/base_link/sensor/imu_sensor_" + std::to_string(idx) + "/imu";
++		std::function<void(const gz::msgs::IMU &)> imu_cb =
++			[this, idx](const gz::msgs::IMU &msg) { imuCallback(idx, msg); };
++		if (!_node.Subscribe(imu_topic, imu_cb)) {
++			PX4_ERR("failed to subscribe to %s", imu_topic.c_str());
++			return PX4_ERROR;
++		}
++	}
++	{
++		const std::string legacy_imu =
++			"/world/" + _world_name + "/model/" + _model_name +
++			"/link/base_link/sensor/imu_sensor/imu";
++		std::function<void(const gz::msgs::IMU &)> legacy_imu_cb =
++			[this](const gz::msgs::IMU &msg) { imuCallback(0, msg); };
++		_node.Subscribe(legacy_imu, legacy_imu_cb);
+ 	}
+ 	return PX4_OK;
+@@ -240,11 +281,19 @@
+-void GZBridge::barometerCallback(const gz::msgs::FluidPressure &air_pressure)
++void GZBridge::barometerCallback(int idx, const gz::msgs::FluidPressure &air_pressure)
+ {
++	if (idx < 0 || idx >= kNumBaros) {
++		return;
++	}
+ 	const uint64_t timestamp = hrt_absolute_time();
+ 	sensor_baro_s report{};
+ 	report.timestamp_sample = timestamp;
+-	report.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
++	device::Device::DeviceId baro_id{};
++	baro_id.devid_s.bus_type = device::Device::DeviceBusType_SIMULATION;
++	baro_id.devid_s.bus = 1;
++	baro_id.devid_s.address = static_cast<uint8_t>(4 + idx);
++	baro_id.devid_s.devtype = DRV_BARO_DEVTYPE_BAROSIM;
++	report.device_id = baro_id.devid;
+ 	report.pressure = air_pressure.pressure();
+ 	report.temperature = _temperature;
+ 	report.timestamp = hrt_absolute_time();
+-	_sensor_baro_pub.publish(report);
++	_sensor_baro_pubs[idx].publish(report);
+ }
+@@ -265,7 +314,11 @@
+-void GZBridge::imuCallback(const gz::msgs::IMU &imu)
++void GZBridge::imuCallback(int idx, const gz::msgs::IMU &imu)
+ {
++	if (idx < 0 || idx >= kNumImus || !_px4_accels[idx] || !_px4_gyros[idx]) {
++		return;
++	}
+ 	const uint64_t timestamp = hrt_absolute_time();
+ 	// Convert FLU -> FRD: (x, -y, -z)
+-	_px4_accel.update(timestamp, imu.linear_acceleration().x(), -imu.linear_acceleration().y(), -imu.linear_acceleration().z());
+-	_px4_gyro.update(timestamp, imu.angular_velocity().x(), -imu.angular_velocity().y(), -imu.angular_velocity().z());
++	// PX4Accelerometer::update() and PX4Gyroscope::update() invoke native failure_injection::process()
++	_px4_accels[idx]->update(timestamp, imu.linear_acceleration().x(), -imu.linear_acceleration().y(), -imu.linear_acceleration().z());
++	_px4_gyros[idx]->update(timestamp, imu.angular_velocity().x(), -imu.angular_velocity().y(), -imu.angular_velocity().z());
+ }
+diff --git a/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.hpp b/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.hpp
+--- a/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.hpp
++++ b/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.hpp
+@@ -42,3 +42,4 @@
+ #include <uORB/Publication.hpp>
+ #include <uORB/Subscription.hpp>
++#include <uORB/topics/vehicle_command.h>
+ #include <uORB/topics/esc_status.h>
+@@ -70,3 +71,6 @@
+ 	gz::transport::Node::Publisher _actuators_pub;
+ 	uORB::Publication<esc_status_s> _esc_status_pub{ORB_ID(esc_status)};
++	// Part (d): Motor failure injection subscription (failure motor off -i <1..8>)
++	uORB::Subscription _failure_injection_sub{ORB_ID(vehicle_command)};
++	uint16_t _motor_failure_mask{0};
+ 	pthread_mutex_t _node_mutex;
+diff --git a/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.cpp b/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.cpp
+--- a/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.cpp
++++ b/src/modules/simulation/gz_bridge/GZMixingInterfaceESC.cpp
+@@ -88,9 +88,37 @@
+ bool GZMixingInterfaceESC::updateOutputs(float outputs[MAX_ACTUATORS], unsigned num_outputs, unsigned num_control_groups_updated)
+ {
++	// Part (d): Poll VEHICLE_CMD_INJECT_FAILURE for motor cuts (GZ Harmonic parity with Gazebo Classic)
++	vehicle_command_s cmd{};
++	while (_failure_injection_sub.update(&cmd)) {
++		if (cmd.command == vehicle_command_s::VEHICLE_CMD_INJECT_FAILURE &&
++		    static_cast<int>(cmd.param1) == vehicle_command_s::FAILURE_UNIT_SYSTEM_MOTOR) {
++			const int ftype = static_cast<int>(cmd.param2);
++			const int instance = static_cast<int>(cmd.param3); // 0 = all, 1..N = 1-indexed motor
++			const bool cut = (ftype == vehicle_command_s::FAILURE_TYPE_OFF);
++			const bool restore = (ftype == vehicle_command_s::FAILURE_TYPE_OK);
++			if (cut || restore) {
++				if (instance == 0) {
++					_motor_failure_mask = cut ? 0xFFFFu : 0x0000u;
++				} else if (instance >= 1 && instance <= static_cast<int>(MAX_ACTUATORS)) {
++					const uint16_t bit = static_cast<uint16_t>(1u << (instance - 1));
++					if (cut) {
++						_motor_failure_mask |= bit;
++					} else {
++						_motor_failure_mask &= static_cast<uint16_t>(~bit);
++					}
++				}
++			}
++		}
++	}
++
+ 	gz::msgs::Actuators actuators_msg;
+ 	actuators_msg.mutable_velocity()->Resize(num_outputs, 0);
+ 	for (unsigned i = 0; i < num_outputs; ++i) {
+-		actuators_msg.mutable_velocity()->Set(i, outputs[i]);
++		if ((_motor_failure_mask & static_cast<uint16_t>(1u << i)) != 0u) {
++			actuators_msg.mutable_velocity()->Set(i, 0.0);
++		} else {
++			actuators_msg.mutable_velocity()->Set(i, outputs[i]);
++		}
+ 	}
+ 	return _actuators_pub.Publish(actuators_msg);
+ }
