@@ -26,7 +26,7 @@ def _find_emit_smt2_binary() -> tuple[list[str], bool]:
     """Locate emit_smt2_cases binary from env override or standard build presets."""
     env_bin = os.environ.get("VERTIRTA_EMIT_SMT2_BIN")
     if env_bin:
-        if env_bin.startswith("/"):
+        if os.name == "nt" and env_bin.startswith("/"):
             return (["wsl", "-d", "Ubuntu", "--", env_bin], True)
         return ([env_bin], True)
 

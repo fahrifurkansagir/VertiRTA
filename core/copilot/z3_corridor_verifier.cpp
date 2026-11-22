@@ -205,7 +205,8 @@ void append_circum_ngon_vertices(double cx, double cy, double r, int n_sides,
 
 #ifdef VERTIRTA_HAS_Z3
 [[nodiscard]] z3::expr z3_qreal(z3::context& c, double val) {
-  return c.real_val(scale_1e4(val), 10000);
+  const std::string rat = std::to_string(scale_1e4(val)) + "/10000";
+  return c.real_val(rat.c_str());
 }
 
 [[nodiscard]] z3::expr z3_segment_disjoint(z3::context& c, double e0, double n0,
@@ -459,11 +460,12 @@ Z3VerifyResult verify_mission_qflra(const RtaStateSnapshotV1& st,
   }
 
 #ifdef VERTIRTA_HAS_Z3
-  z3::context ctx;
-  z3::solver s(ctx, "QF_LRA");
+  // Reuse thread-local Z3 context & incremental SMT core (avoids ~6 ms per-call context/tactic init).
+  thread_local z3::context ctx;
+  thread_local z3::solver s(ctx);
+  s.reset();
   z3::params p(ctx);
   p.set("unsat_core", true);
-  p.set("core.minimize", true);
   p.set("rlimit", 250000U);
   p.set("timeout", 12U);
   s.set(p);
@@ -517,37 +519,56 @@ Z3VerifyResult verify_mission_qflra(const RtaStateSnapshotV1& st,
     return horiz || above;
   };
 
-  s.add(ctx.bool_val(!m.requests_shield_disable && st.shield_active), "c_shield_bypass");
-  s.add(zn_act == z3_qreal(ctx, 1.0), "c_action_mutex");
+  z3::expr_vector assumptions(ctx);
+  std::vector<std::string> tracker_names;
+  tracker_names.reserve(16U);
+  auto add_z3_tracked = [&](const std::string& label, const z3::expr& expr) {
+    z3::expr b = ctx.bool_const(label.c_str());
+    s.add(z3::implies(b, expr));
+    assumptions.push_back(b);
+    tracker_names.push_back(label);
+  };
+
+  add_z3_tracked("c_shield_bypass", ctx.bool_val(!m.requests_shield_disable && st.shield_active));
+  add_z3_tracked("c_action_mutex", zn_act == z3_qreal(ctx, 1.0));
   if (st.ltfj_ctr_active) {
-    s.add(z3_zone_expr(polys.ltfj), "c_ltfj_ctr");
+    add_z3_tracked("c_ltfj_ctr", z3_zone_expr(polys.ltfj));
   }
   if (st.ltbx_ctr_active) {
-    s.add(z3_zone_expr(polys.ltbx), "c_ltbx_ctr");
+    add_z3_tracked("c_ltbx_ctr", z3_zone_expr(polys.ltbx));
   }
   for (const auto& dn : dyn_polys) {
-    s.add(z3_zone_expr(dn.poly), dn.label.c_str());
+    add_z3_tracked(dn.label, z3_zone_expr(dn.poly));
   }
-  s.add(zt_eta <= z3_qreal(ctx, t_max_soc), "c_soc_reserve");
-  s.add(zagl_min >= z3_qreal(ctx, kDefaultMinAglM), "c_min_agl");
-  s.add(zagl_max <= z3_qreal(ctx, kDefaultMaxAglM), "c_max_agl");
+  add_z3_tracked("c_soc_reserve", zt_eta <= z3_qreal(ctx, t_max_soc));
+  add_z3_tracked("c_min_agl", zagl_min >= z3_qreal(ctx, kDefaultMinAglM));
+  add_z3_tracked("c_max_agl", zagl_max <= z3_qreal(ctx, kDefaultMaxAglM));
   if (!is_loiter) {
-    s.add(zp_safe >= z3_qreal(ctx, kDefaultMinPsafe), "c_slz_unsafe");
-    s.add(zood <= z3_qreal(ctx, kDefaultMaxOodVar), "c_slz_ood");
+    add_z3_tracked("c_slz_unsafe", zp_safe >= z3_qreal(ctx, kDefaultMinPsafe));
+    add_z3_tracked("c_slz_ood", zood <= z3_qreal(ctx, kDefaultMaxOodVar));
   }
-  s.add(zaccel <= z3_qreal(ctx, st.ams.ams_max_accel_mps2), "c_ams_accel");
-  s.add(zspeed <= z3_qreal(ctx, st.ams.max_cruise_airspeed_mps), "c_ams_speed");
-  s.add(zclimb <= z3_qreal(ctx, st.ams.ams_max_climb_mps), "c_ams_climb");
-  s.add((zt1 >= z3_qreal(ctx, 0.0)) && (zt1 < zt2) && (zt2 <= z3_qreal(ctx, t_max_soc)),
-        "c_temporal_order");
+  add_z3_tracked("c_ams_accel", zaccel <= z3_qreal(ctx, st.ams.ams_max_accel_mps2));
+  add_z3_tracked("c_ams_speed", zspeed <= z3_qreal(ctx, st.ams.max_cruise_airspeed_mps));
+  add_z3_tracked("c_ams_climb", zclimb <= z3_qreal(ctx, st.ams.ams_max_climb_mps));
+  add_z3_tracked("c_temporal_order",
+                 (zt1 >= z3_qreal(ctx, 0.0)) && (zt1 < zt2) && (zt2 <= z3_qreal(ctx, t_max_soc)));
 
-  const z3::check_result status = s.check();
+  const z3::check_result status = s.check(assumptions);
   if (status == z3::sat) {
     res.is_sat = true;
   } else if (status == z3::unsat) {
-    z3::expr_vector core = s.unsat_core();
-    for (unsigned i = 0U; i < core.size(); ++i) {
-      res.unsat_core_labels.push_back(core[i].decl().name().str());
+    // Collect complete deterministic set of violated tracked constraints via incremental assumption checks.
+    for (unsigned i = 0U; i < assumptions.size(); ++i) {
+      z3::expr single = assumptions[i];
+      if (s.check(1U, &single) == z3::unsat) {
+        res.unsat_core_labels.push_back(tracker_names[i]);
+      }
+    }
+    if (res.unsat_core_labels.empty()) {
+      z3::expr_vector core = s.unsat_core();
+      for (unsigned i = 0U; i < core.size(); ++i) {
+        res.unsat_core_labels.push_back(core[i].decl().name().str());
+      }
     }
   } else {
     res.timed_out = true;
