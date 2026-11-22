@@ -1,0 +1,187 @@
+{
+  "schema_version": "vertirta.local_gpu_arch_bench/v1.0.0",
+  "weights_status": "ARCHITECTURE_LATENCY_VRAM_BENCHMARK_ONLY_UNTRAINED_WEIGHTS",
+  "disclaimer": "Measures real CUDA silicon inference latency and GPU VRAM footprint of the static-PAPPM PIDNetSlzDeployWrapper ONNX Opset-17 architecture with untrained random weights. Does NOT measure segmentation mIoU, FSR, or OOD AUROC accuracy (all accuracy metrics remain PENDING_COLAB_G4 until trained weights exist).",
+  "timestamp_utc": "2026-11-22T18:17:46Z",
+  "git_sha": "1f7b05e",
+  "host_os": "Windows 10 (AMD64)",
+  "runtime": {
+    "python_version": "3.11.9",
+    "torch_version": "2.15.0+cpu",
+    "onnxruntime_version": "1.23.2",
+    "available_providers": [
+      "TensorrtExecutionProvider",
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ]
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce GTX 1650 SUPER",
+    "driver_version": "621.24",
+    "memory_total_mib": 4096,
+    "memory_free_before_mib": 1876,
+    "compute_cap": "7.5"
+  },
+  "model": {
+    "name": "PIDNetSlzDeployWrapper (static-PAPPM, zero AdaptiveAvgPool2d, zero dino_proj)",
+    "input_shape": [
+      1,
+      3,
+      512,
+      512
+    ],
+    "output_shapes": {
+      "seg_logits": [
+        1,
+        5,
+        512,
+        512
+      ],
+      "surf_normals": [
+        1,
+        3,
+        512,
+        512
+      ],
+      "bdry_prob": [
+        1,
+        1,
+        64,
+        64
+      ]
+    },
+    "opset_version": 17,
+    "deploy_parameters": 8003817
+  },
+  "benchmarks": {
+    "ort_cuda_fp32": {
+      "precision": "fp32",
+      "onnx_size_mb": 30.505,
+      "active_providers": [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "cuda_graph": false,
+      "arena_extend_strategy": "kSameAsRequested",
+      "warmup_iters": 200,
+      "timed_iters": 500,
+      "network_iobinding": {
+        "mean_ms": 9.2042,
+        "p50_ms": 8.9686,
+        "p95_ms": 10.7716,
+        "p99_ms": 15.0456,
+        "min_ms": 7.8743,
+        "max_ms": 21.5362,
+        "fps_mean": 108.65
+      },
+      "end_to_end_host_io": {
+        "timed_iters": 100,
+        "mean_ms": 10.7443,
+        "p50_ms": 10.4391,
+        "p95_ms": 11.5258,
+        "p99_ms": 19.2842,
+        "min_ms": 9.6777,
+        "max_ms": 20.1521,
+        "fps_mean": 93.07
+      },
+      "peak_process_vram_mb": null,
+      "cuda_mem_get_info_delta_mb": 132.0,
+      "nvidia_smi_used_delta_mb": 128.0,
+      "effective_vram_mb": 132.0,
+      "outputs_finite": true,
+      "gates": {
+        "network_p50_lt_12ms": true,
+        "network_p99_lt_12ms": false,
+        "e2e_ge_20hz": true,
+        "vram_lt_300mb": true
+      }
+    },
+    "ort_cuda_fp32_cuda_graph": {
+      "precision": "fp32",
+      "onnx_size_mb": 30.505,
+      "active_providers": [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "cuda_graph": true,
+      "arena_extend_strategy": "kSameAsRequested",
+      "warmup_iters": 200,
+      "timed_iters": 500,
+      "network_iobinding": {
+        "mean_ms": 8.1325,
+        "p50_ms": 8.0586,
+        "p95_ms": 8.8346,
+        "p99_ms": 9.0617,
+        "min_ms": 7.419,
+        "max_ms": 9.3698,
+        "fps_mean": 122.96
+      },
+      "end_to_end_host_io": {
+        "timed_iters": 100,
+        "mean_ms": 11.209,
+        "p50_ms": 11.1789,
+        "p95_ms": 12.1367,
+        "p99_ms": 13.4776,
+        "min_ms": 10.2804,
+        "max_ms": 13.6129,
+        "fps_mean": 89.21
+      },
+      "peak_process_vram_mb": null,
+      "cuda_mem_get_info_delta_mb": 126.0,
+      "nvidia_smi_used_delta_mb": 135.0,
+      "effective_vram_mb": 126.0,
+      "outputs_finite": true,
+      "gates": {
+        "network_p50_lt_12ms": true,
+        "network_p99_lt_12ms": true,
+        "e2e_ge_20hz": true,
+        "vram_lt_300mb": true
+      }
+    },
+    "ort_cuda_fp16": {
+      "precision": "fp16",
+      "onnx_size_mb": 15.303,
+      "active_providers": [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "cuda_graph": false,
+      "arena_extend_strategy": "kSameAsRequested",
+      "warmup_iters": 200,
+      "timed_iters": 500,
+      "network_iobinding": {
+        "mean_ms": 28.7288,
+        "p50_ms": 28.6717,
+        "p95_ms": 29.4327,
+        "p99_ms": 31.158,
+        "min_ms": 27.149,
+        "max_ms": 41.7204,
+        "fps_mean": 34.81
+      },
+      "end_to_end_host_io": {
+        "timed_iters": 100,
+        "mean_ms": 30.4207,
+        "p50_ms": 30.3938,
+        "p95_ms": 31.343,
+        "p99_ms": 31.9175,
+        "min_ms": 29.3788,
+        "max_ms": 32.3675,
+        "fps_mean": 32.87
+      },
+      "peak_process_vram_mb": null,
+      "cuda_mem_get_info_delta_mb": 92.0,
+      "nvidia_smi_used_delta_mb": 80.0,
+      "effective_vram_mb": 92.0,
+      "outputs_finite": true,
+      "gates": {
+        "network_p50_lt_12ms": false,
+        "network_p99_lt_12ms": false,
+        "e2e_ge_20hz": true,
+        "vram_lt_300mb": true
+      }
+    }
+  },
+  "fp16_vs_fp32_speedup_p50": 0.313,
+  "recommended_local_tu116_mode": "ort_cuda_fp32_cuda_graph",
+  "tu116_fp16_finding": "Empirical TU116 (sm_75, no Tensor Cores) validation: ORT-CUDA FP32 outperforms converted FP16 on GTX 1650 SUPER, directly vindicating DR-7's mandatory TU116 FP32-vs-FP16 regression gate; TRT FP16 remains optimal on Tensor-Core GPUs (Colab L4/A100/G4, Jetson Orin)."
+}
