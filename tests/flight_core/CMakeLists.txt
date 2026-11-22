@@ -1,0 +1,4 @@
+add_executable(test_frames_geodesy test_frames_geodesy.cpp)
+target_link_libraries(test_frames_geodesy PRIVATE vertirta::flight_core Catch2::Catch2WithMain)
+target_compile_features(test_frames_geodesy PRIVATE cxx_std_17)
+add_test(NAME test_frames_geodesy COMMAND test_frames_geodesy)
