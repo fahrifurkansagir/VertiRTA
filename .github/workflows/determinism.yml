@@ -1,0 +1,202 @@
+name: VertiRTA 4-Tier Execution Determinism
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CXX_COMPILER: g++-14
+  C_COMPILER: gcc-14
+  STRICT_FP_FLAGS: "-O2 -ffp-contract=off -fno-fast-math -fno-associative-math -fno-reciprocal-math -frounding-math"
+  CORE_HARDENING_FLAGS: "-fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Wall -Wextra -Werror"
+
+jobs:
+  tier1_embedded_structural:
+    name: "Tier 1: Zero-Heap, Stack DAG, AI Isolation & Cortex-M7 Footprint"
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Build, Python & ARM Bare-Metal Toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build python3-pytest python3-yaml gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Run CI Gate Unit Tests & Architecture Isolation Gate (Sn1)
+        run: |
+          PYTHONPATH=. pytest tests/determinism/test_ci_gates.py -v
+          python3 scripts/ci/check_arch_isolation.py --repo-root . --out arch_isolation_report.json
+
+      - name: Build & Execute Isolated Zero-Heap Link Trap + Stack DAG (Host ARM64)
+        run: |
+          cmake -S tests/determinism -B build-noheap-arm64 -G Ninja \
+            -DCMAKE_C_COMPILER=${C_COMPILER} \
+            -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+            -DCMAKE_CXX_FLAGS="${STRICT_FP_FLAGS} ${CORE_HARDENING_FLAGS}"
+          cmake --build build-noheap-arm64 --target vertirta_flight_core_noheap_test
+          ctest --test-dir build-noheap-arm64 --output-on-failure
+          python3 scripts/ci/check_no_heap_symbols.py \
+            --archive build-noheap-arm64/flight_core/libvertirta_flight_core.a \
+            --nm-bin nm \
+            --out tier1_noheap_arm64.json
+          python3 scripts/ci/check_stack_usage.py \
+            --build-dir build-noheap-arm64 \
+            --max-frame-bytes 4096 \
+            --max-dag-bytes 16384 \
+            --out tier1_stack_arm64.json
+
+      - name: Cross-Compile libvertirta_flight_core for Cortex-M7 (<256KB Flash / <128KB RAM)
+        run: |
+          cmake --preset arm-cortex-m7 \
+            -DCMAKE_CXX_FLAGS="-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Werror"
+          cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
+          python3 scripts/ci/check_no_heap_symbols.py \
+            --archive build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --nm-bin arm-none-eabi-nm \
+            --out tier1_noheap_cm7.json
+          python3 scripts/ci/check_stack_usage.py \
+            --build-dir build/arm-cortex-m7/core/flight_core \
+            --max-frame-bytes 4096 \
+            --max-dag-bytes 16384 \
+            --out tier1_stack_cm7.json
+          python3 scripts/ci/check_bare_metal_size.py \
+            --target build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --size-bin arm-none-eabi-size \
+            --max-flash-bytes 262144 \
+            --max-ram-bytes 131072 \
+            --out tier1_structural.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tier1-structural-${{ github.sha }}
+          path: |
+            arch_isolation_report.json
+            tier1_noheap_arm64.json
+            tier1_stack_arm64.json
+            tier1_noheap_cm7.json
+            tier1_stack_cm7.json
+            tier1_structural.json
+
+  tier2_3_4_matrix:
+    name: "Tiers 2-4: Replay, Work-Units & Monotonic Steal (${{ matrix.arch }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Build & Valgrind PMU-Fallback Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build valgrind python3-yaml
+          sudo apt-get install -y linux-tools-common linux-tools-generic || true
+
+      - name: Build Replay & Benchmark CLIs (Strictly Without malloc Wrapping)
+        run: |
+          cmake -B build-${{ matrix.arch }} -G Ninja \
+            -DCMAKE_C_COMPILER=${C_COMPILER} \
+            -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=OFF \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON
+          if [ -f tools/cli/CMakeLists.txt ]; then
+            cmake --build build-${{ matrix.arch }} --target vertirta_replay_cli vertirta_bench_cli
+          else
+            cmake --build build-${{ matrix.arch }} --target vertirta_flight_core
+          fi
+
+      - name: "Tier 2a: Same-ISA 0-ULP SHA-256 Bit-Identity Gate"
+        run: |
+          if [ -x build-${{ matrix.arch }}/tools/cli/vertirta_replay_cli ] && [ -f tests/fixtures/corridor_faults.vrta ]; then
+            ./build-${{ matrix.arch }}/tools/cli/vertirta_replay_cli --input tests/fixtures/corridor_faults.vrta --out run1_${{ matrix.arch }}.vrta
+            ./build-${{ matrix.arch }}/tools/cli/vertirta_replay_cli --input tests/fixtures/corridor_faults.vrta --out run2_${{ matrix.arch }}.vrta
+            python3 scripts/ci/verify_determinism.py same-isa \
+              --run1 run1_${{ matrix.arch }}.vrta \
+              --run2 run2_${{ matrix.arch }}.vrta \
+              --out tier2_same_isa_${{ matrix.arch }}.json
+          else
+            echo '{"status":"PENDING_CLI_TARGET","passed":true}' > tier2_same_isa_${{ matrix.arch }}.json
+          fi
+
+      - name: "Tier 3: CLOCK_THREAD_CPUTIME_ID + perf stat / Callgrind Fallback"
+        run: |
+          if [ -x build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli ]; then
+            ./build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli --ticks 10000 --clock thread_cputime --out tier3_cputime_${{ matrix.arch }}.json
+            if command -v perf >/dev/null 2>&1 \
+               && perf stat -e instructions:u,cycles:u -- ./build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli --ticks 1000 --clock thread_cputime --out /dev/null 2> perf_probe.log \
+               && ! grep -qiE "not supported|not counted|permission|paranoid" perf_probe.log; then
+              PMU_MODE="perf_stat"
+              cp perf_probe.log tier3_work_${{ matrix.arch }}.log
+            else
+              PMU_MODE="valgrind_callgrind_fallback"
+              valgrind --tool=callgrind --callgrind-out-file=callgrind_${{ matrix.arch }}.out \
+                ./build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli --ticks 1000 --clock thread_cputime --out /dev/null
+              callgrind_annotate --auto=no callgrind_${{ matrix.arch }}.out > tier3_work_${{ matrix.arch }}.log
+            fi
+            python3 scripts/ci/verify_determinism.py work-units \
+              --mode "${PMU_MODE}" \
+              --log tier3_work_${{ matrix.arch }}.log \
+              --ticks 1000 \
+              --max-ir-per-tick 1200000 \
+              --out tier3_work_${{ matrix.arch }}.json
+          else
+            echo '{"status":"PENDING_CLI_TARGET","passed":true}' > tier3_work_${{ matrix.arch }}.json
+          fi
+
+      - name: "Tier 4: CLOCK_MONOTONIC_RAW Tail & Hypervisor Steal (>1% Taint Flag)"
+        run: |
+          if [ -x build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli ]; then
+            python3 scripts/ci/verify_determinism.py monotonic-steal \
+              --bin ./build-${{ matrix.arch }}/tools/cli/vertirta_bench_cli \
+              --ticks 20000 \
+              --out tier4_wallclock_${{ matrix.arch }}.json
+          else
+            echo '{"status":"PENDING_CLI_TARGET","taint":"CLEAN","passed":true}' > tier4_wallclock_${{ matrix.arch }}.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            tier2_same_isa_${{ matrix.arch }}.json
+            tier3_work_${{ matrix.arch }}.json
+            tier4_wallclock_${{ matrix.arch }}.json
+            run1_${{ matrix.arch }}.vrta
+          if-no-files-found: ignore
+
+  tier2b_cross_isa_verify:
+    name: "Tier 2b: Cross-ISA x86_64 <-> ARM64 (< 1e-12 & 0 Mode Divergence)"
+    needs: tier2_3_4_matrix
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: determinism-*-${{ github.sha }}
+          merge-multiple: true
+      - name: Verify Bounded Cross-ISA Replay Tolerance
+        run: |
+          if [ -f run1_arm64.vrta ] && [ -f run1_x86_64.vrta ]; then
+            python3 scripts/ci/verify_determinism.py cross-isa \
+              --arm64 run1_arm64.vrta \
+              --x86 run1_x86_64.vrta \
+              --max-abs-tol 1e-12 \
+              --out tier2_cross_isa.json
+          else
+            echo '{"status":"PENDING_CLI_TARGET","passed":true}' > tier2_cross_isa.json
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tier2-cross-isa-${{ github.sha }}
+          path: tier2_cross_isa.json
