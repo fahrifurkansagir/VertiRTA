@@ -1,0 +1,45 @@
+# VertiRTA Compact Bounded-STL & Contingency Mission DSL (vertirta_dsl_v1.gbnf)
+# Strictly ASCII, <=30 tokens under Qwen3 single-digit BPE (max_tokens=48 never truncates).
+# Full <=32-node Bounded-STL formula is synthesized deterministically in C++20 from this AST.
+
+root ::= action-line "\n" meta-line
+
+action-line ::=
+    "ACT=" action-target ";TGT=" valid-slz ";ETA=" time-sec ";AGL=" agl-min "," agl-max ";SPD=" spd-val
+  | "ACT=HOLD_LOITER;DUR=" loiter-sec ";AGL=" agl-loiter
+  | "ACT=REQUEST_CLARIFICATION;A=" valid-slz ";B=" valid-slz ";RSN=" clarify-reason
+  | "ACT=REJECT_UNSAFE;VIO=" violation-code ";FB=" fallback-target
+
+action-target ::= "DIVERT_SLZ" | "INSPECT_SLZ" | "ABORT_RETURN"
+
+valid-slz ::=
+    "Kartal_Sahil"
+  | "Dragos_Plaza"
+  | "Maltepe_Park"
+  | "Cevizli_Helipad"
+
+fallback-target ::= valid-slz | "HOLD_LOITER"
+
+clarify-reason ::= "AMBIG" | "NO_SLOT" | "LOW_ASR"
+
+violation-code ::=
+    "LTFJ_CTR"
+  | "LTBX_CTR"
+  | "DYN_NFZ"
+  | "SOC_RESERVE"
+  | "SLZ_UNSAFE"
+  | "MIN_AGL"
+  | "SHIELD_BYPASS"
+
+meta-line ::= "LNG=" lang-code ";MOD=" mode-code
+
+lang-code ::= "TR" | "EN" | "MIX"
+mode-code ::= "BRIEF" | "REJECT" | "CLARIFY"
+
+# Bounded numeric domains (prevent unbounded digit sequences & integer overflow)
+time-sec   ::= [1-9] | [1-9][0-9] | [1-5][0-9][0-9] | "600"
+loiter-sec ::= [1-9][0-9] | [1-2][0-9][0-9] | "300"
+agl-min    ::= [1-9][0-9] | "1"[0-4][0-9] | "150"
+agl-max    ::= [3-9][0-9] | "1"[0-4][0-9] | "150"
+agl-loiter ::= [3-9][0-9] | "1"[0-4][0-9] | "150"
+spd-val    ::= [5-9] | [1-2][0-9] | "30"
