@@ -168,7 +168,7 @@ TEST_CASE("StaticDaqpSolver 0-heap, Vrta POD sizes, and 6-DOF Option B1b surviva
 ### Task 6: Offline Colab G4 JAX 4D Fault-Degraded CBVF & 2D CEL Braking LUT Pipeline
 
 **Files:** Create `reachability/{cbvf_4d_dynamics,solve_cbvf_luts,solve_cel_2d_lut,verify_lut_soundness}.py` | Test `tests/reachability/test_cbvf_dynamics_cpu.py`
-**Interfaces:** Consumes `config/vehicle_x8_240.yaml`. Produces `.vrta_lut` (`11,313,864 B`: `4096 B` header `VRTALUT1` + `eps_grid[4]` + `v_cap_f[4]` + SHA-256 + `4 × 41×29×41×29` `int16`) and `.vrta_cel2d` (`4096 B` header + `3 × 41×29` `int16` = `6.97 KiB` for `T/W ∈ {1.25, 1.20, 1.15}`).
+**Interfaces:** Consumes `config/vehicle_x8_240.yaml`. Produces `.vrta_lut` (`11,313,864 B`: `4096 B` header `VRTALUT1` + `eps_grid[4]` + `v_cap_f[4]` + SHA-256 + `4 × 41×29×41×29` `int16` = `11,309,768 B` payload) and `.vrta_cel2d` (`11,230 B`: `4096 B` header `VRTACEL2` + `3 × 41×29` `int16` = `7,134 B` / `6.97 KiB` payload for `T/W ∈ {1.25, 1.20, 1.15}`).
 
 - [ ] **Step 1: Write failing pytest soundness tests (pins DR-2 critical errata #1/#2/#3)**
 ```python
@@ -183,7 +183,7 @@ def test_cfl_bounds_conservative_smax_2m_vcap_and_cel_2d():
 ```
 - [ ] **Step 2: Run test to verify failure** — `pytest tests/reachability/test_cbvf_dynamics_cpu.py -v` → FAIL.
 - [ ] **Step 3: Implement JAX `hj_reachability` v0.7.0 4D CBVF & 2D CEL solvers** — Fix `partial_max_magnitudes` horizontal bound to `a_T * sin(tilt_max)` (matched `_support_U` Lax-Friedrichs CFL), subtract `ln(2)/4.0` from `smax_4`, embed `v_cap_f` in header for `2M-Cross`/`Low-Vbat`. `solve_cbvf_luts.py` runs `81×57×81×57` FP32 on Colab G4 Blackwell (`--quick-cpu-fixture` for fast local test LUT) → exact stride-2 `41×29×41×29` `int16` (`q=0.992 mm`) + fine-grid `eps_grid_f` audit. `solve_cel_2d_lut.py` exports `3 × 2.32 KiB` vertical braking LUT (`v_td,max=2.0 m/s`).
-- [ ] **Step 4: Verify pass** — `pytest tests/reachability/test_cbvf_dynamics_cpu.py -v && python reachability/verify_lut_soundness.py --quick-fixture` → PASS (`11,313,864 B` & `6,970 B` payload verified).
+- [ ] **Step 4: Verify pass** — `pytest tests/reachability/test_cbvf_dynamics_cpu.py -v && python reachability/verify_lut_soundness.py --quick-fixture` → PASS (`11,313,864 B` `.vrta_lut` & `11,230 B` `.vrta_cel2d` exact verified).
 - [ ] **Step 5: Commit** — `git add reachability/ tests/reachability/ && git commit -m "feat(reachability): add JAX 4D CBVF and 2D CEL LUT pipeline with CFL/smax fixes"`
 
 ---
