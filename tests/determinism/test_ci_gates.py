@@ -175,6 +175,13 @@ def test_verify_determinism_same_isa_cross_isa_work_units_and_steal_taint(tmp_pa
     assert perf_ok["passed"] is True and perf_ok["ir_per_tick"] == 450000
     cg_fail = parse_work_units_log("valgrind_callgrind_fallback", "1,300,000,000  PROGRAM TOTALS\n", 1000, 1200000)
     assert cg_fail["passed"] is False
+    cg_v322 = parse_work_units_log(
+        "valgrind_callgrind_fallback",
+        "723,332,439 (100.0%)  PROGRAM TOTALS\n",
+        1000,
+        1200000,
+    )
+    assert cg_v322["passed"] is True and cg_v322["ir_per_tick"] == 723332
 
     assert classify_steal_taint(1.01) == "NOISY_NEIGHBOR_TAINTED"
     assert classify_steal_taint(0.45) == "CLEAN"

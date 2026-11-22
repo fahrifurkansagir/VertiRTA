@@ -122,7 +122,9 @@ def parse_work_units_log(
         if m:
             total_ir = int(m.group(1).replace(",", ""))
     elif mode == "valgrind_callgrind_fallback":
-        m = re.search(r"([\d,]+)\s+PROGRAM TOTALS", log_text)
+        m = re.search(r"([\d,]+)\s+(?:\([\d.]+%\)\s+)?PROGRAM TOTALS", log_text)
+        if not m:
+            m = re.search(r"(?:Collected\s*:\s*|I\s+refs:\s*)([\d,]+)", log_text)
         if m:
             total_ir = int(m.group(1).replace(",", ""))
     else:

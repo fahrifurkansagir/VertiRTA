@@ -118,6 +118,7 @@ void append_circum_ngon_vertices(double cx, double cy, double r, int n_sides,
   }
 }
 
+#ifndef VERTIRTA_HAS_Z3
 [[nodiscard]] bool eval_segment_disjoint_2d_exact(double e0, double n0, double e1, double n1,
                                                   const ConvexPoly2D& poly) noexcept {
   const double qe0 = quant_1e4(e0);
@@ -149,6 +150,7 @@ void append_circum_ngon_vertices(double cx, double cy, double r, int n_sides,
   }
   return all_pos || all_neg;
 }
+#endif
 
 [[nodiscard]] std::string smt_segment_disjoint(double e0, double n0, const ConvexPoly2D& poly) {
   const double qe0 = quant_1e4(e0);
@@ -456,22 +458,6 @@ Z3VerifyResult verify_mission_qflra(const RtaStateSnapshotV1& st,
     res.auditable_smt2 = smt.str();
   }
 
-  auto check_zone_clear = [&](const ConvexPoly2D& poly) noexcept -> bool {
-    if (eval_segment_disjoint_2d_exact(e0, n0, e1, n1, poly)) {
-      return true;
-    }
-    const double qz0 = quant_1e4(z0);
-    const double qz1 = quant_1e4(z1);
-    const double qzmin = quant_1e4(z_cmd_min);
-    const double qzmax = quant_1e4(z_cmd_max);
-    const double qceil = quant_1e4(poly.ceil_enu_u_m);
-    const double qfloor = quant_1e4(poly.floor_enu_u_m);
-    const bool above = (qz0 > qceil + kSatEps) && (qz1 > qceil + kSatEps) && (qzmin > qceil + kSatEps);
-    const bool below = poly.has_elevated_floor && (qz0 < qfloor - kSatEps) &&
-                       (qz1 < qfloor - kSatEps) && (qzmax < qfloor - kSatEps);
-    return above || below;
-  };
-
 #ifdef VERTIRTA_HAS_Z3
   z3::context ctx;
   z3::solver s(ctx, "QF_LRA");
@@ -568,6 +554,22 @@ Z3VerifyResult verify_mission_qflra(const RtaStateSnapshotV1& st,
     res.unsat_core_labels.push_back("c_solver_timeout");
   }
 #else
+  auto check_zone_clear = [&](const ConvexPoly2D& poly) noexcept -> bool {
+    if (eval_segment_disjoint_2d_exact(e0, n0, e1, n1, poly)) {
+      return true;
+    }
+    const double qz0 = quant_1e4(z0);
+    const double qz1 = quant_1e4(z1);
+    const double qzmin = quant_1e4(z_cmd_min);
+    const double qzmax = quant_1e4(z_cmd_max);
+    const double qceil = quant_1e4(poly.ceil_enu_u_m);
+    const double qfloor = quant_1e4(poly.floor_enu_u_m);
+    const bool above = (qz0 > qceil + kSatEps) && (qz1 > qceil + kSatEps) && (qzmin > qceil + kSatEps);
+    const bool below = poly.has_elevated_floor && (qz0 < qfloor - kSatEps) &&
+                       (qz1 < qfloor - kSatEps) && (qzmax < qfloor - kSatEps);
+    return above || below;
+  };
+
   // Mathematically exact QF_LRA evaluator matching the emitted SMT-LIB2 rational assertions 1:1.
   if (m.requests_shield_disable || !st.shield_active) {
     res.unsat_core_labels.push_back("c_shield_bypass");
