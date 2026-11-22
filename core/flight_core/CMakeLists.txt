@@ -1,5 +1,6 @@
 add_library(vertirta_flight_core STATIC
   src/frames.cpp
+  src/tmr_voter.cpp
 )
 add_library(vertirta::flight_core ALIAS vertirta_flight_core)
 
