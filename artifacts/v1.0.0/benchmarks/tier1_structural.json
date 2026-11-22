@@ -1,0 +1,35 @@
+{
+  "schema_version": "vertirta.tier1_structural_bundle/v1.0.0",
+  "git_sha": "ef9be75",
+  "cortex_m7": {
+    "flash_bytes": 28886,
+    "ram_bytes": 0,
+    "text_bytes": 28886,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "members_parsed": 11,
+    "max_flash_bytes": 262144,
+    "max_ram_bytes": 131072,
+    "functions_checked": 77,
+    "bounded_realigned_frames": 0,
+    "callgraph_nodes": 98,
+    "max_frame_bytes": 1496,
+    "max_dag_bytes": 2960,
+    "forbidden_heap_symbols": 0
+  },
+  "x86_64": {
+    "functions_checked": 74,
+    "bounded_realigned_frames": 3,
+    "callgraph_nodes": 105,
+    "max_frame_bytes": 2112,
+    "max_dag_bytes": 5280,
+    "forbidden_heap_symbols": 0
+  },
+  "arch_isolation": {
+    "files_scanned": 37,
+    "violations": 0,
+    "sha256": "81b5dd7af0d3ae182ab7c465482672107e988b4f54c801c93ba93379dcfde244"
+  },
+  "passed": true,
+  "sha256": "950f9821abbc7e4c5bfe13116d11a55c9fb9eebce9f87118f3c2805676a6bd5d"
+}

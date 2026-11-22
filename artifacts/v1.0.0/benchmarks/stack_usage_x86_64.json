@@ -1,0 +1,19 @@
+{
+  "schema_version": "vertirta.tier1_stack_dag/v1.0.0",
+  "build_dir": "/tmp/vertirta_g3_x86_su",
+  "functions_checked": 74,
+  "bounded_realigned_frames": 3,
+  "callgraph_nodes": 105,
+  "max_frame_bytes": 2112,
+  "limit_frame_bytes": 4096,
+  "max_dag_bytes": 5280,
+  "limit_dag_bytes": 16384,
+  "worst_call_chain": [
+    "main",
+    "/mnt/c/PROJECTS/AEGIS-VTOL/tests/determinism/test_flight_core_noheap.cpp:_ZN12_GLOBAL__N_1L45test_coax_envelope_battery_indi_fdi_and_plantEv",
+    "_ZN8vertirta4core17IndiWlsController10step_400hzERKNS0_9IndiInputEPf",
+    "_ZN8vertirta4core17wls_alloc_8x4_f64EPA8_KdPS1_S4_S4_S4_S4_S4_dPah"
+  ],
+  "passed": true,
+  "sha256": "483eab12541f765a201b936b463adf3bc625a47fd5167af2338eaf5bae56605f"
+}

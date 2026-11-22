@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="8"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="1"
+	timestamp="2026-11-22T19:08:03"
+	>
+	<testcase name="test_frames_geodesy" classname="test_frames_geodesy" time="0.0385576" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 741986157
+===============================================================================
+All tests passed (37 assertions in 4 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="test_tmr_voter" classname="test_tmr_voter" time="0.022348" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 3136746167
+===============================================================================
+All tests passed (620 assertions in 3 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="test_indi_wls_thevenin" classname="test_indi_wls_thevenin" time="0.0456717" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 3803905109
+===============================================================================
+All tests passed (237518 assertions in 3 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="test_daqp_vrec_plant" classname="test_daqp_vrec_plant" time="0.075179" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 2665704676
+===============================================================================
+All tests passed (4420 assertions in 3 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="test_lut_dryden" classname="test_lut_dryden" time="0.83419" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 1655162579
+===============================================================================
+All tests passed (49 assertions in 3 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="test_cbvf_safety_filter" classname="test_cbvf_safety_filter" time="0.197227" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 569745822
+===============================================================================
+All tests passed (3022 assertions in 1 test case)
+
+</system-out>
+	</testcase>
+	<testcase name="test_esdf_hazards_slz" classname="test_esdf_hazards_slz" time="0.0223603" status="run">
+		<properties/>
+		<system-out>Randomness seeded to: 960758265
+===============================================================================
+All tests passed (50 assertions in 3 test cases)
+
+</system-out>
+	</testcase>
+	<testcase name="vertirta_flight_core_noheap_test" classname="vertirta_flight_core_noheap_test" time="0.00616209" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+</testsuite>

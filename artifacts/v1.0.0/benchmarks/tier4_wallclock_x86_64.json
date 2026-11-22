@@ -1,0 +1,19 @@
+{
+  "schema_version": "vertirta.tier4_wallclock/v1.0.0",
+  "ticks": 50000,
+  "steal_pct": 0.0,
+  "taint": "CLEAN",
+  "metrics": {
+    "schema_version": "vertirta.bench_cli/v1.0.0",
+    "clock": "monotonic_raw",
+    "ticks": 50000,
+    "lut_loaded": true,
+    "mean_us": 0.578,
+    "p50_us": 0.54,
+    "p99_us": 0.95,
+    "p999_us": 1.59,
+    "max_us": 32.069
+  },
+  "passed": true,
+  "sha256": "4e21d42b8bbea9c49a215e26f69ead62d9fbc42dac605c23cb655566f842bac8"
+}

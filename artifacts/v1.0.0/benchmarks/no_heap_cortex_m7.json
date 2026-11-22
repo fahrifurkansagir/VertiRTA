@@ -1,0 +1,8 @@
+{
+  "schema_version": "vertirta.tier1_noheap/v1.0.0",
+  "archive": "/tmp/vertirta_g3_cm7_su/core/flight_core/libvertirta_flight_core.a",
+  "nm_bin": "arm-none-eabi-nm",
+  "forbidden_symbols": [],
+  "passed": true,
+  "sha256": "cb025b12cb26b92d311791c50e1f0183dfaabb60895add219938d35eb5659fcf"
+}

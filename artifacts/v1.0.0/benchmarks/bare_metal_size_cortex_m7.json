@@ -1,0 +1,14 @@
+{
+  "schema_version": "vertirta.tier1_bare_metal_size/v1.0.0",
+  "members_parsed": 11,
+  "text_bytes": 28886,
+  "data_bytes": 0,
+  "bss_bytes": 0,
+  "flash_bytes": 28886,
+  "ram_bytes": 0,
+  "max_flash_bytes": 262144,
+  "max_ram_bytes": 131072,
+  "passed": true,
+  "sha256": "ed4de12da57ae024f4c3efcb7ec45777f46f76aebd1e2548dcec97054f6089fb",
+  "target": "/tmp/vertirta_g3_cm7_su/core/flight_core/libvertirta_flight_core.a"
+}

@@ -1,0 +1,4888 @@
+{
+  "schema_version": "vertirta.cliff_ledger/v1.0.0",
+  "total_runs": 10000,
+  "total_failures": 244,
+  "entries": [
+    {
+      "run_id": 3508,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264630,
+      "initial_state": {
+        "mean_wind_mps": 2.173,
+        "peak_gust_mps": 2.2078,
+        "initial_soc_pct": 62.564,
+        "cruise_speed_mps": 20.558,
+        "start_lat_deg": 40.877749,
+        "start_lon_deg": 29.136878,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03508.vrta"
+    },
+    {
+      "run_id": 3536,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264658,
+      "initial_state": {
+        "mean_wind_mps": 5.6405,
+        "peak_gust_mps": 5.9775,
+        "initial_soc_pct": 76.501,
+        "cruise_speed_mps": 20.678,
+        "start_lat_deg": 40.907544,
+        "start_lon_deg": 29.164994,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03536.vrta"
+    },
+    {
+      "run_id": 3548,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264670,
+      "initial_state": {
+        "mean_wind_mps": 6.1297,
+        "peak_gust_mps": 2.6297,
+        "initial_soc_pct": 95.075,
+        "cruise_speed_mps": 20.405,
+        "start_lat_deg": 40.903901,
+        "start_lon_deg": 29.146467,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03548.vrta"
+    },
+    {
+      "run_id": 3566,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264688,
+      "initial_state": {
+        "mean_wind_mps": 11.3145,
+        "peak_gust_mps": 5.9189,
+        "initial_soc_pct": 70.252,
+        "cruise_speed_mps": 19.021,
+        "start_lat_deg": 40.922493,
+        "start_lon_deg": 29.12627,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03566.vrta"
+    },
+    {
+      "run_id": 3567,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264689,
+      "initial_state": {
+        "mean_wind_mps": 1.7907,
+        "peak_gust_mps": 6.3643,
+        "initial_soc_pct": 59.26,
+        "cruise_speed_mps": 17.846,
+        "start_lat_deg": 40.918838,
+        "start_lon_deg": 29.141264,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03567.vrta"
+    },
+    {
+      "run_id": 3614,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264736,
+      "initial_state": {
+        "mean_wind_mps": 9.9229,
+        "peak_gust_mps": 2.2593,
+        "initial_soc_pct": 72.125,
+        "cruise_speed_mps": 20.466,
+        "start_lat_deg": 40.882505,
+        "start_lon_deg": 29.169213,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03614.vrta"
+    },
+    {
+      "run_id": 3615,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264737,
+      "initial_state": {
+        "mean_wind_mps": 1.1091,
+        "peak_gust_mps": 7.7424,
+        "initial_soc_pct": 49.923,
+        "cruise_speed_mps": 21.249,
+        "start_lat_deg": 40.887256,
+        "start_lon_deg": 29.128034,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03615.vrta"
+    },
+    {
+      "run_id": 3632,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264754,
+      "initial_state": {
+        "mean_wind_mps": 9.2504,
+        "peak_gust_mps": 0.0305,
+        "initial_soc_pct": 44.554,
+        "cruise_speed_mps": 20.015,
+        "start_lat_deg": 40.934421,
+        "start_lon_deg": 29.145945,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03632.vrta"
+    },
+    {
+      "run_id": 3645,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264767,
+      "initial_state": {
+        "mean_wind_mps": 9.916,
+        "peak_gust_mps": 7.5382,
+        "initial_soc_pct": 68.376,
+        "cruise_speed_mps": 19.669,
+        "start_lat_deg": 40.889226,
+        "start_lon_deg": 29.156571,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03645.vrta"
+    },
+    {
+      "run_id": 3648,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264770,
+      "initial_state": {
+        "mean_wind_mps": 9.0449,
+        "peak_gust_mps": 7.8371,
+        "initial_soc_pct": 39.743,
+        "cruise_speed_mps": 18.77,
+        "start_lat_deg": 40.939377,
+        "start_lon_deg": 29.160943,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03648.vrta"
+    },
+    {
+      "run_id": 3671,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264793,
+      "initial_state": {
+        "mean_wind_mps": 7.1783,
+        "peak_gust_mps": 4.8989,
+        "initial_soc_pct": 74.929,
+        "cruise_speed_mps": 20.439,
+        "start_lat_deg": 40.904218,
+        "start_lon_deg": 29.154785,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03671.vrta"
+    },
+    {
+      "run_id": 3682,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264804,
+      "initial_state": {
+        "mean_wind_mps": 11.9321,
+        "peak_gust_mps": 6.3706,
+        "initial_soc_pct": 53.754,
+        "cruise_speed_mps": 18.806,
+        "start_lat_deg": 40.918205,
+        "start_lon_deg": 29.141797,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03682.vrta"
+    },
+    {
+      "run_id": 3696,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264818,
+      "initial_state": {
+        "mean_wind_mps": 0.4162,
+        "peak_gust_mps": 0.1119,
+        "initial_soc_pct": 59.624,
+        "cruise_speed_mps": 18.065,
+        "start_lat_deg": 40.878107,
+        "start_lon_deg": 29.159289,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03696.vrta"
+    },
+    {
+      "run_id": 3703,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264825,
+      "initial_state": {
+        "mean_wind_mps": 8.9552,
+        "peak_gust_mps": 2.6089,
+        "initial_soc_pct": 79.743,
+        "cruise_speed_mps": 20.769,
+        "start_lat_deg": 40.906764,
+        "start_lon_deg": 29.186179,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03703.vrta"
+    },
+    {
+      "run_id": 3711,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264833,
+      "initial_state": {
+        "mean_wind_mps": 2.8035,
+        "peak_gust_mps": 3.2742,
+        "initial_soc_pct": 51.259,
+        "cruise_speed_mps": 19.728,
+        "start_lat_deg": 40.886237,
+        "start_lon_deg": 29.181283,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03711.vrta"
+    },
+    {
+      "run_id": 3772,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264894,
+      "initial_state": {
+        "mean_wind_mps": 9.1337,
+        "peak_gust_mps": 4.0738,
+        "initial_soc_pct": 82.903,
+        "cruise_speed_mps": 19.451,
+        "start_lat_deg": 40.93746,
+        "start_lon_deg": 29.127714,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03772.vrta"
+    },
+    {
+      "run_id": 3776,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264898,
+      "initial_state": {
+        "mean_wind_mps": 8.7956,
+        "peak_gust_mps": 6.9229,
+        "initial_soc_pct": 63.466,
+        "cruise_speed_mps": 18.658,
+        "start_lat_deg": 40.904556,
+        "start_lon_deg": 29.143031,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03776.vrta"
+    },
+    {
+      "run_id": 3788,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264910,
+      "initial_state": {
+        "mean_wind_mps": 10.1667,
+        "peak_gust_mps": 7.3215,
+        "initial_soc_pct": 91.916,
+        "cruise_speed_mps": 19.93,
+        "start_lat_deg": 40.911542,
+        "start_lon_deg": 29.11445,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03788.vrta"
+    },
+    {
+      "run_id": 3792,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264914,
+      "initial_state": {
+        "mean_wind_mps": 7.861,
+        "peak_gust_mps": 3.3956,
+        "initial_soc_pct": 85.093,
+        "cruise_speed_mps": 19.949,
+        "start_lat_deg": 40.91038,
+        "start_lon_deg": 29.184239,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03792.vrta"
+    },
+    {
+      "run_id": 3802,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264924,
+      "initial_state": {
+        "mean_wind_mps": 5.0783,
+        "peak_gust_mps": 6.2109,
+        "initial_soc_pct": 67.305,
+        "cruise_speed_mps": 21.04,
+        "start_lat_deg": 40.886611,
+        "start_lon_deg": 29.123108,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03802.vrta"
+    },
+    {
+      "run_id": 3806,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264928,
+      "initial_state": {
+        "mean_wind_mps": 2.1299,
+        "peak_gust_mps": 2.2973,
+        "initial_soc_pct": 91.453,
+        "cruise_speed_mps": 21.594,
+        "start_lat_deg": 40.900711,
+        "start_lon_deg": 29.168432,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03806.vrta"
+    },
+    {
+      "run_id": 3807,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264929,
+      "initial_state": {
+        "mean_wind_mps": 2.5661,
+        "peak_gust_mps": 3.7276,
+        "initial_soc_pct": 86.486,
+        "cruise_speed_mps": 20.789,
+        "start_lat_deg": 40.940039,
+        "start_lon_deg": 29.12459,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03807.vrta"
+    },
+    {
+      "run_id": 3813,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264935,
+      "initial_state": {
+        "mean_wind_mps": 7.7163,
+        "peak_gust_mps": 7.6549,
+        "initial_soc_pct": 57.174,
+        "cruise_speed_mps": 21.68,
+        "start_lat_deg": 40.913328,
+        "start_lon_deg": 29.139811,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03813.vrta"
+    },
+    {
+      "run_id": 3824,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264946,
+      "initial_state": {
+        "mean_wind_mps": 4.0399,
+        "peak_gust_mps": 6.4936,
+        "initial_soc_pct": 85.805,
+        "cruise_speed_mps": 20.998,
+        "start_lat_deg": 40.878699,
+        "start_lon_deg": 29.185224,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03824.vrta"
+    },
+    {
+      "run_id": 3830,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264952,
+      "initial_state": {
+        "mean_wind_mps": 10.5425,
+        "peak_gust_mps": 6.0247,
+        "initial_soc_pct": 63.167,
+        "cruise_speed_mps": 21.544,
+        "start_lat_deg": 40.891107,
+        "start_lon_deg": 29.121992,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03830.vrta"
+    },
+    {
+      "run_id": 3840,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264962,
+      "initial_state": {
+        "mean_wind_mps": 0.0411,
+        "peak_gust_mps": 4.7146,
+        "initial_soc_pct": 67.936,
+        "cruise_speed_mps": 21.539,
+        "start_lat_deg": 40.89312,
+        "start_lon_deg": 29.113171,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03840.vrta"
+    },
+    {
+      "run_id": 3844,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264966,
+      "initial_state": {
+        "mean_wind_mps": 0.5335,
+        "peak_gust_mps": 4.2563,
+        "initial_soc_pct": 81.214,
+        "cruise_speed_mps": 21.897,
+        "start_lat_deg": 40.932572,
+        "start_lon_deg": 29.178092,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03844.vrta"
+    },
+    {
+      "run_id": 3848,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264970,
+      "initial_state": {
+        "mean_wind_mps": 3.4066,
+        "peak_gust_mps": 7.7405,
+        "initial_soc_pct": 45.535,
+        "cruise_speed_mps": 19.686,
+        "start_lat_deg": 40.934401,
+        "start_lon_deg": 29.162934,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03848.vrta"
+    },
+    {
+      "run_id": 3860,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264982,
+      "initial_state": {
+        "mean_wind_mps": 8.1886,
+        "peak_gust_mps": 5.122,
+        "initial_soc_pct": 77.417,
+        "cruise_speed_mps": 20.63,
+        "start_lat_deg": 40.902632,
+        "start_lon_deg": 29.163051,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03860.vrta"
+    },
+    {
+      "run_id": 3861,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20264983,
+      "initial_state": {
+        "mean_wind_mps": 2.8025,
+        "peak_gust_mps": 0.7547,
+        "initial_soc_pct": 75.147,
+        "cruise_speed_mps": 21.226,
+        "start_lat_deg": 40.923905,
+        "start_lon_deg": 29.186112,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03861.vrta"
+    },
+    {
+      "run_id": 3902,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265024,
+      "initial_state": {
+        "mean_wind_mps": 6.4114,
+        "peak_gust_mps": 6.8542,
+        "initial_soc_pct": 68.88,
+        "cruise_speed_mps": 18.626,
+        "start_lat_deg": 40.940252,
+        "start_lon_deg": 29.144412,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03902.vrta"
+    },
+    {
+      "run_id": 3908,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265030,
+      "initial_state": {
+        "mean_wind_mps": 2.5116,
+        "peak_gust_mps": 6.5641,
+        "initial_soc_pct": 70.529,
+        "cruise_speed_mps": 21.828,
+        "start_lat_deg": 40.912856,
+        "start_lon_deg": 29.147377,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03908.vrta"
+    },
+    {
+      "run_id": 3931,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265053,
+      "initial_state": {
+        "mean_wind_mps": 6.3668,
+        "peak_gust_mps": 6.3365,
+        "initial_soc_pct": 78.275,
+        "cruise_speed_mps": 19.632,
+        "start_lat_deg": 40.897864,
+        "start_lon_deg": 29.18718,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03931.vrta"
+    },
+    {
+      "run_id": 3957,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265079,
+      "initial_state": {
+        "mean_wind_mps": 8.8647,
+        "peak_gust_mps": 7.5833,
+        "initial_soc_pct": 86.703,
+        "cruise_speed_mps": 18.09,
+        "start_lat_deg": 40.924504,
+        "start_lon_deg": 29.165317,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03957.vrta"
+    },
+    {
+      "run_id": 3980,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265102,
+      "initial_state": {
+        "mean_wind_mps": 7.5023,
+        "peak_gust_mps": 5.9412,
+        "initial_soc_pct": 56.263,
+        "cruise_speed_mps": 21.788,
+        "start_lat_deg": 40.903347,
+        "start_lon_deg": 29.106895,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03980.vrta"
+    },
+    {
+      "run_id": 3988,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265110,
+      "initial_state": {
+        "mean_wind_mps": 8.452,
+        "peak_gust_mps": 5.3999,
+        "initial_soc_pct": 71.099,
+        "cruise_speed_mps": 19.887,
+        "start_lat_deg": 40.898688,
+        "start_lon_deg": 29.174344,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_03988.vrta"
+    },
+    {
+      "run_id": 4021,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265143,
+      "initial_state": {
+        "mean_wind_mps": 9.9681,
+        "peak_gust_mps": 3.4186,
+        "initial_soc_pct": 44.041,
+        "cruise_speed_mps": 19.155,
+        "start_lat_deg": 40.908777,
+        "start_lon_deg": 29.181216,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04021.vrta"
+    },
+    {
+      "run_id": 4029,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265151,
+      "initial_state": {
+        "mean_wind_mps": 6.6487,
+        "peak_gust_mps": 6.3847,
+        "initial_soc_pct": 86.271,
+        "cruise_speed_mps": 17.657,
+        "start_lat_deg": 40.887617,
+        "start_lon_deg": 29.164553,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04029.vrta"
+    },
+    {
+      "run_id": 4045,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265167,
+      "initial_state": {
+        "mean_wind_mps": 9.0397,
+        "peak_gust_mps": 2.9097,
+        "initial_soc_pct": 45.298,
+        "cruise_speed_mps": 20.332,
+        "start_lat_deg": 40.880511,
+        "start_lon_deg": 29.123592,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04045.vrta"
+    },
+    {
+      "run_id": 4051,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265173,
+      "initial_state": {
+        "mean_wind_mps": 6.3305,
+        "peak_gust_mps": 5.6405,
+        "initial_soc_pct": 74.352,
+        "cruise_speed_mps": 19.785,
+        "start_lat_deg": 40.903925,
+        "start_lon_deg": 29.116005,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04051.vrta"
+    },
+    {
+      "run_id": 4088,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265210,
+      "initial_state": {
+        "mean_wind_mps": 3.9233,
+        "peak_gust_mps": 0.5655,
+        "initial_soc_pct": 54.263,
+        "cruise_speed_mps": 20.7,
+        "start_lat_deg": 40.901153,
+        "start_lon_deg": 29.155794,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04088.vrta"
+    },
+    {
+      "run_id": 4119,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265241,
+      "initial_state": {
+        "mean_wind_mps": 9.5825,
+        "peak_gust_mps": 4.3142,
+        "initial_soc_pct": 90.287,
+        "cruise_speed_mps": 17.766,
+        "start_lat_deg": 40.876197,
+        "start_lon_deg": 29.183944,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04119.vrta"
+    },
+    {
+      "run_id": 4125,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265247,
+      "initial_state": {
+        "mean_wind_mps": 8.8396,
+        "peak_gust_mps": 1.0105,
+        "initial_soc_pct": 98.632,
+        "cruise_speed_mps": 19.655,
+        "start_lat_deg": 40.912424,
+        "start_lon_deg": 29.15722,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04125.vrta"
+    },
+    {
+      "run_id": 4149,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265271,
+      "initial_state": {
+        "mean_wind_mps": 1.7639,
+        "peak_gust_mps": 7.4364,
+        "initial_soc_pct": 74.292,
+        "cruise_speed_mps": 20.684,
+        "start_lat_deg": 40.928562,
+        "start_lon_deg": 29.174876,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04149.vrta"
+    },
+    {
+      "run_id": 4152,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265274,
+      "initial_state": {
+        "mean_wind_mps": 9.2954,
+        "peak_gust_mps": 2.3963,
+        "initial_soc_pct": 66.743,
+        "cruise_speed_mps": 17.952,
+        "start_lat_deg": 40.919496,
+        "start_lon_deg": 29.125587,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04152.vrta"
+    },
+    {
+      "run_id": 4159,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265281,
+      "initial_state": {
+        "mean_wind_mps": 9.3106,
+        "peak_gust_mps": 2.0625,
+        "initial_soc_pct": 83.465,
+        "cruise_speed_mps": 18.308,
+        "start_lat_deg": 40.891249,
+        "start_lon_deg": 29.149845,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04159.vrta"
+    },
+    {
+      "run_id": 4197,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265319,
+      "initial_state": {
+        "mean_wind_mps": 2.7556,
+        "peak_gust_mps": 2.8069,
+        "initial_soc_pct": 40.227,
+        "cruise_speed_mps": 21.973,
+        "start_lat_deg": 40.912795,
+        "start_lon_deg": 29.185981,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04197.vrta"
+    },
+    {
+      "run_id": 4204,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265326,
+      "initial_state": {
+        "mean_wind_mps": 9.6513,
+        "peak_gust_mps": 7.4449,
+        "initial_soc_pct": 74.186,
+        "cruise_speed_mps": 19.016,
+        "start_lat_deg": 40.893522,
+        "start_lon_deg": 29.121623,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04204.vrta"
+    },
+    {
+      "run_id": 4215,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265337,
+      "initial_state": {
+        "mean_wind_mps": 6.1617,
+        "peak_gust_mps": 0.761,
+        "initial_soc_pct": 42.743,
+        "cruise_speed_mps": 18.421,
+        "start_lat_deg": 40.896881,
+        "start_lon_deg": 29.156726,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04215.vrta"
+    },
+    {
+      "run_id": 4223,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265345,
+      "initial_state": {
+        "mean_wind_mps": 1.6108,
+        "peak_gust_mps": 3.6588,
+        "initial_soc_pct": 44.113,
+        "cruise_speed_mps": 21.613,
+        "start_lat_deg": 40.911136,
+        "start_lon_deg": 29.112082,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04223.vrta"
+    },
+    {
+      "run_id": 4224,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265346,
+      "initial_state": {
+        "mean_wind_mps": 8.5874,
+        "peak_gust_mps": 3.8269,
+        "initial_soc_pct": 55.876,
+        "cruise_speed_mps": 20.032,
+        "start_lat_deg": 40.88868,
+        "start_lon_deg": 29.145127,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04224.vrta"
+    },
+    {
+      "run_id": 4232,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265354,
+      "initial_state": {
+        "mean_wind_mps": 3.5741,
+        "peak_gust_mps": 0.8105,
+        "initial_soc_pct": 88.221,
+        "cruise_speed_mps": 20.86,
+        "start_lat_deg": 40.910994,
+        "start_lon_deg": 29.167601,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04232.vrta"
+    },
+    {
+      "run_id": 4244,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265366,
+      "initial_state": {
+        "mean_wind_mps": 1.2301,
+        "peak_gust_mps": 7.8653,
+        "initial_soc_pct": 56.179,
+        "cruise_speed_mps": 19.955,
+        "start_lat_deg": 40.919824,
+        "start_lon_deg": 29.121383,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04244.vrta"
+    },
+    {
+      "run_id": 4268,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265390,
+      "initial_state": {
+        "mean_wind_mps": 4.2081,
+        "peak_gust_mps": 5.7066,
+        "initial_soc_pct": 68.96,
+        "cruise_speed_mps": 20.904,
+        "start_lat_deg": 40.904122,
+        "start_lon_deg": 29.169667,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04268.vrta"
+    },
+    {
+      "run_id": 4269,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265391,
+      "initial_state": {
+        "mean_wind_mps": 10.4261,
+        "peak_gust_mps": 4.3776,
+        "initial_soc_pct": 88.922,
+        "cruise_speed_mps": 18.554,
+        "start_lat_deg": 40.913529,
+        "start_lon_deg": 29.163457,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04269.vrta"
+    },
+    {
+      "run_id": 4279,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265401,
+      "initial_state": {
+        "mean_wind_mps": 3.615,
+        "peak_gust_mps": 5.4999,
+        "initial_soc_pct": 42.491,
+        "cruise_speed_mps": 21.524,
+        "start_lat_deg": 40.919565,
+        "start_lon_deg": 29.158398,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04279.vrta"
+    },
+    {
+      "run_id": 4280,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265402,
+      "initial_state": {
+        "mean_wind_mps": 10.6353,
+        "peak_gust_mps": 7.6117,
+        "initial_soc_pct": 52.803,
+        "cruise_speed_mps": 16.601,
+        "start_lat_deg": 40.918519,
+        "start_lon_deg": 29.160692,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04280.vrta"
+    },
+    {
+      "run_id": 4285,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265407,
+      "initial_state": {
+        "mean_wind_mps": 5.2228,
+        "peak_gust_mps": 6.6518,
+        "initial_soc_pct": 66.015,
+        "cruise_speed_mps": 18.788,
+        "start_lat_deg": 40.875662,
+        "start_lon_deg": 29.189303,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04285.vrta"
+    },
+    {
+      "run_id": 4300,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265422,
+      "initial_state": {
+        "mean_wind_mps": 11.322,
+        "peak_gust_mps": 2.106,
+        "initial_soc_pct": 73.643,
+        "cruise_speed_mps": 19.028,
+        "start_lat_deg": 40.896428,
+        "start_lon_deg": 29.169346,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04300.vrta"
+    },
+    {
+      "run_id": 4309,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265431,
+      "initial_state": {
+        "mean_wind_mps": 2.2024,
+        "peak_gust_mps": 3.9044,
+        "initial_soc_pct": 93.356,
+        "cruise_speed_mps": 21.582,
+        "start_lat_deg": 40.877764,
+        "start_lon_deg": 29.131812,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04309.vrta"
+    },
+    {
+      "run_id": 4311,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265433,
+      "initial_state": {
+        "mean_wind_mps": 4.3351,
+        "peak_gust_mps": 0.8608,
+        "initial_soc_pct": 63.991,
+        "cruise_speed_mps": 19.431,
+        "start_lat_deg": 40.937269,
+        "start_lon_deg": 29.124969,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04311.vrta"
+    },
+    {
+      "run_id": 4317,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265439,
+      "initial_state": {
+        "mean_wind_mps": 10.9692,
+        "peak_gust_mps": 0.5288,
+        "initial_soc_pct": 72.297,
+        "cruise_speed_mps": 20.831,
+        "start_lat_deg": 40.933033,
+        "start_lon_deg": 29.154432,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04317.vrta"
+    },
+    {
+      "run_id": 4328,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265450,
+      "initial_state": {
+        "mean_wind_mps": 6.5168,
+        "peak_gust_mps": 2.307,
+        "initial_soc_pct": 55.762,
+        "cruise_speed_mps": 21.99,
+        "start_lat_deg": 40.881715,
+        "start_lon_deg": 29.121538,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04328.vrta"
+    },
+    {
+      "run_id": 4335,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265457,
+      "initial_state": {
+        "mean_wind_mps": 5.0396,
+        "peak_gust_mps": 7.3948,
+        "initial_soc_pct": 44.843,
+        "cruise_speed_mps": 18.054,
+        "start_lat_deg": 40.92678,
+        "start_lon_deg": 29.105994,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04335.vrta"
+    },
+    {
+      "run_id": 4340,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265462,
+      "initial_state": {
+        "mean_wind_mps": 4.1954,
+        "peak_gust_mps": 2.7048,
+        "initial_soc_pct": 42.143,
+        "cruise_speed_mps": 21.108,
+        "start_lat_deg": 40.929664,
+        "start_lon_deg": 29.14576,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04340.vrta"
+    },
+    {
+      "run_id": 4348,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265470,
+      "initial_state": {
+        "mean_wind_mps": 7.7766,
+        "peak_gust_mps": 4.6646,
+        "initial_soc_pct": 93.569,
+        "cruise_speed_mps": 21.141,
+        "start_lat_deg": 40.90806,
+        "start_lon_deg": 29.184041,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04348.vrta"
+    },
+    {
+      "run_id": 4363,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265485,
+      "initial_state": {
+        "mean_wind_mps": 3.3743,
+        "peak_gust_mps": 6.0141,
+        "initial_soc_pct": 95.897,
+        "cruise_speed_mps": 20.418,
+        "start_lat_deg": 40.907705,
+        "start_lon_deg": 29.116528,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04363.vrta"
+    },
+    {
+      "run_id": 4372,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265494,
+      "initial_state": {
+        "mean_wind_mps": 10.089,
+        "peak_gust_mps": 7.6462,
+        "initial_soc_pct": 76.034,
+        "cruise_speed_mps": 21.908,
+        "start_lat_deg": 40.891419,
+        "start_lon_deg": 29.136812,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04372.vrta"
+    },
+    {
+      "run_id": 4400,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265522,
+      "initial_state": {
+        "mean_wind_mps": 7.6128,
+        "peak_gust_mps": 1.4723,
+        "initial_soc_pct": 69.161,
+        "cruise_speed_mps": 21.451,
+        "start_lat_deg": 40.875455,
+        "start_lon_deg": 29.120991,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04400.vrta"
+    },
+    {
+      "run_id": 4407,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265529,
+      "initial_state": {
+        "mean_wind_mps": 6.7095,
+        "peak_gust_mps": 5.0437,
+        "initial_soc_pct": 39.522,
+        "cruise_speed_mps": 21.239,
+        "start_lat_deg": 40.895771,
+        "start_lon_deg": 29.18374,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04407.vrta"
+    },
+    {
+      "run_id": 4411,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265533,
+      "initial_state": {
+        "mean_wind_mps": 4.0432,
+        "peak_gust_mps": 3.706,
+        "initial_soc_pct": 76.931,
+        "cruise_speed_mps": 21.673,
+        "start_lat_deg": 40.928593,
+        "start_lon_deg": 29.163655,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04411.vrta"
+    },
+    {
+      "run_id": 4415,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265537,
+      "initial_state": {
+        "mean_wind_mps": 11.9503,
+        "peak_gust_mps": 6.1604,
+        "initial_soc_pct": 78.125,
+        "cruise_speed_mps": 21.699,
+        "start_lat_deg": 40.939347,
+        "start_lon_deg": 29.129677,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04415.vrta"
+    },
+    {
+      "run_id": 4420,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265542,
+      "initial_state": {
+        "mean_wind_mps": 3.1429,
+        "peak_gust_mps": 3.5747,
+        "initial_soc_pct": 64.573,
+        "cruise_speed_mps": 21.689,
+        "start_lat_deg": 40.932472,
+        "start_lon_deg": 29.127548,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04420.vrta"
+    },
+    {
+      "run_id": 4439,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265561,
+      "initial_state": {
+        "mean_wind_mps": 2.1479,
+        "peak_gust_mps": 3.4097,
+        "initial_soc_pct": 46.08,
+        "cruise_speed_mps": 21.396,
+        "start_lat_deg": 40.906306,
+        "start_lon_deg": 29.125535,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04439.vrta"
+    },
+    {
+      "run_id": 4440,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265562,
+      "initial_state": {
+        "mean_wind_mps": 11.0608,
+        "peak_gust_mps": 7.6624,
+        "initial_soc_pct": 46.302,
+        "cruise_speed_mps": 21.525,
+        "start_lat_deg": 40.926276,
+        "start_lon_deg": 29.119606,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04440.vrta"
+    },
+    {
+      "run_id": 4448,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265570,
+      "initial_state": {
+        "mean_wind_mps": 4.0783,
+        "peak_gust_mps": 3.8888,
+        "initial_soc_pct": 95.312,
+        "cruise_speed_mps": 18.178,
+        "start_lat_deg": 40.927531,
+        "start_lon_deg": 29.116469,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04448.vrta"
+    },
+    {
+      "run_id": 4464,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265586,
+      "initial_state": {
+        "mean_wind_mps": 5.1986,
+        "peak_gust_mps": 7.3405,
+        "initial_soc_pct": 64.823,
+        "cruise_speed_mps": 17.855,
+        "start_lat_deg": 40.904679,
+        "start_lon_deg": 29.164244,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04464.vrta"
+    },
+    {
+      "run_id": 4478,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265600,
+      "initial_state": {
+        "mean_wind_mps": 7.7431,
+        "peak_gust_mps": 7.5435,
+        "initial_soc_pct": 41.354,
+        "cruise_speed_mps": 18.46,
+        "start_lat_deg": 40.924991,
+        "start_lon_deg": 29.117951,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04478.vrta"
+    },
+    {
+      "run_id": 4484,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265606,
+      "initial_state": {
+        "mean_wind_mps": 5.0696,
+        "peak_gust_mps": 5.0292,
+        "initial_soc_pct": 62.202,
+        "cruise_speed_mps": 20.452,
+        "start_lat_deg": 40.922268,
+        "start_lon_deg": 29.172751,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04484.vrta"
+    },
+    {
+      "run_id": 4508,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265630,
+      "initial_state": {
+        "mean_wind_mps": 5.7949,
+        "peak_gust_mps": 4.6747,
+        "initial_soc_pct": 72.742,
+        "cruise_speed_mps": 19.318,
+        "start_lat_deg": 40.915046,
+        "start_lon_deg": 29.179918,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04508.vrta"
+    },
+    {
+      "run_id": 4509,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265631,
+      "initial_state": {
+        "mean_wind_mps": 4.8642,
+        "peak_gust_mps": 4.2291,
+        "initial_soc_pct": 83.931,
+        "cruise_speed_mps": 18.361,
+        "start_lat_deg": 40.89855,
+        "start_lon_deg": 29.12425,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04509.vrta"
+    },
+    {
+      "run_id": 4520,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265642,
+      "initial_state": {
+        "mean_wind_mps": 9.2115,
+        "peak_gust_mps": 0.1751,
+        "initial_soc_pct": 41.39,
+        "cruise_speed_mps": 17.595,
+        "start_lat_deg": 40.905832,
+        "start_lon_deg": 29.186363,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04520.vrta"
+    },
+    {
+      "run_id": 4527,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265649,
+      "initial_state": {
+        "mean_wind_mps": 10.8421,
+        "peak_gust_mps": 6.3739,
+        "initial_soc_pct": 61.066,
+        "cruise_speed_mps": 16.994,
+        "start_lat_deg": 40.901689,
+        "start_lon_deg": 29.143459,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04527.vrta"
+    },
+    {
+      "run_id": 4544,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265666,
+      "initial_state": {
+        "mean_wind_mps": 3.204,
+        "peak_gust_mps": 1.2739,
+        "initial_soc_pct": 91.403,
+        "cruise_speed_mps": 17.067,
+        "start_lat_deg": 40.880841,
+        "start_lon_deg": 29.156292,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04544.vrta"
+    },
+    {
+      "run_id": 4550,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265672,
+      "initial_state": {
+        "mean_wind_mps": 9.2767,
+        "peak_gust_mps": 6.3793,
+        "initial_soc_pct": 81.539,
+        "cruise_speed_mps": 18.635,
+        "start_lat_deg": 40.937714,
+        "start_lon_deg": 29.18847,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04550.vrta"
+    },
+    {
+      "run_id": 4556,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265678,
+      "initial_state": {
+        "mean_wind_mps": 10.3046,
+        "peak_gust_mps": 6.9016,
+        "initial_soc_pct": 72.053,
+        "cruise_speed_mps": 20.692,
+        "start_lat_deg": 40.893809,
+        "start_lon_deg": 29.182856,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04556.vrta"
+    },
+    {
+      "run_id": 4570,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265692,
+      "initial_state": {
+        "mean_wind_mps": 9.7794,
+        "peak_gust_mps": 2.4463,
+        "initial_soc_pct": 99.059,
+        "cruise_speed_mps": 21.443,
+        "start_lat_deg": 40.908657,
+        "start_lon_deg": 29.110148,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04570.vrta"
+    },
+    {
+      "run_id": 4575,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265697,
+      "initial_state": {
+        "mean_wind_mps": 2.4321,
+        "peak_gust_mps": 6.1295,
+        "initial_soc_pct": 62.759,
+        "cruise_speed_mps": 21.079,
+        "start_lat_deg": 40.911766,
+        "start_lon_deg": 29.175692,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04575.vrta"
+    },
+    {
+      "run_id": 4588,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265710,
+      "initial_state": {
+        "mean_wind_mps": 9.3688,
+        "peak_gust_mps": 4.113,
+        "initial_soc_pct": 95.642,
+        "cruise_speed_mps": 21.577,
+        "start_lat_deg": 40.908321,
+        "start_lon_deg": 29.164753,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04588.vrta"
+    },
+    {
+      "run_id": 4604,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265726,
+      "initial_state": {
+        "mean_wind_mps": 3.0902,
+        "peak_gust_mps": 4.5696,
+        "initial_soc_pct": 70.386,
+        "cruise_speed_mps": 21.503,
+        "start_lat_deg": 40.878905,
+        "start_lon_deg": 29.142851,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04604.vrta"
+    },
+    {
+      "run_id": 4621,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265743,
+      "initial_state": {
+        "mean_wind_mps": 7.5325,
+        "peak_gust_mps": 6.1215,
+        "initial_soc_pct": 73.057,
+        "cruise_speed_mps": 20.446,
+        "start_lat_deg": 40.897473,
+        "start_lon_deg": 29.139862,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04621.vrta"
+    },
+    {
+      "run_id": 4632,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265754,
+      "initial_state": {
+        "mean_wind_mps": 10.2922,
+        "peak_gust_mps": 0.963,
+        "initial_soc_pct": 46.869,
+        "cruise_speed_mps": 17.417,
+        "start_lat_deg": 40.923221,
+        "start_lon_deg": 29.143267,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04632.vrta"
+    },
+    {
+      "run_id": 4640,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265762,
+      "initial_state": {
+        "mean_wind_mps": 4.9394,
+        "peak_gust_mps": 1.9472,
+        "initial_soc_pct": 41.897,
+        "cruise_speed_mps": 19.969,
+        "start_lat_deg": 40.941509,
+        "start_lon_deg": 29.164925,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04640.vrta"
+    },
+    {
+      "run_id": 4647,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265769,
+      "initial_state": {
+        "mean_wind_mps": 1.9395,
+        "peak_gust_mps": 7.9209,
+        "initial_soc_pct": 38.521,
+        "cruise_speed_mps": 19.899,
+        "start_lat_deg": 40.898016,
+        "start_lon_deg": 29.180527,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04647.vrta"
+    },
+    {
+      "run_id": 4677,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265799,
+      "initial_state": {
+        "mean_wind_mps": 0.0947,
+        "peak_gust_mps": 4.1511,
+        "initial_soc_pct": 37.919,
+        "cruise_speed_mps": 18.079,
+        "start_lat_deg": 40.882593,
+        "start_lon_deg": 29.108968,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04677.vrta"
+    },
+    {
+      "run_id": 4701,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265823,
+      "initial_state": {
+        "mean_wind_mps": 8.4977,
+        "peak_gust_mps": 0.3466,
+        "initial_soc_pct": 56.145,
+        "cruise_speed_mps": 21.288,
+        "start_lat_deg": 40.897361,
+        "start_lon_deg": 29.16361,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04701.vrta"
+    },
+    {
+      "run_id": 4703,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265825,
+      "initial_state": {
+        "mean_wind_mps": 7.0847,
+        "peak_gust_mps": 6.5765,
+        "initial_soc_pct": 85.319,
+        "cruise_speed_mps": 18.911,
+        "start_lat_deg": 40.876645,
+        "start_lon_deg": 29.132105,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04703.vrta"
+    },
+    {
+      "run_id": 4706,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265828,
+      "initial_state": {
+        "mean_wind_mps": 11.912,
+        "peak_gust_mps": 6.8105,
+        "initial_soc_pct": 65.165,
+        "cruise_speed_mps": 21.892,
+        "start_lat_deg": 40.925967,
+        "start_lon_deg": 29.125675,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04706.vrta"
+    },
+    {
+      "run_id": 4727,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265849,
+      "initial_state": {
+        "mean_wind_mps": 9.7683,
+        "peak_gust_mps": 1.3683,
+        "initial_soc_pct": 70.46,
+        "cruise_speed_mps": 19.698,
+        "start_lat_deg": 40.882271,
+        "start_lon_deg": 29.105896,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04727.vrta"
+    },
+    {
+      "run_id": 4760,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265882,
+      "initial_state": {
+        "mean_wind_mps": 9.0527,
+        "peak_gust_mps": 7.182,
+        "initial_soc_pct": 68.514,
+        "cruise_speed_mps": 20.567,
+        "start_lat_deg": 40.916605,
+        "start_lon_deg": 29.164873,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04760.vrta"
+    },
+    {
+      "run_id": 4765,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265887,
+      "initial_state": {
+        "mean_wind_mps": 5.5336,
+        "peak_gust_mps": 4.9111,
+        "initial_soc_pct": 80.271,
+        "cruise_speed_mps": 19.132,
+        "start_lat_deg": 40.896641,
+        "start_lon_deg": 29.16101,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04765.vrta"
+    },
+    {
+      "run_id": 4796,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265918,
+      "initial_state": {
+        "mean_wind_mps": 1.1721,
+        "peak_gust_mps": 7.6758,
+        "initial_soc_pct": 38.577,
+        "cruise_speed_mps": 21.102,
+        "start_lat_deg": 40.931764,
+        "start_lon_deg": 29.171912,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04796.vrta"
+    },
+    {
+      "run_id": 4797,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265919,
+      "initial_state": {
+        "mean_wind_mps": 10.993,
+        "peak_gust_mps": 5.3028,
+        "initial_soc_pct": 35.002,
+        "cruise_speed_mps": 22.0,
+        "start_lat_deg": 40.911174,
+        "start_lon_deg": 29.166245,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04797.vrta"
+    },
+    {
+      "run_id": 4800,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265922,
+      "initial_state": {
+        "mean_wind_mps": 10.4594,
+        "peak_gust_mps": 1.3286,
+        "initial_soc_pct": 55.999,
+        "cruise_speed_mps": 19.381,
+        "start_lat_deg": 40.938715,
+        "start_lon_deg": 29.138562,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04800.vrta"
+    },
+    {
+      "run_id": 4821,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265943,
+      "initial_state": {
+        "mean_wind_mps": 8.4265,
+        "peak_gust_mps": 7.8942,
+        "initial_soc_pct": 64.851,
+        "cruise_speed_mps": 19.076,
+        "start_lat_deg": 40.900679,
+        "start_lon_deg": 29.160161,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04821.vrta"
+    },
+    {
+      "run_id": 4832,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265954,
+      "initial_state": {
+        "mean_wind_mps": 6.9291,
+        "peak_gust_mps": 1.0794,
+        "initial_soc_pct": 57.303,
+        "cruise_speed_mps": 17.623,
+        "start_lat_deg": 40.924558,
+        "start_lon_deg": 29.181752,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04832.vrta"
+    },
+    {
+      "run_id": 4844,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265966,
+      "initial_state": {
+        "mean_wind_mps": 9.9909,
+        "peak_gust_mps": 0.3545,
+        "initial_soc_pct": 77.021,
+        "cruise_speed_mps": 18.407,
+        "start_lat_deg": 40.905282,
+        "start_lon_deg": 29.172553,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04844.vrta"
+    },
+    {
+      "run_id": 4861,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265983,
+      "initial_state": {
+        "mean_wind_mps": 11.55,
+        "peak_gust_mps": 4.5028,
+        "initial_soc_pct": 98.532,
+        "cruise_speed_mps": 19.109,
+        "start_lat_deg": 40.906284,
+        "start_lon_deg": 29.111599,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04861.vrta"
+    },
+    {
+      "run_id": 4874,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20265996,
+      "initial_state": {
+        "mean_wind_mps": 10.652,
+        "peak_gust_mps": 7.6499,
+        "initial_soc_pct": 42.019,
+        "cruise_speed_mps": 21.836,
+        "start_lat_deg": 40.881545,
+        "start_lon_deg": 29.142273,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04874.vrta"
+    },
+    {
+      "run_id": 4882,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266004,
+      "initial_state": {
+        "mean_wind_mps": 8.558,
+        "peak_gust_mps": 7.1295,
+        "initial_soc_pct": 85.209,
+        "cruise_speed_mps": 18.728,
+        "start_lat_deg": 40.910023,
+        "start_lon_deg": 29.118928,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04882.vrta"
+    },
+    {
+      "run_id": 4900,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266022,
+      "initial_state": {
+        "mean_wind_mps": 7.4594,
+        "peak_gust_mps": 4.2091,
+        "initial_soc_pct": 90.531,
+        "cruise_speed_mps": 21.659,
+        "start_lat_deg": 40.885544,
+        "start_lon_deg": 29.117389,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04900.vrta"
+    },
+    {
+      "run_id": 4903,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266025,
+      "initial_state": {
+        "mean_wind_mps": 10.9981,
+        "peak_gust_mps": 4.9741,
+        "initial_soc_pct": 69.191,
+        "cruise_speed_mps": 19.753,
+        "start_lat_deg": 40.936385,
+        "start_lon_deg": 29.137602,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04903.vrta"
+    },
+    {
+      "run_id": 4916,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266038,
+      "initial_state": {
+        "mean_wind_mps": 7.6596,
+        "peak_gust_mps": 2.4077,
+        "initial_soc_pct": 36.171,
+        "cruise_speed_mps": 19.339,
+        "start_lat_deg": 40.936335,
+        "start_lon_deg": 29.134376,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04916.vrta"
+    },
+    {
+      "run_id": 4920,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266042,
+      "initial_state": {
+        "mean_wind_mps": 2.5851,
+        "peak_gust_mps": 6.3958,
+        "initial_soc_pct": 50.317,
+        "cruise_speed_mps": 19.367,
+        "start_lat_deg": 40.932929,
+        "start_lon_deg": 29.143888,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04920.vrta"
+    },
+    {
+      "run_id": 4927,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266049,
+      "initial_state": {
+        "mean_wind_mps": 9.9483,
+        "peak_gust_mps": 7.4592,
+        "initial_soc_pct": 68.63,
+        "cruise_speed_mps": 20.209,
+        "start_lat_deg": 40.915085,
+        "start_lon_deg": 29.153522,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04927.vrta"
+    },
+    {
+      "run_id": 4952,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266074,
+      "initial_state": {
+        "mean_wind_mps": 0.0145,
+        "peak_gust_mps": 4.1959,
+        "initial_soc_pct": 75.938,
+        "cruise_speed_mps": 21.558,
+        "start_lat_deg": 40.919773,
+        "start_lon_deg": 29.118857,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04952.vrta"
+    },
+    {
+      "run_id": 4963,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266085,
+      "initial_state": {
+        "mean_wind_mps": 4.6061,
+        "peak_gust_mps": 4.6127,
+        "initial_soc_pct": 87.909,
+        "cruise_speed_mps": 20.293,
+        "start_lat_deg": 40.92317,
+        "start_lon_deg": 29.144177,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04963.vrta"
+    },
+    {
+      "run_id": 4982,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266104,
+      "initial_state": {
+        "mean_wind_mps": 11.0223,
+        "peak_gust_mps": 4.0143,
+        "initial_soc_pct": 75.03,
+        "cruise_speed_mps": 19.188,
+        "start_lat_deg": 40.902227,
+        "start_lon_deg": 29.138099,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04982.vrta"
+    },
+    {
+      "run_id": 4988,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266110,
+      "initial_state": {
+        "mean_wind_mps": 5.8776,
+        "peak_gust_mps": 4.1991,
+        "initial_soc_pct": 78.094,
+        "cruise_speed_mps": 20.473,
+        "start_lat_deg": 40.916993,
+        "start_lon_deg": 29.13445,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_04988.vrta"
+    },
+    {
+      "run_id": 5000,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266122,
+      "initial_state": {
+        "mean_wind_mps": 1.5458,
+        "peak_gust_mps": 6.6054,
+        "initial_soc_pct": 77.676,
+        "cruise_speed_mps": 19.747,
+        "start_lat_deg": 40.941105,
+        "start_lon_deg": 29.144538,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05000.vrta"
+    },
+    {
+      "run_id": 5016,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266138,
+      "initial_state": {
+        "mean_wind_mps": 1.0488,
+        "peak_gust_mps": 4.5192,
+        "initial_soc_pct": 45.269,
+        "cruise_speed_mps": 17.464,
+        "start_lat_deg": 40.876111,
+        "start_lon_deg": 29.130014,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05016.vrta"
+    },
+    {
+      "run_id": 5020,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266142,
+      "initial_state": {
+        "mean_wind_mps": 9.2211,
+        "peak_gust_mps": 5.9089,
+        "initial_soc_pct": 76.751,
+        "cruise_speed_mps": 18.697,
+        "start_lat_deg": 40.919415,
+        "start_lon_deg": 29.182777,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05020.vrta"
+    },
+    {
+      "run_id": 5024,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266146,
+      "initial_state": {
+        "mean_wind_mps": 10.4946,
+        "peak_gust_mps": 5.0706,
+        "initial_soc_pct": 90.614,
+        "cruise_speed_mps": 20.202,
+        "start_lat_deg": 40.930338,
+        "start_lon_deg": 29.109524,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05024.vrta"
+    },
+    {
+      "run_id": 5029,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266151,
+      "initial_state": {
+        "mean_wind_mps": 5.9322,
+        "peak_gust_mps": 2.5126,
+        "initial_soc_pct": 60.176,
+        "cruise_speed_mps": 19.504,
+        "start_lat_deg": 40.88049,
+        "start_lon_deg": 29.112501,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05029.vrta"
+    },
+    {
+      "run_id": 5037,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266159,
+      "initial_state": {
+        "mean_wind_mps": 2.3202,
+        "peak_gust_mps": 2.8839,
+        "initial_soc_pct": 78.813,
+        "cruise_speed_mps": 17.492,
+        "start_lat_deg": 40.917702,
+        "start_lon_deg": 29.130798,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05037.vrta"
+    },
+    {
+      "run_id": 5079,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266201,
+      "initial_state": {
+        "mean_wind_mps": 1.5558,
+        "peak_gust_mps": 6.9882,
+        "initial_soc_pct": 63.857,
+        "cruise_speed_mps": 18.27,
+        "start_lat_deg": 40.933508,
+        "start_lon_deg": 29.124267,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05079.vrta"
+    },
+    {
+      "run_id": 5092,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266214,
+      "initial_state": {
+        "mean_wind_mps": 1.1868,
+        "peak_gust_mps": 2.642,
+        "initial_soc_pct": 55.833,
+        "cruise_speed_mps": 21.607,
+        "start_lat_deg": 40.925413,
+        "start_lon_deg": 29.167247,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05092.vrta"
+    },
+    {
+      "run_id": 5101,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266223,
+      "initial_state": {
+        "mean_wind_mps": 10.3596,
+        "peak_gust_mps": 6.391,
+        "initial_soc_pct": 77.836,
+        "cruise_speed_mps": 19.609,
+        "start_lat_deg": 40.919913,
+        "start_lon_deg": 29.180245,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05101.vrta"
+    },
+    {
+      "run_id": 5119,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266241,
+      "initial_state": {
+        "mean_wind_mps": 5.4195,
+        "peak_gust_mps": 7.8055,
+        "initial_soc_pct": 40.172,
+        "cruise_speed_mps": 19.566,
+        "start_lat_deg": 40.883213,
+        "start_lon_deg": 29.135916,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05119.vrta"
+    },
+    {
+      "run_id": 5132,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266254,
+      "initial_state": {
+        "mean_wind_mps": 6.8571,
+        "peak_gust_mps": 1.6813,
+        "initial_soc_pct": 99.871,
+        "cruise_speed_mps": 18.562,
+        "start_lat_deg": 40.908987,
+        "start_lon_deg": 29.137762,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05132.vrta"
+    },
+    {
+      "run_id": 5133,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266255,
+      "initial_state": {
+        "mean_wind_mps": 6.7781,
+        "peak_gust_mps": 1.7471,
+        "initial_soc_pct": 80.247,
+        "cruise_speed_mps": 16.948,
+        "start_lat_deg": 40.901663,
+        "start_lon_deg": 29.130756,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05133.vrta"
+    },
+    {
+      "run_id": 5151,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266273,
+      "initial_state": {
+        "mean_wind_mps": 4.9076,
+        "peak_gust_mps": 1.3363,
+        "initial_soc_pct": 54.306,
+        "cruise_speed_mps": 16.807,
+        "start_lat_deg": 40.877608,
+        "start_lon_deg": 29.12237,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05151.vrta"
+    },
+    {
+      "run_id": 5155,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266277,
+      "initial_state": {
+        "mean_wind_mps": 3.4306,
+        "peak_gust_mps": 3.0897,
+        "initial_soc_pct": 63.247,
+        "cruise_speed_mps": 21.77,
+        "start_lat_deg": 40.936055,
+        "start_lon_deg": 29.127384,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05155.vrta"
+    },
+    {
+      "run_id": 5167,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266289,
+      "initial_state": {
+        "mean_wind_mps": 5.3911,
+        "peak_gust_mps": 3.0168,
+        "initial_soc_pct": 99.868,
+        "cruise_speed_mps": 19.466,
+        "start_lat_deg": 40.931255,
+        "start_lon_deg": 29.181306,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05167.vrta"
+    },
+    {
+      "run_id": 5170,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266292,
+      "initial_state": {
+        "mean_wind_mps": 3.8601,
+        "peak_gust_mps": 4.1904,
+        "initial_soc_pct": 97.031,
+        "cruise_speed_mps": 20.82,
+        "start_lat_deg": 40.937946,
+        "start_lon_deg": 29.165814,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05170.vrta"
+    },
+    {
+      "run_id": 5181,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266303,
+      "initial_state": {
+        "mean_wind_mps": 4.306,
+        "peak_gust_mps": 5.4143,
+        "initial_soc_pct": 40.679,
+        "cruise_speed_mps": 18.984,
+        "start_lat_deg": 40.875097,
+        "start_lon_deg": 29.137744,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05181.vrta"
+    },
+    {
+      "run_id": 5199,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266321,
+      "initial_state": {
+        "mean_wind_mps": 6.6052,
+        "peak_gust_mps": 2.9466,
+        "initial_soc_pct": 69.627,
+        "cruise_speed_mps": 21.34,
+        "start_lat_deg": 40.899936,
+        "start_lon_deg": 29.162236,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05199.vrta"
+    },
+    {
+      "run_id": 5205,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266327,
+      "initial_state": {
+        "mean_wind_mps": 1.8775,
+        "peak_gust_mps": 7.9265,
+        "initial_soc_pct": 35.642,
+        "cruise_speed_mps": 20.663,
+        "start_lat_deg": 40.898769,
+        "start_lon_deg": 29.148271,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05205.vrta"
+    },
+    {
+      "run_id": 5216,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266338,
+      "initial_state": {
+        "mean_wind_mps": 4.2746,
+        "peak_gust_mps": 7.5899,
+        "initial_soc_pct": 44.147,
+        "cruise_speed_mps": 19.667,
+        "start_lat_deg": 40.940793,
+        "start_lon_deg": 29.120834,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05216.vrta"
+    },
+    {
+      "run_id": 5221,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266343,
+      "initial_state": {
+        "mean_wind_mps": 6.9894,
+        "peak_gust_mps": 1.482,
+        "initial_soc_pct": 66.564,
+        "cruise_speed_mps": 20.948,
+        "start_lat_deg": 40.922801,
+        "start_lon_deg": 29.132722,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05221.vrta"
+    },
+    {
+      "run_id": 5232,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266354,
+      "initial_state": {
+        "mean_wind_mps": 5.354,
+        "peak_gust_mps": 4.8689,
+        "initial_soc_pct": 61.652,
+        "cruise_speed_mps": 19.114,
+        "start_lat_deg": 40.884905,
+        "start_lon_deg": 29.157962,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05232.vrta"
+    },
+    {
+      "run_id": 5239,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266361,
+      "initial_state": {
+        "mean_wind_mps": 8.4641,
+        "peak_gust_mps": 2.5204,
+        "initial_soc_pct": 58.307,
+        "cruise_speed_mps": 21.937,
+        "start_lat_deg": 40.89633,
+        "start_lon_deg": 29.186633,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05239.vrta"
+    },
+    {
+      "run_id": 5271,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266393,
+      "initial_state": {
+        "mean_wind_mps": 0.5484,
+        "peak_gust_mps": 4.8549,
+        "initial_soc_pct": 63.417,
+        "cruise_speed_mps": 17.732,
+        "start_lat_deg": 40.905099,
+        "start_lon_deg": 29.119893,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05271.vrta"
+    },
+    {
+      "run_id": 5275,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266397,
+      "initial_state": {
+        "mean_wind_mps": 9.1036,
+        "peak_gust_mps": 1.4709,
+        "initial_soc_pct": 37.504,
+        "cruise_speed_mps": 21.272,
+        "start_lat_deg": 40.939432,
+        "start_lon_deg": 29.138167,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05275.vrta"
+    },
+    {
+      "run_id": 5282,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266404,
+      "initial_state": {
+        "mean_wind_mps": 11.9189,
+        "peak_gust_mps": 5.8708,
+        "initial_soc_pct": 75.906,
+        "cruise_speed_mps": 20.063,
+        "start_lat_deg": 40.938446,
+        "start_lon_deg": 29.109429,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05282.vrta"
+    },
+    {
+      "run_id": 5288,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266410,
+      "initial_state": {
+        "mean_wind_mps": 2.025,
+        "peak_gust_mps": 3.3905,
+        "initial_soc_pct": 98.919,
+        "cruise_speed_mps": 19.559,
+        "start_lat_deg": 40.910896,
+        "start_lon_deg": 29.167818,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05288.vrta"
+    },
+    {
+      "run_id": 5295,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266417,
+      "initial_state": {
+        "mean_wind_mps": 8.7586,
+        "peak_gust_mps": 1.4662,
+        "initial_soc_pct": 65.838,
+        "cruise_speed_mps": 19.23,
+        "start_lat_deg": 40.935004,
+        "start_lon_deg": 29.139516,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05295.vrta"
+    },
+    {
+      "run_id": 5351,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266473,
+      "initial_state": {
+        "mean_wind_mps": 2.0309,
+        "peak_gust_mps": 5.0505,
+        "initial_soc_pct": 97.656,
+        "cruise_speed_mps": 20.895,
+        "start_lat_deg": 40.918788,
+        "start_lon_deg": 29.138637,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05351.vrta"
+    },
+    {
+      "run_id": 5362,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266484,
+      "initial_state": {
+        "mean_wind_mps": 4.4828,
+        "peak_gust_mps": 3.9498,
+        "initial_soc_pct": 42.831,
+        "cruise_speed_mps": 21.634,
+        "start_lat_deg": 40.935584,
+        "start_lon_deg": 29.187373,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05362.vrta"
+    },
+    {
+      "run_id": 5376,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266498,
+      "initial_state": {
+        "mean_wind_mps": 0.4115,
+        "peak_gust_mps": 2.141,
+        "initial_soc_pct": 99.036,
+        "cruise_speed_mps": 18.144,
+        "start_lat_deg": 40.886904,
+        "start_lon_deg": 29.105651,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05376.vrta"
+    },
+    {
+      "run_id": 5386,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266508,
+      "initial_state": {
+        "mean_wind_mps": 10.6672,
+        "peak_gust_mps": 5.8414,
+        "initial_soc_pct": 43.178,
+        "cruise_speed_mps": 19.986,
+        "start_lat_deg": 40.881076,
+        "start_lon_deg": 29.170005,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05386.vrta"
+    },
+    {
+      "run_id": 5397,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266519,
+      "initial_state": {
+        "mean_wind_mps": 8.5147,
+        "peak_gust_mps": 1.4028,
+        "initial_soc_pct": 41.976,
+        "cruise_speed_mps": 17.197,
+        "start_lat_deg": 40.880657,
+        "start_lon_deg": 29.117194,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05397.vrta"
+    },
+    {
+      "run_id": 5400,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266522,
+      "initial_state": {
+        "mean_wind_mps": 7.0468,
+        "peak_gust_mps": 5.7469,
+        "initial_soc_pct": 49.458,
+        "cruise_speed_mps": 16.984,
+        "start_lat_deg": 40.911431,
+        "start_lon_deg": 29.144674,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05400.vrta"
+    },
+    {
+      "run_id": 5414,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266536,
+      "initial_state": {
+        "mean_wind_mps": 10.8919,
+        "peak_gust_mps": 0.0997,
+        "initial_soc_pct": 88.855,
+        "cruise_speed_mps": 19.242,
+        "start_lat_deg": 40.915513,
+        "start_lon_deg": 29.175596,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05414.vrta"
+    },
+    {
+      "run_id": 5431,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266553,
+      "initial_state": {
+        "mean_wind_mps": 2.8527,
+        "peak_gust_mps": 1.3537,
+        "initial_soc_pct": 62.633,
+        "cruise_speed_mps": 21.733,
+        "start_lat_deg": 40.904878,
+        "start_lon_deg": 29.155552,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05431.vrta"
+    },
+    {
+      "run_id": 5437,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266559,
+      "initial_state": {
+        "mean_wind_mps": 10.4422,
+        "peak_gust_mps": 6.2739,
+        "initial_soc_pct": 50.245,
+        "cruise_speed_mps": 21.774,
+        "start_lat_deg": 40.879601,
+        "start_lon_deg": 29.178958,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05437.vrta"
+    },
+    {
+      "run_id": 5439,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266561,
+      "initial_state": {
+        "mean_wind_mps": 10.6263,
+        "peak_gust_mps": 5.4527,
+        "initial_soc_pct": 45.103,
+        "cruise_speed_mps": 16.96,
+        "start_lat_deg": 40.941234,
+        "start_lon_deg": 29.116392,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05439.vrta"
+    },
+    {
+      "run_id": 5448,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266570,
+      "initial_state": {
+        "mean_wind_mps": 9.3127,
+        "peak_gust_mps": 6.8772,
+        "initial_soc_pct": 83.081,
+        "cruise_speed_mps": 17.039,
+        "start_lat_deg": 40.929222,
+        "start_lon_deg": 29.164517,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05448.vrta"
+    },
+    {
+      "run_id": 5469,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266591,
+      "initial_state": {
+        "mean_wind_mps": 1.8646,
+        "peak_gust_mps": 4.1931,
+        "initial_soc_pct": 39.807,
+        "cruise_speed_mps": 17.702,
+        "start_lat_deg": 40.878577,
+        "start_lon_deg": 29.141323,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05469.vrta"
+    },
+    {
+      "run_id": 5471,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266593,
+      "initial_state": {
+        "mean_wind_mps": 9.5227,
+        "peak_gust_mps": 6.2006,
+        "initial_soc_pct": 49.158,
+        "cruise_speed_mps": 20.851,
+        "start_lat_deg": 40.88839,
+        "start_lon_deg": 29.142773,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05471.vrta"
+    },
+    {
+      "run_id": 5480,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266602,
+      "initial_state": {
+        "mean_wind_mps": 3.1562,
+        "peak_gust_mps": 6.0164,
+        "initial_soc_pct": 72.797,
+        "cruise_speed_mps": 20.958,
+        "start_lat_deg": 40.887712,
+        "start_lon_deg": 29.17997,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05480.vrta"
+    },
+    {
+      "run_id": 5504,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266626,
+      "initial_state": {
+        "mean_wind_mps": 7.5118,
+        "peak_gust_mps": 2.1401,
+        "initial_soc_pct": 66.52,
+        "cruise_speed_mps": 21.757,
+        "start_lat_deg": 40.931354,
+        "start_lon_deg": 29.127246,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05504.vrta"
+    },
+    {
+      "run_id": 5517,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266639,
+      "initial_state": {
+        "mean_wind_mps": 9.5493,
+        "peak_gust_mps": 2.36,
+        "initial_soc_pct": 88.986,
+        "cruise_speed_mps": 19.995,
+        "start_lat_deg": 40.933687,
+        "start_lon_deg": 29.141994,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05517.vrta"
+    },
+    {
+      "run_id": 5519,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266641,
+      "initial_state": {
+        "mean_wind_mps": 9.1082,
+        "peak_gust_mps": 1.4174,
+        "initial_soc_pct": 95.35,
+        "cruise_speed_mps": 19.409,
+        "start_lat_deg": 40.877327,
+        "start_lon_deg": 29.13621,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05519.vrta"
+    },
+    {
+      "run_id": 5544,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266666,
+      "initial_state": {
+        "mean_wind_mps": 0.81,
+        "peak_gust_mps": 2.3368,
+        "initial_soc_pct": 45.015,
+        "cruise_speed_mps": 20.136,
+        "start_lat_deg": 40.880225,
+        "start_lon_deg": 29.117897,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05544.vrta"
+    },
+    {
+      "run_id": 5581,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266703,
+      "initial_state": {
+        "mean_wind_mps": 8.7352,
+        "peak_gust_mps": 1.0695,
+        "initial_soc_pct": 65.964,
+        "cruise_speed_mps": 19.593,
+        "start_lat_deg": 40.930067,
+        "start_lon_deg": 29.134649,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05581.vrta"
+    },
+    {
+      "run_id": 5587,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266709,
+      "initial_state": {
+        "mean_wind_mps": 3.0278,
+        "peak_gust_mps": 6.046,
+        "initial_soc_pct": 49.277,
+        "cruise_speed_mps": 21.456,
+        "start_lat_deg": 40.924018,
+        "start_lon_deg": 29.165978,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05587.vrta"
+    },
+    {
+      "run_id": 5596,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266718,
+      "initial_state": {
+        "mean_wind_mps": 5.9961,
+        "peak_gust_mps": 6.7025,
+        "initial_soc_pct": 38.438,
+        "cruise_speed_mps": 18.671,
+        "start_lat_deg": 40.916434,
+        "start_lon_deg": 29.155695,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05596.vrta"
+    },
+    {
+      "run_id": 5615,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266737,
+      "initial_state": {
+        "mean_wind_mps": 4.2027,
+        "peak_gust_mps": 6.6691,
+        "initial_soc_pct": 75.004,
+        "cruise_speed_mps": 20.709,
+        "start_lat_deg": 40.927693,
+        "start_lon_deg": 29.141839,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05615.vrta"
+    },
+    {
+      "run_id": 5620,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266742,
+      "initial_state": {
+        "mean_wind_mps": 6.1227,
+        "peak_gust_mps": 1.0643,
+        "initial_soc_pct": 42.183,
+        "cruise_speed_mps": 20.53,
+        "start_lat_deg": 40.889089,
+        "start_lon_deg": 29.157594,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05620.vrta"
+    },
+    {
+      "run_id": 5623,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266745,
+      "initial_state": {
+        "mean_wind_mps": 4.167,
+        "peak_gust_mps": 4.5328,
+        "initial_soc_pct": 59.693,
+        "cruise_speed_mps": 20.39,
+        "start_lat_deg": 40.893786,
+        "start_lon_deg": 29.119222,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05623.vrta"
+    },
+    {
+      "run_id": 5630,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266752,
+      "initial_state": {
+        "mean_wind_mps": 9.6552,
+        "peak_gust_mps": 5.8016,
+        "initial_soc_pct": 90.17,
+        "cruise_speed_mps": 21.196,
+        "start_lat_deg": 40.922436,
+        "start_lon_deg": 29.138674,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05630.vrta"
+    },
+    {
+      "run_id": 5655,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266777,
+      "initial_state": {
+        "mean_wind_mps": 10.7414,
+        "peak_gust_mps": 4.7108,
+        "initial_soc_pct": 60.025,
+        "cruise_speed_mps": 20.312,
+        "start_lat_deg": 40.935914,
+        "start_lon_deg": 29.146542,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05655.vrta"
+    },
+    {
+      "run_id": 5668,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266790,
+      "initial_state": {
+        "mean_wind_mps": 6.8499,
+        "peak_gust_mps": 6.8129,
+        "initial_soc_pct": 96.947,
+        "cruise_speed_mps": 21.051,
+        "start_lat_deg": 40.929355,
+        "start_lon_deg": 29.146768,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05668.vrta"
+    },
+    {
+      "run_id": 5684,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266806,
+      "initial_state": {
+        "mean_wind_mps": 11.2257,
+        "peak_gust_mps": 1.2936,
+        "initial_soc_pct": 65.7,
+        "cruise_speed_mps": 18.396,
+        "start_lat_deg": 40.911326,
+        "start_lon_deg": 29.177898,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05684.vrta"
+    },
+    {
+      "run_id": 5687,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266809,
+      "initial_state": {
+        "mean_wind_mps": 9.742,
+        "peak_gust_mps": 1.6795,
+        "initial_soc_pct": 69.527,
+        "cruise_speed_mps": 21.304,
+        "start_lat_deg": 40.924949,
+        "start_lon_deg": 29.176124,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05687.vrta"
+    },
+    {
+      "run_id": 5692,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266814,
+      "initial_state": {
+        "mean_wind_mps": 9.3058,
+        "peak_gust_mps": 6.8457,
+        "initial_soc_pct": 65.757,
+        "cruise_speed_mps": 19.218,
+        "start_lat_deg": 40.916816,
+        "start_lon_deg": 29.149291,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05692.vrta"
+    },
+    {
+      "run_id": 5696,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266818,
+      "initial_state": {
+        "mean_wind_mps": 10.2058,
+        "peak_gust_mps": 7.5544,
+        "initial_soc_pct": 84.119,
+        "cruise_speed_mps": 18.519,
+        "start_lat_deg": 40.876276,
+        "start_lon_deg": 29.173226,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05696.vrta"
+    },
+    {
+      "run_id": 5716,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266838,
+      "initial_state": {
+        "mean_wind_mps": 10.9428,
+        "peak_gust_mps": 1.4427,
+        "initial_soc_pct": 85.105,
+        "cruise_speed_mps": 21.63,
+        "start_lat_deg": 40.927251,
+        "start_lon_deg": 29.109029,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05716.vrta"
+    },
+    {
+      "run_id": 5720,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266842,
+      "initial_state": {
+        "mean_wind_mps": 10.8006,
+        "peak_gust_mps": 6.3145,
+        "initial_soc_pct": 62.96,
+        "cruise_speed_mps": 21.221,
+        "start_lat_deg": 40.922989,
+        "start_lon_deg": 29.175765,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05720.vrta"
+    },
+    {
+      "run_id": 5722,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266844,
+      "initial_state": {
+        "mean_wind_mps": 5.8455,
+        "peak_gust_mps": 2.5035,
+        "initial_soc_pct": 59.169,
+        "cruise_speed_mps": 21.015,
+        "start_lat_deg": 40.906487,
+        "start_lon_deg": 29.156456,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05722.vrta"
+    },
+    {
+      "run_id": 5726,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266848,
+      "initial_state": {
+        "mean_wind_mps": 8.966,
+        "peak_gust_mps": 5.5234,
+        "initial_soc_pct": 37.697,
+        "cruise_speed_mps": 19.099,
+        "start_lat_deg": 40.894879,
+        "start_lon_deg": 29.17694,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05726.vrta"
+    },
+    {
+      "run_id": 5732,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266854,
+      "initial_state": {
+        "mean_wind_mps": 0.6523,
+        "peak_gust_mps": 1.5932,
+        "initial_soc_pct": 48.508,
+        "cruise_speed_mps": 21.921,
+        "start_lat_deg": 40.940305,
+        "start_lon_deg": 29.188564,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05732.vrta"
+    },
+    {
+      "run_id": 5736,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266858,
+      "initial_state": {
+        "mean_wind_mps": 11.7664,
+        "peak_gust_mps": 4.426,
+        "initial_soc_pct": 67.555,
+        "cruise_speed_mps": 21.884,
+        "start_lat_deg": 40.928264,
+        "start_lon_deg": 29.128062,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05736.vrta"
+    },
+    {
+      "run_id": 5767,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266889,
+      "initial_state": {
+        "mean_wind_mps": 4.9287,
+        "peak_gust_mps": 0.2244,
+        "initial_soc_pct": 68.206,
+        "cruise_speed_mps": 20.652,
+        "start_lat_deg": 40.91377,
+        "start_lon_deg": 29.129798,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05767.vrta"
+    },
+    {
+      "run_id": 5774,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266896,
+      "initial_state": {
+        "mean_wind_mps": 9.3409,
+        "peak_gust_mps": 5.8638,
+        "initial_soc_pct": 35.381,
+        "cruise_speed_mps": 20.004,
+        "start_lat_deg": 40.908976,
+        "start_lon_deg": 29.182156,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05774.vrta"
+    },
+    {
+      "run_id": 5784,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266906,
+      "initial_state": {
+        "mean_wind_mps": 9.8119,
+        "peak_gust_mps": 3.1263,
+        "initial_soc_pct": 77.887,
+        "cruise_speed_mps": 19.731,
+        "start_lat_deg": 40.901601,
+        "start_lon_deg": 29.124843,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05784.vrta"
+    },
+    {
+      "run_id": 5791,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266913,
+      "initial_state": {
+        "mean_wind_mps": 5.0468,
+        "peak_gust_mps": 6.5894,
+        "initial_soc_pct": 73.433,
+        "cruise_speed_mps": 19.896,
+        "start_lat_deg": 40.90666,
+        "start_lon_deg": 29.108353,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05791.vrta"
+    },
+    {
+      "run_id": 5805,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266927,
+      "initial_state": {
+        "mean_wind_mps": 9.1179,
+        "peak_gust_mps": 3.4241,
+        "initial_soc_pct": 35.062,
+        "cruise_speed_mps": 21.811,
+        "start_lat_deg": 40.893079,
+        "start_lon_deg": 29.113677,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05805.vrta"
+    },
+    {
+      "run_id": 5816,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266938,
+      "initial_state": {
+        "mean_wind_mps": 0.8118,
+        "peak_gust_mps": 4.2973,
+        "initial_soc_pct": 41.476,
+        "cruise_speed_mps": 18.292,
+        "start_lat_deg": 40.896102,
+        "start_lon_deg": 29.113313,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05816.vrta"
+    },
+    {
+      "run_id": 5828,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266950,
+      "initial_state": {
+        "mean_wind_mps": 8.0805,
+        "peak_gust_mps": 4.2067,
+        "initial_soc_pct": 79.903,
+        "cruise_speed_mps": 20.36,
+        "start_lat_deg": 40.88239,
+        "start_lon_deg": 29.172717,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05828.vrta"
+    },
+    {
+      "run_id": 5842,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266964,
+      "initial_state": {
+        "mean_wind_mps": 9.5066,
+        "peak_gust_mps": 4.5755,
+        "initial_soc_pct": 51.571,
+        "cruise_speed_mps": 21.049,
+        "start_lat_deg": 40.881484,
+        "start_lon_deg": 29.169058,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05842.vrta"
+    },
+    {
+      "run_id": 5851,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266973,
+      "initial_state": {
+        "mean_wind_mps": 7.8102,
+        "peak_gust_mps": 6.66,
+        "initial_soc_pct": 54.239,
+        "cruise_speed_mps": 20.716,
+        "start_lat_deg": 40.904599,
+        "start_lon_deg": 29.172692,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05851.vrta"
+    },
+    {
+      "run_id": 5856,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20266978,
+      "initial_state": {
+        "mean_wind_mps": 6.3509,
+        "peak_gust_mps": 2.2628,
+        "initial_soc_pct": 79.258,
+        "cruise_speed_mps": 18.924,
+        "start_lat_deg": 40.916094,
+        "start_lon_deg": 29.153545,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05856.vrta"
+    },
+    {
+      "run_id": 5879,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267001,
+      "initial_state": {
+        "mean_wind_mps": 3.2249,
+        "peak_gust_mps": 2.1274,
+        "initial_soc_pct": 62.093,
+        "cruise_speed_mps": 21.751,
+        "start_lat_deg": 40.907183,
+        "start_lon_deg": 29.129999,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05879.vrta"
+    },
+    {
+      "run_id": 5889,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267011,
+      "initial_state": {
+        "mean_wind_mps": 11.5653,
+        "peak_gust_mps": 2.3553,
+        "initial_soc_pct": 60.426,
+        "cruise_speed_mps": 21.797,
+        "start_lat_deg": 40.931084,
+        "start_lon_deg": 29.170282,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05889.vrta"
+    },
+    {
+      "run_id": 5901,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267023,
+      "initial_state": {
+        "mean_wind_mps": 11.9349,
+        "peak_gust_mps": 7.9095,
+        "initial_soc_pct": 77.38,
+        "cruise_speed_mps": 17.365,
+        "start_lat_deg": 40.893668,
+        "start_lon_deg": 29.160308,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05901.vrta"
+    },
+    {
+      "run_id": 5904,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267026,
+      "initial_state": {
+        "mean_wind_mps": 7.7634,
+        "peak_gust_mps": 4.9367,
+        "initial_soc_pct": 36.803,
+        "cruise_speed_mps": 20.216,
+        "start_lat_deg": 40.883702,
+        "start_lon_deg": 29.154195,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05904.vrta"
+    },
+    {
+      "run_id": 5914,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267036,
+      "initial_state": {
+        "mean_wind_mps": 11.3309,
+        "peak_gust_mps": 7.6676,
+        "initial_soc_pct": 37.179,
+        "cruise_speed_mps": 20.507,
+        "start_lat_deg": 40.890853,
+        "start_lon_deg": 29.174404,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05914.vrta"
+    },
+    {
+      "run_id": 5928,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267050,
+      "initial_state": {
+        "mean_wind_mps": 10.8669,
+        "peak_gust_mps": 1.9406,
+        "initial_soc_pct": 57.2,
+        "cruise_speed_mps": 18.447,
+        "start_lat_deg": 40.87541,
+        "start_lon_deg": 29.111693,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05928.vrta"
+    },
+    {
+      "run_id": 5936,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267058,
+      "initial_state": {
+        "mean_wind_mps": 5.945,
+        "peak_gust_mps": 2.8786,
+        "initial_soc_pct": 51.308,
+        "cruise_speed_mps": 19.827,
+        "start_lat_deg": 40.931533,
+        "start_lon_deg": 29.13821,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05936.vrta"
+    },
+    {
+      "run_id": 5941,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267063,
+      "initial_state": {
+        "mean_wind_mps": 5.4535,
+        "peak_gust_mps": 7.3269,
+        "initial_soc_pct": 95.223,
+        "cruise_speed_mps": 18.715,
+        "start_lat_deg": 40.935237,
+        "start_lon_deg": 29.140697,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05941.vrta"
+    },
+    {
+      "run_id": 5949,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267071,
+      "initial_state": {
+        "mean_wind_mps": 5.9496,
+        "peak_gust_mps": 3.1851,
+        "initial_soc_pct": 67.708,
+        "cruise_speed_mps": 16.809,
+        "start_lat_deg": 40.940099,
+        "start_lon_deg": 29.151853,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05949.vrta"
+    },
+    {
+      "run_id": 5951,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267073,
+      "initial_state": {
+        "mean_wind_mps": 10.4845,
+        "peak_gust_mps": 7.0753,
+        "initial_soc_pct": 54.837,
+        "cruise_speed_mps": 21.179,
+        "start_lat_deg": 40.890747,
+        "start_lon_deg": 29.157709,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05951.vrta"
+    },
+    {
+      "run_id": 5960,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267082,
+      "initial_state": {
+        "mean_wind_mps": 10.4392,
+        "peak_gust_mps": 0.4131,
+        "initial_soc_pct": 89.41,
+        "cruise_speed_mps": 20.069,
+        "start_lat_deg": 40.883311,
+        "start_lon_deg": 29.12885,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05960.vrta"
+    },
+    {
+      "run_id": 5976,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267098,
+      "initial_state": {
+        "mean_wind_mps": 8.5422,
+        "peak_gust_mps": 4.7172,
+        "initial_soc_pct": 80.719,
+        "cruise_speed_mps": 18.649,
+        "start_lat_deg": 40.889835,
+        "start_lon_deg": 29.120516,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05976.vrta"
+    },
+    {
+      "run_id": 5997,
+      "stratum": "S3",
+      "outcome_class": "CSFL",
+      "seed": 20267119,
+      "initial_state": {
+        "mean_wind_mps": 4.0479,
+        "peak_gust_mps": 1.366,
+        "initial_soc_pct": 93.313,
+        "cruise_speed_mps": 17.733,
+        "start_lat_deg": 40.931889,
+        "start_lon_deg": 29.152919,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_05997.vrta"
+    },
+    {
+      "run_id": 9019,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270141,
+      "initial_state": {
+        "mean_wind_mps": 15.6677,
+        "peak_gust_mps": 6.052,
+        "initial_soc_pct": 26.96,
+        "cruise_speed_mps": 21.499,
+        "start_lat_deg": 40.891308,
+        "start_lon_deg": 29.1714,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09019.vrta"
+    },
+    {
+      "run_id": 9061,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270183,
+      "initial_state": {
+        "mean_wind_mps": 15.4631,
+        "peak_gust_mps": 7.1592,
+        "initial_soc_pct": 22.81,
+        "cruise_speed_mps": 20.74,
+        "start_lat_deg": 40.919717,
+        "start_lon_deg": 29.178774,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09061.vrta"
+    },
+    {
+      "run_id": 9067,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270189,
+      "initial_state": {
+        "mean_wind_mps": 12.0406,
+        "peak_gust_mps": 6.2721,
+        "initial_soc_pct": 23.682,
+        "cruise_speed_mps": 18.485,
+        "start_lat_deg": 40.9253,
+        "start_lon_deg": 29.188192,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09067.vrta"
+    },
+    {
+      "run_id": 9091,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270213,
+      "initial_state": {
+        "mean_wind_mps": 10.1851,
+        "peak_gust_mps": 5.1686,
+        "initial_soc_pct": 29.48,
+        "cruise_speed_mps": 20.166,
+        "start_lat_deg": 40.917189,
+        "start_lon_deg": 29.188643,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09091.vrta"
+    },
+    {
+      "run_id": 9121,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270243,
+      "initial_state": {
+        "mean_wind_mps": 13.3469,
+        "peak_gust_mps": 6.3002,
+        "initial_soc_pct": 24.864,
+        "cruise_speed_mps": 20.47,
+        "start_lat_deg": 40.91796,
+        "start_lon_deg": 29.17333,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09121.vrta"
+    },
+    {
+      "run_id": 9124,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270246,
+      "initial_state": {
+        "mean_wind_mps": 10.4236,
+        "peak_gust_mps": 7.5672,
+        "initial_soc_pct": 26.891,
+        "cruise_speed_mps": 20.419,
+        "start_lat_deg": 40.930813,
+        "start_lon_deg": 29.173939,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09124.vrta"
+    },
+    {
+      "run_id": 9172,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270294,
+      "initial_state": {
+        "mean_wind_mps": 14.6908,
+        "peak_gust_mps": 5.7733,
+        "initial_soc_pct": 26.85,
+        "cruise_speed_mps": 20.041,
+        "start_lat_deg": 40.918305,
+        "start_lon_deg": 29.174858,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09172.vrta"
+    },
+    {
+      "run_id": 9193,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270315,
+      "initial_state": {
+        "mean_wind_mps": 17.0031,
+        "peak_gust_mps": 5.6709,
+        "initial_soc_pct": 22.414,
+        "cruise_speed_mps": 17.181,
+        "start_lat_deg": 40.917101,
+        "start_lon_deg": 29.16508,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09193.vrta"
+    },
+    {
+      "run_id": 9196,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270318,
+      "initial_state": {
+        "mean_wind_mps": 11.7736,
+        "peak_gust_mps": 7.741,
+        "initial_soc_pct": 33.634,
+        "cruise_speed_mps": 18.889,
+        "start_lat_deg": 40.91483,
+        "start_lon_deg": 29.182413,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09196.vrta"
+    },
+    {
+      "run_id": 9361,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270483,
+      "initial_state": {
+        "mean_wind_mps": 12.543,
+        "peak_gust_mps": 6.8996,
+        "initial_soc_pct": 23.192,
+        "cruise_speed_mps": 16.943,
+        "start_lat_deg": 40.93053,
+        "start_lon_deg": 29.189336,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09361.vrta"
+    },
+    {
+      "run_id": 9385,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270507,
+      "initial_state": {
+        "mean_wind_mps": 17.9443,
+        "peak_gust_mps": 7.4522,
+        "initial_soc_pct": 25.306,
+        "cruise_speed_mps": 17.054,
+        "start_lat_deg": 40.931948,
+        "start_lon_deg": 29.188341,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09385.vrta"
+    },
+    {
+      "run_id": 9409,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270531,
+      "initial_state": {
+        "mean_wind_mps": 14.5205,
+        "peak_gust_mps": 5.7595,
+        "initial_soc_pct": 27.756,
+        "cruise_speed_mps": 21.335,
+        "start_lat_deg": 40.909732,
+        "start_lon_deg": 29.171228,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09409.vrta"
+    },
+    {
+      "run_id": 9412,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270534,
+      "initial_state": {
+        "mean_wind_mps": 14.7425,
+        "peak_gust_mps": 7.259,
+        "initial_soc_pct": 23.916,
+        "cruise_speed_mps": 17.241,
+        "start_lat_deg": 40.937283,
+        "start_lon_deg": 29.180601,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09412.vrta"
+    },
+    {
+      "run_id": 9433,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270555,
+      "initial_state": {
+        "mean_wind_mps": 11.5834,
+        "peak_gust_mps": 6.8968,
+        "initial_soc_pct": 33.96,
+        "cruise_speed_mps": 18.249,
+        "start_lat_deg": 40.931424,
+        "start_lon_deg": 29.177667,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09433.vrta"
+    },
+    {
+      "run_id": 9481,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270603,
+      "initial_state": {
+        "mean_wind_mps": 11.6142,
+        "peak_gust_mps": 6.9435,
+        "initial_soc_pct": 34.171,
+        "cruise_speed_mps": 19.517,
+        "start_lat_deg": 40.883181,
+        "start_lon_deg": 29.167928,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09481.vrta"
+    },
+    {
+      "run_id": 9523,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270645,
+      "initial_state": {
+        "mean_wind_mps": 15.0922,
+        "peak_gust_mps": 7.4568,
+        "initial_soc_pct": 30.73,
+        "cruise_speed_mps": 17.954,
+        "start_lat_deg": 40.890432,
+        "start_lon_deg": 29.182018,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09523.vrta"
+    },
+    {
+      "run_id": 9529,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270651,
+      "initial_state": {
+        "mean_wind_mps": 17.6402,
+        "peak_gust_mps": 6.5385,
+        "initial_soc_pct": 32.326,
+        "cruise_speed_mps": 20.566,
+        "start_lat_deg": 40.932657,
+        "start_lon_deg": 29.184718,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09529.vrta"
+    },
+    {
+      "run_id": 9565,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270687,
+      "initial_state": {
+        "mean_wind_mps": 16.9108,
+        "peak_gust_mps": 6.8078,
+        "initial_soc_pct": 20.335,
+        "cruise_speed_mps": 21.164,
+        "start_lat_deg": 40.893927,
+        "start_lon_deg": 29.17319,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09565.vrta"
+    },
+    {
+      "run_id": 9571,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270693,
+      "initial_state": {
+        "mean_wind_mps": 11.4386,
+        "peak_gust_mps": 7.4022,
+        "initial_soc_pct": 22.713,
+        "cruise_speed_mps": 20.703,
+        "start_lat_deg": 40.882909,
+        "start_lon_deg": 29.185556,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09571.vrta"
+    },
+    {
+      "run_id": 9577,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270699,
+      "initial_state": {
+        "mean_wind_mps": 17.1877,
+        "peak_gust_mps": 7.2455,
+        "initial_soc_pct": 32.262,
+        "cruise_speed_mps": 21.575,
+        "start_lat_deg": 40.883723,
+        "start_lon_deg": 29.180145,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09577.vrta"
+    },
+    {
+      "run_id": 9673,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270795,
+      "initial_state": {
+        "mean_wind_mps": 14.8947,
+        "peak_gust_mps": 7.4662,
+        "initial_soc_pct": 24.1,
+        "cruise_speed_mps": 17.0,
+        "start_lat_deg": 40.88425,
+        "start_lon_deg": 29.179207,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09673.vrta"
+    },
+    {
+      "run_id": 9700,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270822,
+      "initial_state": {
+        "mean_wind_mps": 14.0848,
+        "peak_gust_mps": 5.6675,
+        "initial_soc_pct": 24.451,
+        "cruise_speed_mps": 18.506,
+        "start_lat_deg": 40.909523,
+        "start_lon_deg": 29.166324,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09700.vrta"
+    },
+    {
+      "run_id": 9733,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270855,
+      "initial_state": {
+        "mean_wind_mps": 13.7996,
+        "peak_gust_mps": 5.0327,
+        "initial_soc_pct": 31.889,
+        "cruise_speed_mps": 19.623,
+        "start_lat_deg": 40.891916,
+        "start_lon_deg": 29.167684,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09733.vrta"
+    },
+    {
+      "run_id": 9739,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270861,
+      "initial_state": {
+        "mean_wind_mps": 12.0257,
+        "peak_gust_mps": 5.0519,
+        "initial_soc_pct": 32.647,
+        "cruise_speed_mps": 18.563,
+        "start_lat_deg": 40.926714,
+        "start_lon_deg": 29.169025,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09739.vrta"
+    },
+    {
+      "run_id": 9745,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270867,
+      "initial_state": {
+        "mean_wind_mps": 15.8027,
+        "peak_gust_mps": 7.9651,
+        "initial_soc_pct": 34.578,
+        "cruise_speed_mps": 18.538,
+        "start_lat_deg": 40.910672,
+        "start_lon_deg": 29.177138,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09745.vrta"
+    },
+    {
+      "run_id": 9772,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270894,
+      "initial_state": {
+        "mean_wind_mps": 16.3845,
+        "peak_gust_mps": 6.0845,
+        "initial_soc_pct": 32.054,
+        "cruise_speed_mps": 19.926,
+        "start_lat_deg": 40.877967,
+        "start_lon_deg": 29.177174,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09772.vrta"
+    },
+    {
+      "run_id": 9805,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270927,
+      "initial_state": {
+        "mean_wind_mps": 14.7234,
+        "peak_gust_mps": 7.4601,
+        "initial_soc_pct": 32.863,
+        "cruise_speed_mps": 19.473,
+        "start_lat_deg": 40.921412,
+        "start_lon_deg": 29.165991,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09805.vrta"
+    },
+    {
+      "run_id": 9811,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270933,
+      "initial_state": {
+        "mean_wind_mps": 12.0382,
+        "peak_gust_mps": 7.9335,
+        "initial_soc_pct": 31.204,
+        "cruise_speed_mps": 20.276,
+        "start_lat_deg": 40.876739,
+        "start_lon_deg": 29.184752,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09811.vrta"
+    },
+    {
+      "run_id": 9841,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270963,
+      "initial_state": {
+        "mean_wind_mps": 11.7341,
+        "peak_gust_mps": 5.0663,
+        "initial_soc_pct": 22.303,
+        "cruise_speed_mps": 18.431,
+        "start_lat_deg": 40.912817,
+        "start_lon_deg": 29.188788,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09841.vrta"
+    },
+    {
+      "run_id": 9853,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270975,
+      "initial_state": {
+        "mean_wind_mps": 15.2082,
+        "peak_gust_mps": 6.8373,
+        "initial_soc_pct": 29.914,
+        "cruise_speed_mps": 21.395,
+        "start_lat_deg": 40.934917,
+        "start_lon_deg": 29.170652,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09853.vrta"
+    },
+    {
+      "run_id": 9865,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20270987,
+      "initial_state": {
+        "mean_wind_mps": 10.3775,
+        "peak_gust_mps": 5.4777,
+        "initial_soc_pct": 27.634,
+        "cruise_speed_mps": 21.122,
+        "start_lat_deg": 40.889585,
+        "start_lon_deg": 29.186768,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09865.vrta"
+    },
+    {
+      "run_id": 9889,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271011,
+      "initial_state": {
+        "mean_wind_mps": 12.6177,
+        "peak_gust_mps": 6.4278,
+        "initial_soc_pct": 21.091,
+        "cruise_speed_mps": 21.792,
+        "start_lat_deg": 40.937392,
+        "start_lon_deg": 29.170915,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09889.vrta"
+    },
+    {
+      "run_id": 9955,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271077,
+      "initial_state": {
+        "mean_wind_mps": 11.3244,
+        "peak_gust_mps": 7.9232,
+        "initial_soc_pct": 28.9,
+        "cruise_speed_mps": 18.746,
+        "start_lat_deg": 40.896916,
+        "start_lon_deg": 29.171176,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09955.vrta"
+    },
+    {
+      "run_id": 9961,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271083,
+      "initial_state": {
+        "mean_wind_mps": 12.7769,
+        "peak_gust_mps": 6.7433,
+        "initial_soc_pct": 20.93,
+        "cruise_speed_mps": 17.319,
+        "start_lat_deg": 40.908836,
+        "start_lon_deg": 29.174445,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09961.vrta"
+    },
+    {
+      "run_id": 9964,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271086,
+      "initial_state": {
+        "mean_wind_mps": 14.7017,
+        "peak_gust_mps": 7.121,
+        "initial_soc_pct": 34.476,
+        "cruise_speed_mps": 17.419,
+        "start_lat_deg": 40.893972,
+        "start_lon_deg": 29.184568,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09964.vrta"
+    },
+    {
+      "run_id": 9985,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271107,
+      "initial_state": {
+        "mean_wind_mps": 15.6382,
+        "peak_gust_mps": 7.6326,
+        "initial_soc_pct": 23.078,
+        "cruise_speed_mps": 16.717,
+        "start_lat_deg": 40.917591,
+        "start_lon_deg": 29.183293,
+        "exposure": "urban_b"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09985.vrta"
+    },
+    {
+      "run_id": 9988,
+      "stratum": "S6",
+      "outcome_class": "CSFL",
+      "seed": 20271110,
+      "initial_state": {
+        "mean_wind_mps": 16.2303,
+        "peak_gust_mps": 5.1859,
+        "initial_soc_pct": 19.625,
+        "cruise_speed_mps": 21.032,
+        "start_lat_deg": 40.917415,
+        "start_lon_deg": 29.177983,
+        "exposure": "coastal_d"
+      },
+      "fault_topology": "FLT_2M_CROSS",
+      "fault_inject_time_s": null,
+      "violated_invariant": "CBVF_COLLISION_BREACH",
+      "root_cause_class": "QP_INFEASIBLE",
+      "vrta_path": "/tmp/vertirta_t1_vrta/hj_cbvf__indi_wls/run_09988.vrta"
+    }
+  ],
+  "sha256": "0078573c536d5d108d8f455683d052f3dd87ada422f8c44cedbf9653f91549a3"
+}

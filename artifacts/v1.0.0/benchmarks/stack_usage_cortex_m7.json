@@ -1,0 +1,17 @@
+{
+  "schema_version": "vertirta.tier1_stack_dag/v1.0.0",
+  "build_dir": "/tmp/vertirta_g3_cm7_su/core/flight_core",
+  "functions_checked": 77,
+  "bounded_realigned_frames": 0,
+  "callgraph_nodes": 98,
+  "max_frame_bytes": 1496,
+  "limit_frame_bytes": 4096,
+  "max_dag_bytes": 2960,
+  "limit_dag_bytes": 16384,
+  "worst_call_chain": [
+    "_ZN8vertirta4core17IndiWlsController10step_400hzERKNS0_9IndiInputEPf",
+    "_ZN8vertirta4core17wls_alloc_8x4_f64EPA8_KdPS1_S4_S4_S4_S4_S4_dPah"
+  ],
+  "passed": true,
+  "sha256": "5a7e9f0f612b982e78fb1cb3a63bfa536015e5081df7253d4fc274c294a219f3"
+}

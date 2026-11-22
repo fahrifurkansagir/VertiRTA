@@ -42,7 +42,7 @@ Generated deterministically from `verification/gsn/safety_case_gsn.yaml` via `ve
 
 <!-- GSN:BEGIN -->
 ```mermaid
-%% VertiRTA SCSC-141C GSN v3 Living Safety Case | commit=bootstrap
+%% VertiRTA SCSC-141C GSN v3 Living Safety Case | commit=ef9be75
 flowchart TD
     G1["G1: VertiRTA-X8-240 RTA software and simulation testbed upholds specified safety, conditional fault-recovery, and determinism invariants inside ODD.yaml."]
     C1(["C1: ODD.yaml (v1.0.0) & Maltepe-Dragos-Kartal Coastal Corridor bounded by LTFJ/LTBX CTR walls"])
@@ -55,16 +55,16 @@ flowchart TD
     G4["G4: libvertirta_flight_core passes all 4-Tier Determinism CI gates (0-heap, static stack DAG, Cortex-M7 <256K/<128K, 0-ULP Same-ISA, <1e-12 Cross-ISA, work units & transparent steal)."]
     G5["G5 [UNDEVELOPED]: Physical hardware qualification (motor/ESC <= 1.58e-5/FH, boom CCF segregation, dissimilar 3-IMU, 1oo3 COM-MON / low-lambda FCC, dual isolated HV packs) satisfies DO-254/SC-VTOL-02."]
     G6["G6 [UNDEVELOPED]: DO-178C DAL A software lifecycle, bare-metal RTOS WCET proof, and EASA/SHGM type certification (or Stage-A SORA 2.5 authorization) are completed."]
-    Sn1(("Sn1: AI Read-Only & Symbol Isolation Report<br/>[PENDING@bootstrap]"))
-    Sn2(("Sn2: RTA FSM Hysteresis & Latch Unit Tests<br/>[PENDING@bootstrap]"))
+    Sn1(("Sn1: AI Read-Only & Symbol Isolation Report<br/>[81b5dd7af0d3]"))
+    Sn2(("Sn2: RTA FSM Hysteresis & Latch Unit Tests<br/>[f32fd1a2e1d0]"))
     Sn3(("Sn3: ODD.yaml & Part-IAM Reserve Validation<br/>[ee90ea4f7917]"))
-    Sn4(("Sn4: Tier-1 10k 6-DOF Clopper-Pearson Summary<br/>[PENDING@bootstrap]"))
-    Sn5(("Sn5: Tier-2 1k Stratified Atlas S1..S6 Report<br/>[PENDING@bootstrap]"))
-    Sn6(("Sn6: Tier-3 50 EGL LiDAR & Cliff Ledger<br/>[PENDING@bootstrap]"))
-    Sn7(("Sn7: 0-Heap, Stack DAG & Cortex-M7 <256K/128K<br/>[PENDING@bootstrap]"))
-    Sn8(("Sn8: .vrta 0-ULP Same-ISA & <1e-12 Cross-ISA<br/>[PENDING@bootstrap]"))
-    Sn9(("Sn9: THREAD_CPUTIME & perf/callgrind Ir/tick<br/>[PENDING@bootstrap]"))
-    Sn10(("Sn10: MONOTONIC_RAW Tail & Steal Transparency<br/>[PENDING@bootstrap]"))
+    Sn4(("Sn4: Tier-1 10k 6-DOF Clopper-Pearson Summary<br/>[5ed4bba011c9]"))
+    Sn5(("Sn5: Tier-2 1k Stratified Atlas S1..S6 Report<br/>[PENDING_LOCAL_PX4_GZ_SITL]"))
+    Sn6(("Sn6: Tier-3 50 EGL LiDAR & Cliff Ledger<br/>[PENDING_LOCAL_PX4_GZ_SITL]"))
+    Sn7(("Sn7: 0-Heap, Stack DAG & Cortex-M7 <256K/128K<br/>[950f9821abbc]"))
+    Sn8(("Sn8: .vrta 0-ULP Same-ISA & <1e-12 Cross-ISA<br/>[f7dd4e2bdaf3]"))
+    Sn9(("Sn9: THREAD_CPUTIME & perf/callgrind Ir/tick<br/>[c08da5de22cf]"))
+    Sn10(("Sn10: MONOTONIC_RAW Tail & Steal Transparency<br/>[4e21d42b8bbe]"))
     G1 -.-> C1
     G1 -.-> C2
     G1 -.-> A1

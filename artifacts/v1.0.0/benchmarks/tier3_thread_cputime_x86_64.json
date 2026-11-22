@@ -1,0 +1,11 @@
+{
+  "schema_version": "vertirta.bench_cli/v1.0.0",
+  "clock": "thread_cputime",
+  "ticks": 100000,
+  "lut_loaded": true,
+  "mean_us": 1.2841,
+  "p50_us": 1.2400,
+  "p99_us": 1.9000,
+  "p999_us": 11.5690,
+  "max_us": 55.3490
+}

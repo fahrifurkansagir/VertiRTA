@@ -28,3 +28,4 @@ viz/geo/data/
 *.vrt
 *.mcap
 *.vrta
+!tests/fixtures/corridor_faults.vrta

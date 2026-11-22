@@ -126,7 +126,10 @@ def build_gsn_mermaid(
             digest = artifact_hashes.get(nid)
             if require_all_hashes and not digest:
                 raise ValueError(f"Release GSN build missing CI SHA-256 hash for Solution {nid}")
-            tag = digest[:12] if digest else f"PENDING@{short_sha}"
+            if digest and digest.startswith("PENDING"):
+                tag = digest
+            else:
+                tag = digest[:12] if digest else f"PENDING@{short_sha}"
             label = _escape_mermaid(f"{nid}: {node['label']}<br/>[{tag}]")
             lines.append(f'    {nid}(("{label}"))')
         else:

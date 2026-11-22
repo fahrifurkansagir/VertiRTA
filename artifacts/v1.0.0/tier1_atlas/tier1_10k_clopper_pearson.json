@@ -1,0 +1,205 @@
+{
+  "schema_version": "vertirta.tier1_atlas_report/v1.0.0",
+  "tier": "tier1_10k",
+  "seed": 20261122,
+  "runs_executed": 10000,
+  "ab_total_simulations": 30000,
+  "wall_clock_s": {
+    "hj_cbvf__indi_wls": 33.083,
+    "hocbf__indi_wls": 23.111,
+    "hj_cbvf__stock_ca": 17.667,
+    "total_s": 77.32
+  },
+  "summary": {
+    "schema_version": "vertirta.atlas_stats/v1.0.0",
+    "alpha": 0.05,
+    "total_runs": 10000,
+    "per_stratum": {
+      "S1": {
+        "k": 0,
+        "n": 1000,
+        "alpha": 0.05,
+        "p_hat": 0.0,
+        "cp_one_sided_upper": 0.002991249545095296,
+        "p_surv_one_sided_lower": 0.9970087504549047,
+        "cp_two_sided": [
+          0.0,
+          0.003682083896865672
+        ],
+        "wilson_two_sided": [
+          2.168404344971009e-19,
+          0.0038267584855551234
+        ]
+      },
+      "S2": {
+        "k": 0,
+        "n": 2500,
+        "alpha": 0.05,
+        "p_hat": 0.0,
+        "cp_one_sided_upper": 0.0011975752431599648,
+        "p_surv_one_sided_lower": 0.99880242475684,
+        "cp_two_sided": [
+          0.0,
+          0.0014744636903595615
+        ],
+        "wilson_two_sided": [
+          0.0,
+          0.001534226061782461
+        ]
+      },
+      "S3": {
+        "k": 207,
+        "n": 2500,
+        "alpha": 0.05,
+        "p_hat": 0.0828,
+        "cp_one_sided_upper": 0.09243293315413517,
+        "p_surv_one_sided_lower": 0.9075670668458649,
+        "cp_two_sided": [
+          0.07229097276819217,
+          0.09429793965457044
+        ],
+        "wilson_two_sided": [
+          0.07262688297200767,
+          0.09425327525394361
+        ]
+      },
+      "S4": {
+        "k": 0,
+        "n": 1500,
+        "alpha": 0.05,
+        "p_hat": 0.0,
+        "cp_one_sided_upper": 0.001995161862278986,
+        "p_surv_one_sided_lower": 0.998004838137721,
+        "cp_two_sided": [
+          0.0,
+          0.002456231484198529
+        ],
+        "wilson_two_sided": [
+          0.0,
+          0.002554430720181488
+        ]
+      },
+      "S5": {
+        "k": 0,
+        "n": 1500,
+        "alpha": 0.05,
+        "p_hat": 0.0,
+        "cp_one_sided_upper": 0.001995161862278986,
+        "p_surv_one_sided_lower": 0.998004838137721,
+        "cp_two_sided": [
+          0.0,
+          0.002456231484198529
+        ],
+        "wilson_two_sided": [
+          0.0,
+          0.002554430720181488
+        ]
+      },
+      "S6": {
+        "k": 37,
+        "n": 1000,
+        "alpha": 0.05,
+        "p_hat": 0.037,
+        "cp_one_sided_upper": 0.04838992666597329,
+        "p_surv_one_sided_lower": 0.9516100733340267,
+        "cp_two_sided": [
+          0.026182708843737332,
+          0.05064112305992494
+        ],
+        "wilson_two_sided": [
+          0.026961180875554734,
+          0.05058239748206931
+        ]
+      }
+    },
+    "csfl_pool": {
+      "k": 207,
+      "n": 6500,
+      "alpha": 0.05,
+      "p_hat": 0.031846153846153843,
+      "cp_one_sided_upper": 0.03566501216466545,
+      "p_surv_one_sided_lower": 0.9643349878353346,
+      "cp_two_sided": [
+        0.027711711747237484,
+        0.036407284314722864
+      ],
+      "wilson_two_sided": [
+        0.027846312865326246,
+        0.036399019907047185
+      ],
+      "strata": [
+        "S2",
+        "S3",
+        "S5"
+      ]
+    },
+    "cel_pool": {
+      "k": 0,
+      "n": 1500,
+      "alpha": 0.05,
+      "p_hat": 0.0,
+      "cp_one_sided_upper": 0.001995161862278986,
+      "p_surv_one_sided_lower": 0.998004838137721,
+      "cp_two_sided": [
+        0.0,
+        0.002456231484198529
+      ],
+      "wilson_two_sided": [
+        0.0,
+        0.002554430720181488
+      ],
+      "strata": [
+        "S4"
+      ]
+    },
+    "full_atlas_footnote_only": {
+      "k": 244,
+      "n": 10000,
+      "alpha": 0.05,
+      "p_hat": 0.0244,
+      "cp_one_sided_upper": 0.027092964518001052,
+      "p_surv_one_sided_lower": 0.972907035481999,
+      "cp_two_sided": [
+        0.021465161533882043,
+        0.02761608760695738
+      ],
+      "wilson_two_sided": [
+        0.021553719498578837,
+        0.027611539751608738
+      ]
+    },
+    "zero_failure_1e9_required_fh": 2995732273
+  },
+  "cliff_ledger_sha256": "0078573c536d5d108d8f455683d052f3dd87ada422f8c44cedbf9653f91549a3",
+  "total_failures": 244,
+  "ab_comparison": {
+    "hj_cbvf__indi_wls": {
+      "total_runs": 10000,
+      "csfl_pass_rate": 0.968154,
+      "csfl_cp_one_sided_upper": 0.03566501216466545,
+      "cel_pass_rate": 1.0,
+      "cel_cp_one_sided_upper": 0.001995161862278986,
+      "mean_min_cbvf_margin_m": 1.4739,
+      "mean_touchdown_vz_mps": 0.0919
+    },
+    "hocbf__indi_wls": {
+      "total_runs": 10000,
+      "csfl_pass_rate": 0.448462,
+      "csfl_cp_one_sided_upper": 0.5617434308983065,
+      "cel_pass_rate": 1.0,
+      "cel_cp_one_sided_upper": 0.001995161862278986,
+      "mean_min_cbvf_margin_m": 6.7547,
+      "mean_touchdown_vz_mps": 0.0919
+    },
+    "hj_cbvf__stock_ca": {
+      "total_runs": 10000,
+      "csfl_pass_rate": 0.968154,
+      "csfl_cp_one_sided_upper": 0.03566501216466545,
+      "cel_pass_rate": 0.0,
+      "cel_cp_one_sided_upper": 1.0,
+      "mean_min_cbvf_margin_m": 4.1975,
+      "mean_touchdown_vz_mps": 0.0
+    }
+  },
+  "sha256": "5ed4bba011c951a02f4ec225902b08f497b7fa8c61d566987df8b0aebf86e230"
+}
