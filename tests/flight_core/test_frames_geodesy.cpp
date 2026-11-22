@@ -23,6 +23,10 @@ struct CanAdd<A, B, std::void_t<decltype(std::declval<A>() + std::declval<B>())>
 }  // namespace
 
 TEST_CASE("Strong frames block cross-frame addition and satisfy involutive axis conversions") {
+  static_assert(std::is_same_v<vertirta::Vec3Enu, vertirta::core::Vec3Enu>);
+  static_assert(std::is_same_v<vertirta::Vec3Ned, vertirta::core::Vec3Ned>);
+  static_assert(std::is_same_v<vertirta::Vec3Frd, vertirta::core::Vec3Frd>);
+  static_assert(std::is_same_v<vertirta::Vec3Flu, vertirta::core::Vec3Flu>);
   static_assert(CanAdd<Vec3Ned, Vec3Ned>::value, "Same-frame addition must compile");
   static_assert(!CanAdd<Vec3Ned, Vec3Enu>::value, "Cross-frame NED+ENU addition must be deleted");
   static_assert(!CanAdd<Vec3Frd, Vec3Flu>::value, "Cross-frame FRD+FLU addition must be deleted");

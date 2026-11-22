@@ -105,3 +105,10 @@ struct QuatRosFluEnu {
 }
 
 }  // namespace vertirta::core
+
+namespace vertirta {
+using core::Vec3Enu;
+using core::Vec3Flu;
+using core::Vec3Frd;
+using core::Vec3Ned;
+}  // namespace vertirta

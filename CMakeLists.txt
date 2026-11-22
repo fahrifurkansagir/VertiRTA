@@ -13,19 +13,31 @@ set(VERTIRTA_STRICT_FP_FLAGS
   -ffp-contract=off
   -fno-associative-math
   -fno-reciprocal-math
+  -frounding-math
 )
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/flight_core/CMakeLists.txt")
   add_subdirectory(core/flight_core)
 endif()
 
-if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/rta_companion/CMakeLists.txt")
-  add_subdirectory(core/rta_companion)
+if(VERTIRTA_BUILD_COMPANION)
+  foreach(_vertirta_opt_dir
+      core/rta_companion
+      core/stl
+      core/copilot
+      core/slz_bayes
+      tools/cli
+      sim/colab_egl)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_vertirta_opt_dir}/CMakeLists.txt")
+      add_subdirectory(${_vertirta_opt_dir})
+    endif()
+  endforeach()
 endif()
 
 if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/flight_core/CMakeLists.txt"
-     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/rta_companion/CMakeLists.txt")
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/rta_companion/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
     FetchContent_Declare(
       Catch2
       GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -41,5 +53,8 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/rta_companion/CMakeLists.txt")
     add_subdirectory(tests/rta_companion)
+  endif()
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
+    add_subdirectory(tests/determinism)
   endif()
 endif()

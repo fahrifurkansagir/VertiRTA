@@ -70,6 +70,7 @@ class TmrVoter {
 
   uint64_t pair_onset_tick_[3]{};
   bool pair_onset_active_[3]{false, false, false};
+  int simplex_drift_ticks_{0};
 
   uint16_t last_isolation_latency_ms_{0};
   Vec3Frd last_valid_gyro_{};

@@ -52,6 +52,7 @@ void TmrVoter::reset() noexcept {
   health_mask_ = 0x07;
   tick_count_ = 0;
   ring_idx_ = 0;
+  simplex_drift_ticks_ = 0;
   last_isolation_latency_ms_ = 0;
   last_valid_gyro_ = {};
   last_valid_accel_ = {0.0, 0.0, -9.80665};
@@ -225,6 +226,28 @@ TmrVoteOutput TmrVoter::step(
           }
         }
         break;
+      }
+    }
+  } else if (state_ == TmrState::SIMPLEX_ANALYTICAL) {
+    int survivor = -1;
+    for (int i = 0; i < 3; ++i) {
+      if (is_healthy(health_mask_, i) && sample_is_clean(imus[i])) {
+        survivor = i;
+        break;
+      }
+    }
+    if (survivor < 0) {
+      state_ = TmrState::FAILSAFE_DIVERT;
+    } else if (model_ok) {
+      const double err = (imus[survivor].gyro_rad_s - model_gyro_pred).norm();
+      if (err > reject_lim) {
+        if (++simplex_drift_ticks_ >= kWindowTicks) {
+          health_mask_ = static_cast<uint8_t>(health_mask_ & ~(1u << survivor));
+          state_ = TmrState::FAILSAFE_DIVERT;
+          last_isolation_latency_ms_ = static_cast<uint16_t>(kWindowTicks * cfg_.dt_s * 1000.0 + 0.5);
+        }
+      } else {
+        simplex_drift_ticks_ = 0;
       }
     }
   }

@@ -130,5 +130,17 @@ TEST_CASE("TMR latches NaN/Inf immediately, never unlatches, and degrades to SIM
     REQUIRE(last.state == TmrState::SIMPLEX_ANALYTICAL);
     REQUIRE(last.health_mask == 0x01);  // Only IMU0 remains healthy
     REQUIRE_THAT(last.gyro_voted.x, WithinAbs(0.01, 1e-6));
+
+    // Finite drift > 6*sigma on last surviving IMU0 for kWindowTicks -> FAILSAFE_DIVERT
+    for (uint64_t k = 15; k < 25; ++k) {
+      ImuSampleFrd s[3] = {
+          make_imu(k, 0.30, 0.0, 0.0),  // Drifts > 6*sigma from model (0.0)
+          make_imu(k, 0.25, 0.0, 0.0),
+          make_imu(k, 0.0, 0.0, 0.0),
+      };
+      last = voter.step(s, {0.0, 0.0, 0.0}, true);
+    }
+    REQUIRE(last.state == TmrState::FAILSAFE_DIVERT);
+    REQUIRE(last.health_mask == 0x00);
   }
 }
