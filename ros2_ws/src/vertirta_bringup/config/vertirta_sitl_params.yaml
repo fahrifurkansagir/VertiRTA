@@ -1,0 +1,22 @@
+# Frozen VertiRTA ROS 2 Jazzy SITL Configuration (Plan 1A Task 12 + Review Focus #5)
+ports:
+  foxglove_ws: 8891
+  micro_xrce_agent_udp: 8888
+  cesium_http: 5180
+
+geodesy:
+  datum_name: Kartal_Coastal_Vertiport
+  datum_lat_deg: 40.8860
+  datum_lon_deg: 29.1880
+  # kartal_coast.sdf locks <elevation>12.0</elevation> (AMSL); EGM2008 (+36.7 m) is added ONCE -> 48.7 m HAE
+  datum_amsl_m: 12.0
+  egm2008_n_m: 36.7
+  datum_hae_m: 48.7
+
+sitl:
+  world_name: kartal_coast
+  model_name: vertirta_x8_240
+  airframe_id: 12050
+  default_use_indi: 1
+  default_gz_partition: vertirta_live
+  lidar_topic: /vertirta/lidar_16

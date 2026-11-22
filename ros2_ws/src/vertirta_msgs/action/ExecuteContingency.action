@@ -1,0 +1,33 @@
+# Async Contingency Action Server (/vertirta/execute_contingency) hosted by VertiRtaExecutor (ModeExecutorBase)
+# Consumed strictly asynchronously by Plan 2 vertirta_mission_node with 0 us jitter on 100 Hz RTA.
+
+uint8 ACTION_DIVERT_SLZ = 0
+uint8 ACTION_INSPECT_SLZ = 1
+uint8 ACTION_HOLD_LOITER = 2
+uint8 ACTION_ABORT_RETURN = 3
+uint8 ACTION_CEL_LAND_NOW = 4
+
+# Goal
+uint8 action_kind
+string target_id
+geometry_msgs/Point target_enu
+float32 eta_lim_s
+float32 min_agl_m
+float32 max_agl_m
+float32 max_speed_mps
+float32 loiter_duration_s
+bool z3_verified
+string z3_audit_hash
+---
+# Result
+bool accepted
+bool completed
+uint8 final_regime
+string status_text
+---
+# Feedback
+uint8 active_state
+float32 distance_to_target_m
+float32 remaining_eta_s
+float32 stl_robustness_rho
+float32 cbvf_min_margin_m

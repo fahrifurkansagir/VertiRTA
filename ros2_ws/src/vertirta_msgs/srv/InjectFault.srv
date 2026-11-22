@@ -1,0 +1,20 @@
+# Deterministic fault injection service (/vertirta/inject_fault)
+# Routes through PX4 VEHICLE_CMD_INJECT_FAILURE (420) or Gazebo motor fault topic fallback.
+
+uint8 FAULT_MOTOR_OFF = 1
+uint8 FAULT_MOTOR_RESTORE = 2
+uint8 FAULT_IMU_STUCK = 3
+uint8 FAULT_IMU_WRONG = 4
+uint8 FAULT_IMU_OFF = 5
+uint8 FAULT_GPS_OFF = 6
+uint8 FAULT_BARO_STUCK = 7
+uint8 FAULT_BATTERY_SAG = 8
+
+uint8 fault_kind
+uint8 instance_index
+float32 magnitude
+bool use_gz_topic_fallback
+---
+bool accepted
+uint64 applied_stamp_ns
+string message
