@@ -1,0 +1,100 @@
+# Frozen Single-Source-of-Truth Vehicle Configuration (Spec v1.2 + DR-1 Forensic Lock)
+model_name: VertiRTA-X8-240
+schema_version: 1
+mass_kg: 240.0
+gravity_m_s2: 9.80665
+weight_n: 2353.596
+tw_nominal: 2.5
+t_max_nominal_n: 5886.0
+inertia_kg_m2: [85.0, 95.0, 140.0]
+
+geometry:
+  rotor_count: 8
+  arm_count: 4
+  arm_angles_deg: [45.0, -135.0, -45.0, 135.0]
+  arm_radius_m: 1.35
+  arm_xy_offset_m: 0.9545941546
+  rotor_radius_m: 0.75
+  disk_area_single_m2: 1.7671458676
+  disk_area_4proj_m2: 7.0685834706
+  coax_spacing_m: 0.35
+  upper_z_frd_m: -0.175
+  lower_z_frd_m: 0.175
+  # Rotor spin signs in PX4 FRD (+1 = CCW exerting +tau_z, -1 = CW exerting -tau_z)
+  spin_signs_frd: [1, 1, -1, -1, -1, -1, 1, 1]
+
+propulsion:
+  blades_per_rotor: 3
+  mean_chord_m: 0.095
+  solidity: 0.1210
+  c_d0: 0.011
+  eta_coax_hover: 0.85
+  eta_coax_bounds: [0.82, 0.88]
+  swirl_recovery_factor: 0.96
+  kappa_iso: 1.15
+  kappa_int_hover: 1.22
+  k_t_upper: 0.0138091
+  k_t_lower: 0.0117377
+  k_q_upper: 0.00104876
+  k_q_lower: 0.00100681
+  c_m_upper_m: 0.07590
+  c_m_lower_m: 0.08572
+  rotor_inertia_kg_m2: 0.135
+  tau_up_s: 0.085
+  tau_down_s: 0.120
+  tau_coast_s: 0.424
+  alpha_max_rad_s2: 487.7
+  omega_idle_rad_s: 20.0
+  omega_hover_rad_s: 151.8
+  omega_max_rad_s: 240.0
+  # Voltage-headroom BLDC winding lock (DR-1): preserves 2-arm T/W=1.25 to 358.4 V, >=1.12 to 338 V
+  ke_bus_vs_rad: 1.36
+  r_eff_hot_ohm: 0.72
+  drivetrain_efficiency: 0.88
+  flat_plate_drag_area_m2: 0.48
+
+battery:
+  # Mass closure lock (DR-1 Option a): high-energy 320 Wh/kg pack keeps 240 kg MTOW w/ 80 kg pax
+  pack_config: 112S12P
+  pack_mass_kg: 68.0
+  specific_energy_wh_kg: 320.0
+  v_nom_v: 403.2
+  v_full_v: 470.4
+  energy_kwh: 21.77
+  nominal_energy_class_kwh: 22.0
+  capacity_ah: 54.0
+  r0_ohm: 0.1363
+  r1_ohm: 0.0840
+  c1_f: 300.0
+  tau1_s: 25.2
+  i_max_cont_a: 540.0
+  p_avionics_w: 450.0
+  v_min_tw112_v: 338.0
+  soc_reserve_min: 0.10
+
+control_and_fdir:
+  inner_loop_hz: 400
+  outer_rta_hz: 100
+  esdf_map_hz: 20
+  indi_lpf_cutoff_hz: 8.0
+  indi_lpf_zeta: 0.70710678
+  indi_biquad_b: [0.00362168, 0.00724336, 0.00362168]
+  indi_biquad_a: [1.0, -1.82269493, 0.83718165]
+  tmr_window_ticks: 8
+  tmr_chi2_24_threshold: 72.23
+  tmr_sigma_gyro_eff_rad_s: 0.015
+  tmr_sigma_accel_eff_m_s2: 0.25
+  same_arm_spin_rate_rad_s: 2.2
+  same_arm_phase_lead_deg: 10.6
+
+limits:
+  v_max_mps: 22.0
+  r_slz_min_m: 5.0
+  slz_max_slope_deg: 8.0
+  slz_max_roughness_m: 0.15
+  cel_vz_max_gt10m_mps: 2.5
+  cel_vz_max_lt5m_mps: 1.5
+  cel_vz_max_touchdown_mps: 0.8
+  perception_staleness_warn_ms: 250
+  perception_staleness_cap_ms: 1000
+  perception_staleness_divert_ms: 2000

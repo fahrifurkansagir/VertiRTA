@@ -1,0 +1,90 @@
+# Frozen Maltepe-Dragos-Kartal Airspace, Geodesy & Port Lock (Spec v1.2 + DR-1/4/5/6 Errata)
+# DISCLAIMER: Simulation reference only — NOT for real-world aeronautical navigation.
+schema_version: 1
+corridor_name: Maltepe-Dragos-Kartal Coastal Corridor
+
+datum:
+  name: Kartal Coastal Vertiport
+  lat_deg: 40.8860
+  lon_deg: 29.1880
+  alt_amsl_m: 12.0
+  egm2008_n_m: 36.7
+  alt_hae_m: 48.7
+  magnetic_variation_deg_e: 6.15
+  r_gauss_m: 6375036.971
+  local_tmerc_proj4: "+proj=tmerc +lat_0=40.886 +lon_0=29.188 +k=1 +datum=WGS84 +units=m +no_defs"
+
+odd_bounds:
+  lat_min_deg: 40.8750
+  lat_max_deg: 40.9450
+  lon_min_deg: 29.1000
+  # Strictly west of LTFJ NW J2 pinch (29.19212 E) with safety buffer
+  max_lon_near_j2_deg: 29.1895
+  alt_agl_min_m: 0.0
+  alt_agl_max_m: 150.0
+
+airspace:
+  ltfj_ctr:
+    icao: LTFJ
+    name: Istanbul Sabiha Gokcen CTR (AIP Turkey AD 2 LTFJ)
+    arp_lat_deg: 40.898333
+    arp_lon_deg: 29.309167
+    arp_elev_amsl_m: 95.1
+    radius_nm: 5.0
+    radius_m: 9260.0
+    floor_amsl_m: 0.0
+    ceiling_amsl_m: 762.0
+    ceiling_hae_m: 798.58
+    # Exact NW polygon extension adjoining Samandira CTR (pulls boundary 603 m west of 29.200 E)
+    nw_j1_lat_deg: 40.987500
+    nw_j1_lon_deg: 29.325000
+    nw_j2_lat_deg: 40.912786
+    nw_j2_lon_deg: 29.192122
+    hard_exclusion: true
+
+  ltbx_ctr:
+    icao: LTBX
+    name: Istanbul Samandira CTR (AIP Turkey AD 2 LTBX)
+    # DHMI AD 2 LTBX ARP 40d59m26sN (verify against current AD 2.17 PDF; DR-6 cited 40d59m56sN)
+    arp_lat_deg: 40.990556
+    arp_lon_deg: 29.216111
+    arp_verification_note: "Verify 40d59m26sN vs 40d59m56sN against current DHMI AD 2.17 PDF before operational use"
+    radius_nm: 5.0
+    radius_m: 9260.0
+    floor_amsl_m: 0.0
+    ceiling_amsl_m: 609.6
+    ceiling_hae_m: 646.35
+    hard_exclusion: true
+
+slz_priors:
+  - id: 1
+    name: Kartal_Coastal_Vertiport
+    lat_deg: 40.8860
+    lon_deg: 29.1880
+    alt_amsl_m: 12.0
+    radius_m: 15.0
+    dem_slope_deg: 1.5
+    roughness_m: 0.05
+  - id: 2
+    name: Dragos_Sahil_Park
+    lat_deg: 40.91686
+    lon_deg: 29.13822
+    alt_amsl_m: 6.0
+    radius_m: 18.0
+    dem_slope_deg: 2.0
+    roughness_m: 0.06
+  - id: 3
+    name: Maltepe_Orhangazi_Park
+    lat_deg: 40.94016
+    lon_deg: 29.10790
+    alt_amsl_m: 5.0
+    radius_m: 25.0
+    dem_slope_deg: 1.0
+    roughness_m: 0.04
+
+ports:
+  foxglove_ws: 8891
+  cesium_http: 5180
+  micro_xrce_agent_udp: 8888
+  tier2_dds_base: 8900
+  tier2_full_sensor_dds_base: 8910
