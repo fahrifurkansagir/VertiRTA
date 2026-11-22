@@ -116,7 +116,7 @@ if [[ "${HAS_CLANG_TIDY}" -eq 1 ]]; then
 import json, pathlib, shlex, subprocess, sys
 src = pathlib.Path(sys.argv[1])
 dst = pathlib.Path(sys.argv[2])
-drop = {"-fstack-usage", "-fcallgraph-info=su,da", "-Wstack-usage=4096"}
+drop = {"-fstack-usage", "-fcallgraph-info=su,da", "-Wstack-usage=4096", "-frounding-math"}
 # Discover Arm GNU Toolchain C++17 system include paths so Clang resolves <cstdint>/<cmath>/<array>
 arm_inc_args = []
 try:
@@ -151,6 +151,7 @@ dst.write_text(json.dumps(entries, indent=2), encoding="utf-8")
     --extra-arg=--target=arm-none-eabi \
     --extra-arg=-mcpu=cortex-m7 \
     --extra-arg=-Wno-unknown-warning-option \
+    --extra-arg=-Wno-unsupported-floating-point-opt \
     "${FLIGHT_CORE_SRCS[@]}"
 else
   echo "[VertiRTA-Static] SKIP: clang-tidy not installed locally (enforced with --strict-tools in CI)."
@@ -169,7 +170,6 @@ if [[ "${HAS_CPPCHECK}" -eq 1 ]]; then
     --std=c++17 \
     --enable=warning,portability \
     --inline-suppr \
-    --suppress=missingIncludeSystem \
     --suppress=unusedFunction \
     --suppressions-list="${SCRIPT_DIR}/cppcheck_suppressions.txt" \
     --error-exitcode=1 \
@@ -182,7 +182,6 @@ if [[ "${HAS_CPPCHECK}" -eq 1 ]]; then
     --std=c++17 \
     --enable=style,performance \
     --inline-suppr \
-    --suppress=missingIncludeSystem \
     --suppress=unusedFunction \
     --suppressions-list="${SCRIPT_DIR}/cppcheck_suppressions.txt" \
     "${CPPCHECK_INC[@]}" \

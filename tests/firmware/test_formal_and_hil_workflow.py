@@ -51,6 +51,8 @@ def test_formal_and_hil_workflow_pins_and_x86_64_esbmc_guard() -> None:
         "arm-none-eabi-objdump",
         "e51ff004|04 f0 1f e5|bfcsel",
         "-DVERTIRTA_FLIGHT_CORE_LIB=",
+        "cd build/renode_results",
+        '-r "${PWD}"',
         "--variable PRIMARY_ELF:",
         "--variable SECONDARY_ELF:",
         "run_static_profile.sh",
@@ -58,3 +60,4 @@ def test_formal_and_hil_workflow_pins_and_x86_64_esbmc_guard() -> None:
     ):
         assert required in raw, f"Missing mandatory CI gate '{required}' in formal_and_hil.yml"
     assert "VERTIRTA_FLIGHT_CORE_ARCHIVE" not in raw, "Must use Lane A1 cache var VERTIRTA_FLIGHT_CORE_LIB"
+    assert "--results-directory" not in raw, "Renode v1.17.0 renode-test uses -r DIR, not --results-directory"

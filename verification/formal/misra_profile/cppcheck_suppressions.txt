@@ -6,3 +6,5 @@ missingIncludeSystem
 unmatchedSuppression
 *:*_deps/daqp-src/*
 *:*daqp_auxiliary_norec.c
+# Audited IEEE-754 Cortex-M7/x86_64/ARM64 deviation: all-bits-zero == +0.0 for C99 POD DAQP structs
+memsetClassFloat:*core/flight_core/src/daqp_qp.cpp

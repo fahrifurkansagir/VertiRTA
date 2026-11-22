@@ -32,13 +32,16 @@ Boot Dual FCC Lockstep Pair
     Execute Script            ${RESC}
     ${pri_uart}=              Create Terminal Tester    sysbus.usart3    machine=fcc_primary      defaultPauseEmulation=true
     ${sec_uart}=              Create Terminal Tester    sysbus.usart3    machine=fcc_secondary    defaultPauseEmulation=true
-    ${can_tester}=            Create CAN Tester         canHub           defaultPauseEmulation=true
+    ${can_tester}=            Create CAN Tester         canHub           0.020
     Start Emulation
     Wait For Line On Uart     BOOT_OK ROLE=PRIMARY NODE_ID=10     testerId=${pri_uart}    timeout=1.0
     Wait For Line On Uart     BOOT_OK ROLE=SECONDARY NODE_ID=11   testerId=${sec_uart}    timeout=1.0
     # Confirm nominal 400 Hz Primary SafetyEnvelope traffic on Subject-ID 1024 before fault injection.
-    Wait For CAN Frame        id=${PRIMARY_ENV_CAN_ID}    testerId=${can_tester}    timeout=0.020
+    Wait For Frame With Id    ${PRIMARY_ENV_CAN_ID}    timeout=0.020    testerId=${can_tester}    pauseEmulation=true
     RETURN                    ${pri_uart}    ${sec_uart}    ${can_tester}
+
+Inject Corrupted Babbling Idiot Frame
+    Execute Command           py "from Antmicro.Renode.Core.CAN import CANMessageFrame; from System import Array, Byte; raw = bytearray.fromhex('${CORRUPT_CRC_FRAME}'); f = CANMessageFrame.CreateWithExtendedId(${PRIMARY_ENV_CAN_ID}, Array[Byte](raw), True, False, True, True); emulationManager.Instance.CurrentEmulation['fcc_secondary']['sysbus.fdcan1'].OnFrameReceived(f)"
 
 *** Test Cases ***
 Fault 1 Primary HardFault Lockup Triggers Secondary Takeover Under 20ms Virtual Time
@@ -46,27 +49,30 @@ Fault 1 Primary HardFault Lockup Triggers Secondary Takeover Under 20ms Virtual 
     ...                       SetPendingSynchronousFault and asserts Secondary Node 11 takes
     ...                       bus authority on Subject-ID 1024 within timeout=0.020 (Functional & Protocol SIL ONLY).
     ${pri_uart}  ${sec_uart}  ${can_tester}=    Boot Dual FCC Lockstep Pair
-    Execute Command           fcc_primary sysbus.nvic SetPendingSynchronousFault 3
+    Execute Command           mach set "fcc_primary"
+    Execute Command           sysbus.nvic SetPendingSynchronousFault 3
     Wait For Line On Uart     FAILOVER_ACTIVE    testerId=${sec_uart}    timeout=0.020
-    Wait For CAN Frame        id=${SECONDARY_HANDOVER_CAN_ID}    testerId=${can_tester}    timeout=0.020
+    Wait For Frame With Id    ${SECONDARY_HANDOVER_CAN_ID}    timeout=0.020    testerId=${can_tester}    pauseEmulation=true
 
 Fault 2 Primary CAN Bus Disconnect Triggers Secondary Takeover Under 20ms Virtual Time
     [Documentation]           Disconnects Primary FDCAN1 from virtual CANHub (modeling wiring/transceiver
     ...                       open fault) and asserts Secondary Node 11 takeover within timeout=0.020.
     ${pri_uart}  ${sec_uart}  ${can_tester}=    Boot Dual FCC Lockstep Pair
-    Execute Command           connector Disconnect fcc_primary.fdcan1 canHub
+    Execute Command           mach set "fcc_primary"
+    Execute Command           connector Disconnect sysbus.fdcan1 canHub
     Wait For Line On Uart     FAILOVER_ACTIVE    testerId=${sec_uart}    timeout=0.020
-    Wait For CAN Frame        id=${SECONDARY_HANDOVER_CAN_ID}    testerId=${can_tester}    timeout=0.020
+    Wait For Frame With Id    ${SECONDARY_HANDOVER_CAN_ID}    timeout=0.020    testerId=${can_tester}    pauseEmulation=true
 
 Fault 3 Corrupted CRC Babbling Idiot Rejected And Triggers Secondary Takeover Under 20ms
     [Documentation]           Silences healthy Primary and injects 400 Hz corrupted-CRC frames on Subject-ID 1024
-    ...                       via CANTester; Secondary must reject invalid CRC-32C without refreshing watchdog
+    ...                       into Secondary FDCAN1; Secondary must reject invalid CRC-32C without refreshing watchdog
     ...                       and transition to FAILOVER_ACTIVE within timeout=0.020.
     ${pri_uart}  ${sec_uart}  ${can_tester}=    Boot Dual FCC Lockstep Pair
-    Execute Command           connector Disconnect fcc_primary.fdcan1 canHub
-    FOR    ${i}    IN RANGE    6
-        Send CAN Frame        id=${PRIMARY_ENV_CAN_ID}    data=${CORRUPT_CRC_FRAME}    extended=true    fd=true    testerId=${can_tester}
+    Execute Command           mach set "fcc_primary"
+    Execute Command           connector Disconnect sysbus.fdcan1 canHub
+    FOR    ${i}    IN RANGE    4
+        Inject Corrupted Babbling Idiot Frame
         Execute Command       emulation RunFor "0.0025"
     END
-    Wait For Line On Uart     FAILOVER_ACTIVE    testerId=${sec_uart}    timeout=0.020
-    Wait For CAN Frame        id=${SECONDARY_HANDOVER_CAN_ID}    testerId=${can_tester}    timeout=0.020
+    Wait For Line On Uart     FAILOVER_ACTIVE.*CRC_REJECTS=[1-9]    testerId=${sec_uart}    timeout=0.020    treatAsRegex=true
+    Wait For Frame With Id    ${SECONDARY_HANDOVER_CAN_ID}    timeout=0.020    testerId=${can_tester}    pauseEmulation=true

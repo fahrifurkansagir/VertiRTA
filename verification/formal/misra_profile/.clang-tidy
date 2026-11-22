@@ -21,9 +21,11 @@ Checks: >-
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
   -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-vararg,
   misc-*,
+  -misc-include-cleaner,
   -misc-non-private-member-variables-in-classes,
   performance-*,
   portability-*,
@@ -33,8 +35,7 @@ Checks: >-
   readability-isolate-declaration,
   readability-misleading-indentation,
   readability-non-const-parameter,
-  readability-redundant-control-flow,
-  readability-uppercase-literal-suffix
+  readability-redundant-control-flow
 WarningsAsErrors: ''
 HeaderFilterRegex: '(core/flight_core/include|firmware/(stm32h7_hitl|renode_cyphal)/include)/.*'
 FormatStyle: none

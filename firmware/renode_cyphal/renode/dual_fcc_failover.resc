@@ -13,6 +13,7 @@ $primary_elf?=$ORIGIN/../../../build/renode_cyphal/vertirta_fcc_primary.elf
 $secondary_elf?=$ORIGIN/../../../build/renode_cyphal/vertirta_fcc_secondary.elf
 
 emulation SetGlobalQuantum "0.000025"
+emulation SetGlobalSerialExecution True
 emulation CreateCANHub "canHub"
 
 # Primary Flight Control Computer (OpenCyphal Node 10, 400 Hz SafetyEnvelope publisher)
@@ -20,9 +21,12 @@ mach create "fcc_primary"
 machine LoadPlatformDescription $ORIGIN/stm32h753_avionics.repl
 connector Connect sysbus.fdcan1 canHub
 sysbus LoadELF $primary_elf
+# Model STM32H753 BOOT_ADD0 = 0x08000000 (Reset_Handler then relocates VTOR to ITCM 0x00000400).
+cpu VectorTableOffset 0x08000000
 
 # Secondary Safety Monitor FCC (OpenCyphal Node 11, 10.50 ms watchdog -> <20 ms takeover)
 mach create "fcc_secondary"
 machine LoadPlatformDescription $ORIGIN/stm32h753_avionics.repl
 connector Connect sysbus.fdcan1 canHub
 sysbus LoadELF $secondary_elf
+cpu VectorTableOffset 0x08000000

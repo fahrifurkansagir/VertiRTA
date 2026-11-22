@@ -139,11 +139,15 @@ jobs:
           PYTHONPATH=. pytest tests/firmware/test_dsdl_contract.py tests/firmware/test_renode_failover_contracts.py -v
           # Tier-1 Functional & Protocol SIL ONLY (NOT hardware Cortex-M7 WCET)
           if command -v renode-test >/dev/null 2>&1 && [ -f firmware/renode_cyphal/renode/failover_suite.robot ]; then
-            renode-test \
-              --variable PRIMARY_ELF:"${PWD}/build/renode_cyphal/vertirta_fcc_primary.elf" \
-              --variable SECONDARY_ELF:"${PWD}/build/renode_cyphal/vertirta_fcc_secondary.elf" \
-              --results-directory build/renode_results \
-              firmware/renode_cyphal/renode/failover_suite.robot
+            mkdir -p build/renode_results
+            (
+              cd build/renode_results
+              renode-test \
+                --variable PRIMARY_ELF:"${PWD}/../renode_cyphal/vertirta_fcc_primary.elf" \
+                --variable SECONDARY_ELF:"${PWD}/../renode_cyphal/vertirta_fcc_secondary.elf" \
+                -r "${PWD}" \
+                ../../firmware/renode_cyphal/renode/failover_suite.robot
+            )
           fi
 
       - uses: actions/upload-artifact@v4

@@ -57,6 +57,7 @@ def test_renode_dual_fcc_overlays_quantum_and_three_fault_scenarios():
     assert 'SetGlobalQuantum "0.000025"' in resc
     assert "STM32H7_PWR.cs" in resc
     assert "CreateCANHub" in resc
+    assert "cpu VectorTableOffset 0x08000000" in resc
     # Ensure SocketCANBridge is never instantiated in .resc (only mentioned in comments if at all).
     non_comment_resc = "\n".join(
         ln for ln in resc.splitlines() if not ln.lstrip().startswith("#")
@@ -71,8 +72,8 @@ def test_renode_dual_fcc_overlays_quantum_and_three_fault_scenarios():
     assert "${PRIMARY_ELF}" in robot and "${SECONDARY_ELF}" in robot
     assert "$primary_elf=@${PRIMARY_ELF}" in robot and "$secondary_elf=@${SECONDARY_ELF}" in robot
     assert "SetPendingSynchronousFault" in robot
-    assert "connector Disconnect fcc_primary.fdcan1 canHub" in robot
-    assert "CORRUPT_CRC_FRAME" in robot
+    assert "connector Disconnect sysbus.fdcan1 canHub" in robot
+    assert "CORRUPT_CRC_FRAME" in robot and "CRC_REJECTS=" in robot
     assert "CANTester" in robot or "Create CAN Tester" in robot
     assert "NOT hardware WCET" in robot and "Functional & Protocol SIL" in robot
 

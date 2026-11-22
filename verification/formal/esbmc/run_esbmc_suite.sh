@@ -16,6 +16,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 MODE="esbmc"
 SOLVER="bitwuzla"
+ARCH_BITS="32"
+HARNESS_FILTER="all"
 BUILD_DIR="${VERTIRTA_FORMAL_BUILD_DIR:-/tmp/vertirta_v3a_formal}"
 WITNESS_DIR="${BUILD_DIR}/witnesses"
 ESBMC_BIN="${ESBMC_BIN:-esbmc}"
@@ -28,6 +30,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --solver)
       SOLVER="$2"
+      shift 2
+      ;;
+    --arch)
+      ARCH_BITS="$2"
+      shift 2
+      ;;
+    --harness)
+      HARNESS_FILTER="$2"
       shift 2
       ;;
     --build-dir)
@@ -174,9 +184,17 @@ elif [[ "${SOLVER}" != "bitwuzla" ]]; then
   exit 1
 fi
 
+ARCH_FLAG="--32"
+if [[ "${ARCH_BITS}" == "64" ]]; then
+  ARCH_FLAG="--64"
+elif [[ "${ARCH_BITS}" != "32" ]]; then
+  echo "ERROR: Unsupported --arch '${ARCH_BITS}' (expected 32 or 64)." >&2
+  exit 1
+fi
+
 # Mandatory ESBMC v8.7 flags (DR-08 Section 3.1) — unwinding assertions stay strictly ON
 ESBMC_COMMON_FLAGS=(
-  --32
+  "${ARCH_FLAG}"
   --floatbv
   --nan-check
   --overflow-check
@@ -194,45 +212,67 @@ ESBMC_BASE_FLAGS=(
   --struct-fields-check
 )
 
-echo "[VertiRTA-Formal] Running ESBMC v8.7 Supplemental Engineering Verification (${SOLVER_FLAG})..."
+run_harness_selected() {
+  [[ "${HARNESS_FILTER}" == "all" || "${HARNESS_FILTER}" == "$1" ]]
+}
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
-  --witness-output "${WITNESS_DIR}/verify_tmr_voter.yaml" \
-  "${SCRIPT_DIR}/verify_tmr_voter.cpp" "${FC_SRC}/tmr_voter.cpp" "${FC_SRC}/frames.cpp"
+echo "[VertiRTA-Formal] Running ESBMC v8.7 Supplemental Engineering Verification (${SOLVER_FLAG}, ${ARCH_FLAG})..."
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 14 \
-  --interval-analysis --scalarize-structs --enforce-all-contracts \
-  --witness-output "${WITNESS_DIR}/verify_indi_wls.yaml" \
-  "${SCRIPT_DIR}/verify_indi_wls.cpp" "${FC_SRC}/indi_wls.cpp" "${FC_SRC}/frames.cpp"
+if run_harness_selected tmr; then
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
+    --witness-output "${WITNESS_DIR}/verify_tmr_voter.yaml" \
+    "${SCRIPT_DIR}/verify_tmr_voter.cpp" "${FC_SRC}/tmr_voter.cpp" "${FC_SRC}/frames.cpp"
+fi
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
-  --witness-output "${WITNESS_DIR}/verify_motor_fdi.yaml" \
-  "${SCRIPT_DIR}/verify_motor_fdi.cpp" "${FC_SRC}/motor_fdi.cpp" "${FC_SRC}/coax_envelope.cpp" "${FC_SRC}/frames.cpp"
+if run_harness_selected indi; then
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 14 \
+    --interval-analysis --scalarize-structs --enforce-all-contracts \
+    --witness-output "${WITNESS_DIR}/verify_indi_wls.yaml" \
+    "${SCRIPT_DIR}/verify_indi_wls.cpp" "${FC_SRC}/indi_wls.cpp" "${FC_SRC}/frames.cpp"
+fi
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
-  --witness-output "${WITNESS_DIR}/verify_coax_envelope.yaml" \
-  "${SCRIPT_DIR}/verify_coax_envelope.cpp" "${FC_SRC}/coax_envelope.cpp" "${FC_SRC}/frames.cpp"
+if run_harness_selected fdi; then
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
+    --witness-output "${WITNESS_DIR}/verify_motor_fdi.yaml" \
+    "${SCRIPT_DIR}/verify_motor_fdi.cpp" "${FC_SRC}/motor_fdi.cpp" "${FC_SRC}/coax_envelope.cpp" "${FC_SRC}/frames.cpp"
+fi
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --scalarize-structs --unwind 27 \
-  --function verify_pass3a_workspace_bounds \
-  --witness-output "${WITNESS_DIR}/verify_daqp_bounds_3a.yaml" \
-  "${SCRIPT_DIR}/verify_daqp_bounds.c"
+if run_harness_selected coax; then
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --std=c++17 --unwind 10 \
+    --witness-output "${WITNESS_DIR}/verify_coax_envelope.yaml" \
+    "${SCRIPT_DIR}/verify_coax_envelope.cpp" "${FC_SRC}/coax_envelope.cpp" "${FC_SRC}/frames.cpp"
+fi
 
-"${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --unwind 5 \
-  --function verify_pass3b_entry \
-  --witness-output "${WITNESS_DIR}/verify_daqp_bounds_3b.yaml" \
-  "${SCRIPT_DIR}/verify_daqp_bounds.c"
+if run_harness_selected daqp; then
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --scalarize-structs --unwind 27 \
+    --function verify_pass3a_workspace_bounds \
+    --witness-output "${WITNESS_DIR}/verify_daqp_bounds_3a.yaml" \
+    "${SCRIPT_DIR}/verify_daqp_bounds.c"
 
-# Harness 6 (C++20 companion LUT guard + irreversible CEL latch):
-# Put mmap_cbvf_lut.cpp before verify_cbvf_filter.cpp for ESBMC C++20 TU symbol ordering, and
-# omit --struct-fields-check on this hosted-STL TU only to bypass ESBMC's own /esbmc-vfs/cpp/ios:175
-# false positive (freestanding flight_core Harnesses 1-5 enforce --struct-fields-check strictly).
-"${ESBMC_BIN}" "${ESBMC_COMMON_FLAGS[@]}" -I"${RTA_INC}" --std=c++20 --unwind 12 \
-  --witness-output "${WITNESS_DIR}/verify_cbvf_filter.yaml" \
-  "${RTA_SRC}/mmap_cbvf_lut.cpp" \
-  "${RTA_SRC}/cbvf_safety_filter.cpp" \
-  "${RTA_SRC}/cel_2d_lut.cpp" \
-  "${FC_SRC}/frames.cpp" \
-  "${SCRIPT_DIR}/verify_cbvf_filter.cpp"
+  "${ESBMC_BIN}" "${ESBMC_BASE_FLAGS[@]}" --unwind 5 \
+    --function verify_pass3b_entry \
+    --witness-output "${WITNESS_DIR}/verify_daqp_bounds_3b.yaml" \
+    "${SCRIPT_DIR}/verify_daqp_bounds.c"
+fi
+
+if run_harness_selected cbvf; then
+  # Harness 6 (C++20 companion LUT guard + irreversible CEL latch):
+  # Amalgamate into a single C++20 translation unit so ESBMC --32 never loses `main` during
+  # multi-TU C++20 merging with <sys/mman.h>/<fstream> headers; omit --struct-fields-check only
+  # on this hosted-STL TU to bypass ESBMC's /esbmc-vfs/cpp/ios:175 false positive (freestanding
+  # flight_core Harnesses 1-5 enforce --struct-fields-check strictly).
+  CBVF_AMALG="${BUILD_DIR}/verify_cbvf_filter_amalg.cpp"
+  cat > "${CBVF_AMALG}" <<EOF
+#include "${FC_SRC}/frames.cpp"
+#include "${RTA_SRC}/mmap_cbvf_lut.cpp"
+#include "${RTA_SRC}/cel_2d_lut.cpp"
+#include "${RTA_SRC}/cbvf_safety_filter.cpp"
+#include "${SCRIPT_DIR}/verify_cbvf_filter.cpp"
+EOF
+
+  "${ESBMC_BIN}" "${ESBMC_COMMON_FLAGS[@]}" -I"${RTA_INC}" --std=c++20 --unwind 12 \
+    --witness-output "${WITNESS_DIR}/verify_cbvf_filter.yaml" \
+    "${CBVF_AMALG}"
+fi
 
 echo "[VertiRTA-Formal] ESBMC v8.7 Supplemental Engineering Verification PASSED (6/6 harnesses)."
