@@ -1,0 +1,66 @@
+# SCSC-141C GSN Community Standard v3 — CI-Linked Living Safety Case Source
+gsn_version: "SCSC-141C-v3"
+safety_case_id: "VERTIRTA-LSC-v1.0.0"
+
+nodes:
+  - id: G1
+    type: Goal
+    text: "VertiRTA-X8-240 RTA software and simulation testbed upholds specified safety, conditional fault-recovery, and determinism invariants inside ODD.yaml."
+    in_context_of: [C1, C2, A1]
+    supported_by: [S1]
+
+  - id: C1
+    type: Context
+    text: "ODD.yaml (v1.0.0) & Maltepe-Dragos-Kartal Coastal Corridor bounded by LTFJ/LTBX CTR walls"
+  - id: C2
+    type: Context
+    text: "Non-Compliance Disclaimer: Zero certification claim; strict Stage-A SORA 2.5 vs Stage-B SC-VTOL-02 separation"
+  - id: A1
+    type: Assumption
+    text: "Simulated plant & fault models are representative within ODD.yaml (no ED-342 / MOC 4 VTOL.2500(b) rig credit claimed)"
+
+  - id: S1
+    type: Strategy
+    text: "Decompose argument across (1) ASTM F3269-21 RTA & AI isolation, (2) Stratified MC Atlas, (3) 4-Tier Determinism CI, and (4) Explicit Undeveloped hardware/TC gaps."
+    supported_by: [G2, G3, G4, G5, G6]
+
+  - id: G2
+    type: Goal
+    text: "Deterministic ASTM F3269-21 RTA core enforces 400 Hz 3-IMU TMR, 100 Hz HJI-CBVF-QP bounds, Part-IAM energy reserve, and strict DR-6/DR-7 AI isolation."
+    supported_by: [Sn1, Sn2, Sn3]
+
+  - id: G3
+    type: Goal
+    text: "2-Tier Verification Pyramid (10k 6-DOF + 1k hot-reset PX4/Gazebo + 50 EGL LiDAR) bounds conditional CSFL (n=650) and same-arm CEL (n=150) recovery and logs every cliff."
+    in_context_of: [J1]
+    supported_by: [Sn4, Sn5, Sn6]
+
+  - id: J1
+    type: Justification
+    text: "Monte Carlo bounds conditional recovery only (<0.30% at n=1000, k=0); NEVER proves 10^-9/FH (requires ~3.00e9 FH)."
+
+  - id: G4
+    type: Goal
+    text: "libvertirta_flight_core passes all 4-Tier Determinism CI gates (0-heap, static stack DAG, Cortex-M7 <256K/<128K, 0-ULP Same-ISA, <1e-12 Cross-ISA, work units & transparent steal)."
+    supported_by: [Sn7, Sn8, Sn9, Sn10]
+
+  - id: G5
+    type: Goal
+    undeveloped: true
+    text: "Physical hardware qualification (motor/ESC <= 1.58e-5/FH, boom CCF segregation, dissimilar 3-IMU, 1oo3 COM-MON / low-lambda FCC, dual isolated HV packs) satisfies DO-254/SC-VTOL-02."
+
+  - id: G6
+    type: Goal
+    undeveloped: true
+    text: "DO-178C DAL A software lifecycle, bare-metal RTOS WCET proof, and EASA/SHGM type certification (or Stage-A SORA 2.5 authorization) are completed."
+
+  - { id: Sn1,  type: Solution, label: "AI Read-Only & Symbol Isolation Report",    ci_job: "tier1_embedded_structural", artifact: "arch_isolation_report.json" }
+  - { id: Sn2,  type: Solution, label: "RTA FSM Hysteresis & Latch Unit Tests",    ci_job: "rta_fsm_unit_tests",        artifact: "rta_hysteresis_latch_junit.xml" }
+  - { id: Sn3,  type: Solution, label: "ODD.yaml & Part-IAM Reserve Validation",   ci_job: "odd_schema_validate",       artifact: "odd_part_iam_validation.json" }
+  - { id: Sn4,  type: Solution, label: "Tier-1 10k 6-DOF Clopper-Pearson Summary", ci_job: "atlas_tier1_10k",           artifact: "tier1_10k_clopper_pearson.json" }
+  - { id: Sn5,  type: Solution, label: "Tier-2 1k Stratified Atlas S1..S6 Report", ci_job: "atlas_tier2_1k",            artifact: "tier2_1k_stratified_atlas.json" }
+  - { id: Sn6,  type: Solution, label: "Tier-3 50 EGL LiDAR & Cliff Ledger",       ci_job: "atlas_tier3_lidar50",       artifact: "tier3_50_lidar_cliff_ledger.json" }
+  - { id: Sn7,  type: Solution, label: "0-Heap, Stack DAG & Cortex-M7 <256K/128K", ci_job: "tier1_embedded_structural", artifact: "tier1_structural.json" }
+  - { id: Sn8,  type: Solution, label: ".vrta 0-ULP Same-ISA & <1e-12 Cross-ISA",  ci_job: "tier2b_cross_isa_verify",   artifact: "tier2_cross_isa.json" }
+  - { id: Sn9,  type: Solution, label: "THREAD_CPUTIME & perf/callgrind Ir/tick",  ci_job: "tier2_3_4_matrix",          artifact: "tier3_work_arm64.json" }
+  - { id: Sn10, type: Solution, label: "MONOTONIC_RAW Tail & Steal Transparency",  ci_job: "tier2_3_4_matrix",          artifact: "tier4_wallclock_arm64.json" }

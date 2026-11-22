@@ -1,0 +1,153 @@
+# Machine-Readable Operational Domain (OD) & AI Constituent ODDs
+# Aligned with EASA MLEAP W-shaped ODD traceability — NOT certified AFM data.
+schema_version: "vertirta.odd/v1.0.0"
+parameter_provenance: "CONFIGURABLE_SIMULATION_DESIGN_BASELINE_NOT_CERTIFIED_AFM_DATA"
+compliance_claim: "NONE_RESEARCH_TESTBED_ONLY"
+
+alignment_references:
+  - "EASA SC-VTOL-02 (2024-06-10) & MOC-5 Issue 2 FINAL (2026-11-05)"
+  - "Reg. (EU) 2024/1111 (Part-IAM, applicable 2025-05-01)"
+  - "EASA SORA 2.5 (ED Decision 2025/018/R & ED Decision 2026/010/R) [Stage-A Unmanned ONLY]"
+  - "SHGM SHT-IHA (effective 2026-07-30, M3 >= 150 kg & IHATTYS Geofencing)"
+  - "ASTM F3269-21 Run-Time Assurance & EASA MLEAP Final Report (2024-05-31)"
+
+operational_domain:
+  od_id: "OD-VERTIRTA-IST-COAST-01"
+  corridor_name: "Istanbul Maltepe - Dragos - Kartal Coastal Simulation Corridor"
+
+  regulatory_stage_split:
+    stage_a_subscale_unmanned:
+      regime: "Specific Category (SORA 2.5, SAIL II-III)"
+      mtom_kg: 25.0
+      max_characteristic_dim_m: 2.2
+      max_speed_mps: 25.0
+      passengers: 0
+      ground_environment: "Controlled test area or < 50 ppl/km^2 range"
+    stage_b_fullscale_reference:
+      regime: "Certified Category Design Driver (SC-VTOL-02 Cat. Enhanced + Part-IAM)"
+      aircraft_id: "VertiRTA-X8-240"
+      mtom_kg: 240.0
+      propulsion_topology: "8-rotor coaxial X8 (4 booms x 2 counter-rotating)"
+      nominal_thrust_to_weight: 2.5
+      pack_voltage_v: 400.0
+      pack_energy_kwh: 22.0
+      status: "SIMULATION_ARCHITECTURAL_TESTBED_ONLY"
+
+  scenery_elements:
+    geofence_crs: "WGS84 / EPSG:4326"
+    datum_origin:
+      name: "Kartal Coastal Vertiport (SLZ-08)"
+      lat_deg: 40.8860
+      lon_deg: 29.1880
+      alt_amsl_m: 12.0
+    egm2008_undulation_m: 36.7
+    # DR-3/DR-4 erratum lock: strictly < 29.1900°E west of LTFJ NW join J2 (40.91279°N, 29.19212°E)
+    corridor_bounding_box:
+      lat_deg: [40.8750, 40.9420]
+      lon_deg: [29.1050, 29.1895]
+    altitude_agl_m: [0.0, 150.0]
+    hard_keep_out_zones:
+      - id: "CTR-LTFJ-EAST"
+        type: "Sabiha Gokcen Controlled Airspace Wall (AIP Turkey AD 2 LTFJ — Simulation Reference Only)"
+        arp_lat_deg: 40.89833
+        arp_lon_deg: 29.30917
+        radius_nm: 5.0
+        nw_join_j2: [40.91279, 29.19212]
+        ceiling_amsl_m: 762.0
+        ceiling_hae_m: 798.58
+        enforcement: "Deterministic 100 Hz HJI-CBVF-QP + Z3 Hard Barrier"
+        design_buffer_m: 150.0
+      - id: "CTR-LTBX-NORTH"
+        type: "Samandira Military CTR Wall (AIP Turkey AD 2 LTBX — Simulation Reference Only)"
+        ctr_center_lat_deg: 40.99889
+        ctr_center_lon_deg: 29.21611
+        radius_nm: 5.0
+        ceiling_amsl_m: 609.6
+        ceiling_hae_m: 646.35
+        enforcement: "Deterministic 100 Hz HJI-CBVF-QP + Z3 Hard Barrier"
+        design_buffer_m: 150.0
+    designated_vertiports_and_alternates:
+      primary_vertiports: ["SLZ-01_MALTEPE_WEST", "SLZ-08_KARTAL_COAST"]
+      contingency_diversion_fatos:
+        - "SLZ-02_MALTEPE_PLAZA"
+        - "SLZ-03_MALTEPE_SAHIL"
+        - "SLZ-04_DRAGOS_SAHIL"
+        - "SLZ-05_DRAGOS_PLAZA"
+        - "SLZ-06_CEVIZLI_ROOF"
+        - "SLZ-07_KARTAL_HOSPITAL_HELIPAD"  # 1.635 km clear of LTFJ J2; 0.699 km clear of LTBX
+      min_reachable_alternates_past_poc: 2
+    prohibited_adversarial_targets:
+      - { id: "ADV-01_PENDIK_MARINA", lat_deg: 40.86778, lon_deg: 29.23972, violation: "INSIDE_LTFJ_CTR" }
+      - { id: "ADV-02_KURTKOY_MERKEZ", lat_deg: 40.91406, lon_deg: 29.29922, violation: "INSIDE_LTFJ_CTR" }
+
+  slz_requirements:
+    r_slz_min_m: 5.0
+    slope_max_deg: 8.0
+    roughness_sigma_z_max_m: 0.15
+
+  environmental_elements:
+    mean_wind_mps:
+      range: [0.0, 12.0]
+      distribution: "Uniform LHS across Atlas strata (S6 extends to 18.0 m/s cliff probe)"
+      excluded: "> 12.0 m/s nominal dispatch"
+    turbulence_gust_mps:
+      model: "MIL-F-8785C Dryden continuous + discrete 1-cos gust (ASCE-7 Exposure D coastal / Exposure B urban)"
+      peak_gust_range_mps: [0.0, 8.0]
+      max_combined_wind_mps: 18.0
+    ambient_temperature_c: [-10.0, 40.0]
+    air_density_kg_m3: [1.10, 1.34]
+    visibility_vfr_m: ">= 5000 (Daylight VMC baseline)"
+    icing_conditions: "EXCLUDED (Non-FIKI reference)"
+    precipitation: "None to light rain (heavy convective cells EXCLUDED)"
+
+  dynamic_elements:
+    airspeed_horizontal_mps: [0.0, 22.0]
+    vertical_speed_mps: [-6.0, 6.0]
+    cel_touchdown_sink_rate_mps:
+      above_10m_agl: 2.5
+      below_5m_agl: 1.5
+      contact_max: 0.8
+    bank_pitch_limit_deg:
+      nominal_cf: 25.0
+      degraded_csfl: 18.0
+      last_resort_cel: "Option B1b active flat spin (|Omega_z| = 2.2 rad/s, tilt <= 20 deg)"
+    fault_topologies_in_od:
+      - { id: "FLT_NONE", expected_outcome: "NOMINAL" }
+      - { id: "FLT_1M", expected_outcome: "CSFL", description: "Any single motor/ESC loss (1 of 8)" }
+      - { id: "FLT_2M_CROSS", expected_outcome: "CSFL", description: "Any cross-arm dual loss (24 pairs)" }
+      - { id: "FLT_2M_SAME_ARM", expected_outcome: "CEL", description: "Same-arm coaxial pair (4 pairs) — EXEMPT from CSFL" }
+      - { id: "FLT_IMU_1OF3", expected_outcome: "CSFL", description: "Single IMU fault (freeze/drift/step/noise), isolation <= 20 ms" }
+
+  operating_parameters:
+    battery_soc_pct:
+      dispatch_range: [35.0, 100.0]
+      part_iam_final_reserve_floor_pct: 15.0
+      minimum_fuel_alert_trigger_pct: 20.0
+    rta_loop_rates_hz:
+      flight_core_tmr_and_indi_wls: 400
+      hji_cbvf_qp_monitor: 100
+      esdf_and_slz_reach: 20
+      part_iam_energy_monitor: 10
+    map_staleness_inflate_ms: 250
+    switching_invariants:
+      cel_latching: "IRREVERSIBLE_IN_FLIGHT"
+      csfl_latching: "LATCHED_UNTIL_MAINTENANCE_RESET"
+      cbf_dwell_time_s: 1.0
+      cbf_hysteresis_margin_min: 0.05
+
+ai_constituent_odds:
+  - constituent_id: "AI-CONST-DR6-COPILOT"
+    easa_ai_level: "Level 1B (Cognitive Assistance - Advisory Only)"
+    target_dal_ceiling: "DAL E / Non-Safety-Critical (Below Proposed Iss. 03 LLM IDAL D ceiling)"
+    rta_isolation: "STRICT_OUTSIDE_RTA_READ_ONLY_TELEMETRY"
+    actuation_authority: "ZERO"
+    max_latency_budget_ms: 3000
+    fallback_action: "Discard output; present deterministic AFM checklist and maintain HOLD_LOITER"
+
+  - constituent_id: "AI-CONST-DR7-SLZ-PERCEPTION"
+    easa_ai_level: "Level 1A / 2A (Human Augmentation / Cooperation - Advisory Only)"
+    target_dal_ceiling: "DAL E / Advisory (Below Proposed Iss. 03 Supervised ML IDAL C ceiling)"
+    rta_isolation: "STRICT_OUTSIDE_RTA_NO_DIRECT_GUIDANCE_WRITE"
+    actuation_authority: "ZERO"
+    altitude_valid_agl_m: [10.0, 120.0]
+    fallback_action: "Suppress neural SLZ prior; rely exclusively on pre-surveyed Part-IAM vertiports and geometric LiDAR checks"
