@@ -194,6 +194,16 @@ def render_tables_from_manifest(manifest_path: Path, out_tex: Path) -> Path:
                 "Azure Cobalt 100 GitHub Actions CI",
             )
         )
+    if "arm64_ci_ir_per_tick" in v1 or "x86_ci_ir_per_tick" in v1:
+        arm_ir = format_metric_value(v1.get("arm64_ci_ir_per_tick"))
+        x86_ir = format_metric_value(v1.get("x86_ci_ir_per_tick"))
+        t1_rows.append(
+            _row(
+                "Tier-3 Callgrind Work Units (ARM64 / x86\\_64)",
+                f"{arm_ir} / {x86_ir}\\,Ir/tick",
+                "Budget $\\le 1{,}200{,}000$\\,Ir/tick",
+            )
+        )
 
     if t1_rows:
         lines.extend(

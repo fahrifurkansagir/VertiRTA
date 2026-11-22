@@ -20,6 +20,7 @@ ASTM F3269-21 Core Isolation & 0 violations & 37 core files scanned \\
 Tier-3 \texttt{THREAD\_CPUTIME} p50 / p99 / p99.9 & 1.24 / 1.90 / 11.57\,$\mu$s & Local WSL2 x86\_64 ($100\text{k}$ ticks) \\
 Tier-4 \texttt{MONOTONIC\_RAW} p50 / p99 / p99.9 & 0.54 / 0.95 / 1.59\,$\mu$s & Steal 0.0\% (CLEAN) \\
 Cloud ARM64 (\texttt{ubuntu-24.04-arm}) Cross-ISA & PASS (Cobalt 100: p99 0.736 us, 0.0 cross-ISA diff) & Azure Cobalt 100 GitHub Actions CI \\
+Tier-3 Callgrind Work Units (ARM64 / x86\_64) & 604{,}543 / 723{,}331\,Ir/tick & Budget $\le 1{,}200{,}000$\,Ir/tick \\
 \bottomrule
 \end{tabular}
 \end{table}
