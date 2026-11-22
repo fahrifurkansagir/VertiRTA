@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Multi-stage hardened runtime container for VertiRTA C++20 CLI + WebSocket Telemetry Bridge (:8891)
+
+FROM debian:bookworm-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY CMakeLists.txt CMakePresets.json ./
+COPY core ./core
+COPY include ./include
+COPY tools ./tools
+
+RUN cmake -S /src -B /build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DVERTIRTA_BUILD_COMPANION=ON \
+      -DVERTIRTA_BUILD_TESTS=OFF \
+      -DVERTIRTA_ENABLE_STRICT_FP=ON \
+  && cmake --build /build --target vertirta_replay_cli vertirta_6dof_batch_cli -j \
+  && strip /build/tools/cli/vertirta_replay_cli /build/tools/cli/vertirta_6dof_batch_cli
+
+FROM python:3.11-slim-bookworm AS runtime
+
+RUN groupadd -g 10001 vertirta \
+  && useradd -u 10001 -g 10001 -M -s /usr/sbin/nologin vertirta \
+  && pip install --no-cache-dir pyyaml
+
+WORKDIR /app
+COPY --from=builder /build/tools/cli/vertirta_replay_cli /usr/local/bin/vertirta_replay_cli
+COPY --from=builder /build/tools/cli/vertirta_6dof_batch_cli /usr/local/bin/vertirta_6dof_batch_cli
+COPY viz/__init__.py /app/viz/__init__.py
+COPY viz/cesium /app/viz/cesium
+COPY viz/geo /app/viz/geo
+COPY config/istanbul_ltfj_airspace.yaml /app/config/istanbul_ltfj_airspace.yaml
+
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+USER 10001:10001
+EXPOSE 8891
+
+CMD ["python", "-m", "viz.cesium.ws_server", "--host", "0.0.0.0", "--port", "8891"]

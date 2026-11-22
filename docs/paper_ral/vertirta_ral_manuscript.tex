@@ -1,0 +1,125 @@
+\documentclass[letterpaper, 10 pt, journal, twoside]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{cite}
+
+\title{Verifiably Safe Fault-Tolerant Coaxial eVTOL Flight Control: INDI-WLS Allocation, 4D HJI-CBVF Reachability, and Formally Checked Bare-Metal Run-Time Assurance under U-Space Preemption}
+
+\author{Anonymous Authors%
+\thanks{Manuscript prepared for double-anonymous peer review (IEEE RA-L 8-page limit). All repository identifiers, institutional affiliations, and author metadata are withheld during review.}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Full-scale coaxial electric vertical take-off and landing (eVTOL) aircraft operating over dense coastal corridors must maintain provably bounded recovery under single-rotor, cross-arm dual-rotor, same-arm dual-rotor, IMU, and battery-sag failures inside strict bare-metal microcontroller budgets. We present a freestanding, zero-heap C++17 flight-control and ASTM~F3269-21 Run-Time Assurance (RTA) core for a 240\,kg coaxial X8 urban eVTOL (\texttt{X8-240}, 400\,V / 22\,kWh 1-RC Th\'evenin pack) operating along a metropolitan coastal corridor bounded by real international-airport control zones. The architecture couples: (1)~a 400\,Hz triple-modular-redundant (TMR) IMU cross-monitor, coaxial-unblanked \texttt{float64} INDI+WLS allocator, and irreversible Option~B1b active-spin same-arm survival controller compiled to 28{,}886\,B Flash, 0\,B static library RAM, 2{,}960\,B worst-case call-graph stack depth, and 0 forbidden heap symbols on ARM Cortex-M7; (2)~a 100\,Hz 4D Hamilton--Jacobi Control Barrier Value Function QP (HJI-CBVF-QP) safety filter backed by a zero-heap static dual active-set QP solver (\texttt{StaticDaqpSolver<5,32>}) and dynamic U-Space preemption hazard slots; and (3)~a deterministic 4-tier verification pipeline spanning supplemental bounded model checking (\texttt{ESBMC}), dual-FCC CAN-FD software-in-the-loop failover, and a live 30{,}000-simulation 6-DOF stratified survival atlas. With strictly isolated Continued Safe Flight and Landing (CSFL, $n=6{,}500$) and Controlled Emergency Landing (CEL, $n=1{,}500$) denominators, \texttt{HJ-CBVF+INDI-WLS} achieves 96.82\% CSFL survival versus 44.85\% for myopic HOCBF ($p_{\text{Holm}}<10^{-16}$) and 100.00\% same-arm CEL survival versus 0.00\% for stock allocation ($p_{\text{Holm}}<10^{-16}$), while publishing all 244 boundary cliffs transparently. This work is strictly a research and software-verification testbed and makes \emph{no} airworthiness certification claim.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Aerial Systems: Mechanics and Control; Safety in HRI and Autonomy; Fault-Tolerant Control; Control Barrier Functions; Embedded Real-Time Control.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+
+Urban coaxial eVTOL aircraft combine four tightly coupled safety hazards that conventional multicopter flight stacks address only in isolation: (i)~loss of coaxial upper-rotor downwash shielding and sharp battery terminal-voltage sag during dual-rotor failures~\cite{leishman_coaxial_2006}; (ii)~unilateral roll/pitch rank collapse under same-arm dual-rotor loss, where standard 4-DOF control allocation inevitably capsizes~\cite{mueller_relaxed_hover_2014}; (iii)~myopic analytical Control Barrier Function (CBF) infeasibility when rotor loss abruptly shrinks the admissible acceleration set near controlled airspace walls~\cite{ames_cbf_2019,choi_cbvf_2021}; and (iv)~dynamic memory allocation, stack overflow, or floating-point divergence on bare-metal flight control computers (FCCs).
+
+Existing open-source multirotor control benchmarks such as \texttt{safe-control-gym}~\cite{yuan_safecontrolgym_2022}, \texttt{px4\_mpc}~\cite{lim_px4_mpc_2024}, and companion-computer fault-tolerant NMPC~\cite{nan_ftc_nmpc_indi_2022} either evaluate planar quadrotors in Python or require heavy online nonlinear optimization that cannot reside on a bare-metal ARM Cortex-M7 microcontroller. Conversely, prioritized Incremental Nonlinear Dynamic Inversion with Weighted Least Squares (INDI-WLS)~\cite{smeur_indi_wls_2017} fits embedded inner loops but lacks fault-conditioned backward-reachability safety filtering and dynamic airspace preemption coupling.
+
+\textbf{Scope and Non-Certification Disclaimer:} The software stack evaluated herein is strictly an open-source research, simulation, and software-verification testbed. It is \emph{not} a certified airborne product, does \emph{not} claim DO-178C, DO-254, DO-330 tool qualification, MISRA C++:2023 certification, or EASA \texttt{SC-VTOL-02} / \texttt{SORA} regulatory compliance, and explicitly distinguishes software-in-the-loop (SIL) checks, empirical hardware high-water marks (HWM), and supplemental formal verification from certifiable WCET proofs~\cite{easa_scvtol_2024}.
+
+\textbf{Contributions:}
+\begin{enumerate}
+  \item A freestanding zero-heap C++17 flight core integrating 400\,Hz 3-IMU TMR fault isolation, coaxial-unblanked \texttt{float64} INDI-WLS, and Option~B1b active-spin same-arm survival in $28{,}886$\,B Cortex-M7 Flash and $2{,}960$\,B static stack DAG.
+  \item A 100\,Hz 4D fault-degraded HJI-CBVF-QP safety filter (\texttt{StaticDaqpSolver<5,32>}) coupled cleanly to untrusted reference commands and dynamic ASTM~F3548-21 U-Space constraint volumes~\cite{astm_f3269_2021,astm_f3548_2021}.
+  \item A live 30{,}000-simulation 6-DOF stratified survival atlas with isolated CSFL/CEL Clopper--Pearson 95\% confidence bounds, Holm--Bonferroni-adjusted McNemar significance testing, and a zero-cherry-picking 244-entry failure cliff ledger.
+\end{enumerate}
+
+\section{Coaxial X8 Dynamics and 400\,Hz Bare-Metal Control}
+\label{sec:dynamics}
+
+\subsection{Physically Closed \texttt{X8-240} Coaxial and 1-RC Th\'evenin Model}
+
+We model a $m=240.0$\,kg single-passenger coaxial X8 eVTOL ($W=2{,}353.6$\,N, inertia $J=\mathrm{diag}(85,95,140)\,\text{kg}\cdot\text{m}^2$, four arms of length $L=1.35$\,m at $\pm 45^\circ/\pm 135^\circ$, eight rotors of radius $R=0.75$\,m, vehicle outer tip radius $R_{\text{veh}}=2.10$\,m, coaxial spacing $\Delta z=0.35$\,m, $z/D=0.233$). Nominal hover thrust-to-weight is $T/W=2.5$ ($T_{\max,\text{nom}}=5{,}886$\,N), with BLDC speed cap $\omega_{\max}=240$\,rad/s ($2{,}292$\,RPM), asymmetric spin-up/down time constants $\tau_{\text{up}}=85$\,ms / $\tau_{\text{down}}=120$\,ms, and aerodynamic coast-down $\tau_{\text{coast}}=424$\,ms.
+
+Under nominal hover, lower rotors $i\in\{4..7\}$ experience coaxial wake interference $\eta_{\text{coax},0}=0.85$ ($676.1$\,N ceiling at $400$\,V vs.\ $795.4$\,N upper). Upon upper-rotor failure $i\in\{0..3\}$, the coaxial lower partner $i+4$ immediately unblanks to $\eta_t=1.0$ ($+17.6\%$ thrust recovery). Propulsion power draws from a $68$\,kg 112S12P $400.0$\,V / $21.77$\,kWh 1-RC Th\'evenin NMC811 pack ($R_0=0.1363\,\Omega$, $R_1=0.0840\,\Omega$, $C_1=300$\,F). Winding constant $K_{e,\text{bus}}=1.36$\,V$\cdot$s/rad dynamically caps maximum rotor speed $\omega_{\lim}(V_{\text{term}})$ while preserving two-arm hover $T/W\ge 1.12$ down to $338$\,V under loaded sag.
+
+\subsection{400\,Hz TMR Voter, \texttt{float64} INDI-WLS, and Option~B1b Flat Spin}
+
+At 400\,Hz, a triple-modular-redundant IMU cross-monitor (\texttt{TmrVoter}) applies median voting and chi-squared residual persistence to quarantine hardover, bias-ramp, or frozen channels in $\le 20$\,ms, aligned with continuous fly-by-wire latent-fault monitoring principles~\cite{easa_scvtol_2024}. A dual-channel motor FDI observer combines ESC RPM innovation ($<60$\,ms) with sensorless 4-DOF wrench cosine similarity ($<85$\,ms, immune to $45$\,N$\cdot$m coastal gusts) to classify five regimes: \texttt{NOMINAL}, \texttt{SINGLE\_LOSS} (1M), \texttt{CROSS\_DUAL} (2M-Cross), \texttt{SAME\_ARM\_ACTIVE\_SPIN} (2M-SameArm), and \texttt{CRITICAL\_DESCENT}.
+
+For 4-DOF regimes, reduced-attitude ($S^2$) tracking feeds an INDI loop solved by an active-set WLS allocator (\texttt{wls\_alloc\_8x4\_f64}) assembled strictly in IEEE-754 \texttt{double} precision to eliminate \texttt{float32} normal-equation Cholesky rank breakdown~\cite{smeur_indi_wls_2017}:
+\begin{equation}
+  \Delta u^* = \arg\min_{\Delta u_{\min}\le \Delta u\le \Delta u_{\max}} \bigl\|W_v(G_{\text{eff}}\Delta u - v_{\text{req}})\bigr\|_2^2 + \gamma\bigl\|W_u(\Delta u - \Delta u_d)\bigr\|_2^2.
+  \label{eq:wls}
+\end{equation}
+When both rotors on one boom fail, torque along the failed-arm diagonal becomes unilateral. Rather than permitting roll capsize, the ASTM~F3269-21 arbiter irreversibly latches \texttt{LATCHED\_CEL} in $\le 1$ tick ($2.5$\,ms), unloads the opposite boom, and stabilizes reduced attitude in an Option~B1b flat spin at $|\Omega_z|=2.2$\,rad/s~\cite{mueller_relaxed_hover_2014} with live actuator-lag phase lead $\Delta\psi=\arctan(\Omega_z\tau_{\text{up}})\approx 10.6^\circ$. Because spinning descent is incompatible with passenger-grade CSFL, same-arm failures are strictly excluded from the CSFL pool and evaluated exclusively as last-resort CEL survivability.
+
+\section{100\,Hz HJI-CBVF-QP Safety Filter and U-Space Interface}
+\label{sec:cbvf}
+
+At 100\,Hz on the companion computer, \texttt{CbvfSafetyFilter} queries a memory-mapped, FIPS~180-4 SHA-256-verified 4D Hamilton--Jacobi Control Barrier Value Function table $V_f(r,v_r,z,v_z)$ precomputed via \texttt{hj\_reachability} at $81\times 57\times 81\times 57$ and stride-2 quantized ($11.31$\,MB across four regimes, $<2\,\mu$s quadrilinear lookup)~\cite{choi_cbvf_2021}. Conservatively subtracting discretization error $\epsilon_{\text{grid}}$, the filter solves a 5-variable, $K\le 16$-constraint QP using a zero-heap, zero-recursion C99 dual active-set solver (\texttt{StaticDaqpSolver<5,32>}, $5{,}888$\,B static workspace)~\cite{arnstrom_daqp_2022}:
+\begin{equation}
+  \min_{a,\delta} \tfrac{1}{2}\|a - a_{\text{ref}}\|_2^2 + \tfrac{1}{2}\rho\|\delta\|_2^2 \quad \text{s.t.}\quad \nabla V_f^\top(f + g a) \ge -\gamma(V_f - \epsilon_{\text{grid}}) - \delta.
+  \label{eq:cbvf}
+\end{equation}
+Mission guidance and future ASTM~F3548-21 / EU~2021/664 U-Space dynamic preemption volumes~\cite{astm_f3548_2021,eu_uspace_2021} enter strictly as untrusted reference accelerations $a_{\text{ref}}$ and bounded obstacle/airspace hazard slots ($\le 14$ active rows: Top-10 tactical neighbors, 2 FATO gates, and 2 hard airport CTR walls west of $29.1895^\circ$\,E). Tall CTR walls enforce horizontal braking without climb-over hallucination, opposing gradients add $+1.5$\,m clutter clearance, and any infeasible QP or $V_f<-0.25$\,m invokes closed-form worst-case HJI braking $u^*_{\text{HJ}}$. In \texttt{LATCHED\_CEL}, the 4-DOF QP is bypassed into a sag-indexed 2D vertical braking table $V_{\text{2D}}(z,v_z)$.
+
+\section{Bare-Metal MCU Footprint and Verification Pipeline}
+\label{sec:mcu_formal}
+
+To verify hardware portability without leaking C++ exceptions, RTTI, or dynamic allocation into embedded control loops, \texttt{libvertirta\_flight\_core} compiles under strict IEEE-754 flags (\texttt{-O2/-Os -ffp-contract=off -fno-fast-math -fno-exceptions -fno-rtti}) across host x86\_64 (\texttt{g++ 15.2}) and bare-metal ARM Cortex-M7 (\texttt{arm-none-eabi-g++ 14.2.1}, \texttt{STM32H753 FPv5-D16}). Four independent structural gates execute automatically:
+\begin{enumerate}
+  \item \textbf{Zero-Heap Enforcement:} Both \texttt{nm}/\texttt{arm-none-eabi-nm} symbol audits and link-time \texttt{-Wl,--wrap=malloc/calloc/realloc} traps confirm $0$ forbidden heap symbols across all 8 core modules.
+  \item \textbf{Static Stack DAG Proof:} \texttt{-fno-lto -fstack-usage -fcallgraph-info=su,da} bounds Cortex-M7 maximum single-frame size at $1{,}496$\,B ($77$ functions, $0$ dynamic) and worst-case call-graph DAG depth at $2{,}960$\,B ($98$ nodes, $0$ recursion; worst chain \texttt{IndiWlsController::step\_400hz} $\to$ \texttt{wls\_alloc\_8x4\_f64}) inside $28{,}886$\,B Flash and $0$\,B static library RAM.
+  \item \textbf{Deterministic Binary Replay:} A 20.0\,s ($2{,}000$-frame, $512{,}128$\,B, $1{,}400$ CEL-latched frames) append-only \texttt{VRTA0001} corridor trace achieves 0-ULP SHA-256 bit-identity across repeated x86\_64 replays; local WSL2 Release latency measures $1.24/1.90\,\mu$s p50/p99 (\texttt{CLOCK\_THREAD\_CPUTIME\_ID}, $100\text{k}$ ticks) and $0.54/0.95\,\mu$s p50/p99 (\texttt{CLOCK\_MONOTONIC\_RAW}, $50\text{k}$ ticks, $0.0\%$ steal).
+  \item \textbf{Hardware Errata, SIL, and Supplemental Formal Harness:} The STM32H753 HITL target enforces Silicon Rev~V verification (\texttt{DBGMCU->IDCODE==0x2003}, blocking safety-critical FDCAN arming on Rev~Y Erratum~2.24.2), \texttt{FLASH\_ACR.LATENCY=4}, 8-region W\^{}X MPU with bottom 1\,KiB ITCM null trap (\texttt{VTOR=0x00000400}), eager FPU (\texttt{LSPEN=0}), and \texttt{FPSCR[4:0]} polling. Dual-FCC CAN-FD failover (Renode, $<20$\,ms functional SIL) and 32-bit \texttt{ESBMC} C++17 harnesses (\texttt{--32 --floatbv --nan-check --overflow-check} on x86\_64 CI)~\cite{gadelha_esbmc_2018} provide supplemental verification alongside physical \texttt{DWT->CYCCNT} empirical HWM profiling (tracked as pending in Table~\ref{tab:ral_mcnemar_mcu}).
+\end{enumerate}
+
+\input{generated/ral_tables.tex}
+
+\section{Experimental Evaluation and SOTA Comparison}
+\label{sec:experiments}
+
+We evaluate the full 6-DOF closed-loop coaxial+Th\'evenin+Dryden plant across $10{,}000$ stratified Latin Hypercube scenarios (\texttt{seed=20261122}, strata S1--S6) for three configurations totaling $30{,}000$ simulations in $77.32$\,s (Table~\ref{tab:ral_survival_atlas}). Statistical rigor follows exact one-sided 95\% Clopper--Pearson binomial bounds~\cite{clopper_pearson_1934}, exact two-sided McNemar tests~\cite{mcnemar_1947} with Holm--Bonferroni step-down correction~\cite{holm_1979}, and \texttt{rliable} 25\%--75\% Interquartile Mean (IQM) bootstrap CIs~\cite{agarwal_rliable_2021}.
+
+Because the archived v1.0 aggregate summary omits per-seed binary vectors, Table~\ref{tab:ral_mcnemar_mcu} reports the mathematically exact \emph{Fr\'echet--Hoeffding worst-case} discordant counts $c_{\max}=\min(\text{fail}_A,\text{pass}_B)$, $b=c_{\max}+(\text{pass}_A-\text{pass}_B)$---representing the most adversarial pairing consistent with the observed marginals---while explicitly marking per-seed \texttt{rliable} IQM as \texttt{Pending (Per-Run Export)} rather than synthesizing fake vectors:
+\begin{itemize}
+  \item \textbf{HJI-CBVF vs.\ Analytical HOCBF:} On the isolated CSFL pool (S2+S3+S5, $n=6{,}500$), \texttt{HJ-CBVF+INDI-WLS} achieves $96.82\%$ survival ($6{,}293/6{,}500$, $k=207$, CP95 upper failure bound $3.57\%$) versus $44.85\%$ ($2{,}915/6{,}500$) for myopic HOCBF ($+51.97$\,pp; even under worst-case Fr\'echet--Hoeffding pairing $(3{,}585,207)$, $p_{\text{Holm}}<10^{-16}$).
+  \item \textbf{INDI-WLS Option~B1b vs.\ Stock CA:} On same-arm dual loss (S4, $n=1{,}500$), \texttt{HJ-CBVF+INDI-WLS} achieves $100.00\%$ CEL survival ($1{,}500/1{,}500$, $k=0$, CP95 upper bound $0.20\%$) versus $0.00\%$ ($0/1{,}500$) for stock allocation ($(1{,}500,0)$, $p_{\text{Holm}}<10^{-16}$).
+  \item \textbf{Transparent Failure Cliff Ledger:} All $244/10{,}000$ primary failures ($207$ high-speed cross-arm S3 authority cliffs and $37$ out-of-ODD S6 wind/SoC cliffs; $0$ in S1, S2, S4, S5) are logged with initial states and seeds. Importantly, Monte Carlo bounds only \emph{conditional} simulated recovery and can \emph{never} establish a $10^{-9}$/FH catastrophic probability target (which mathematically requires $2{,}995{,}732{,}273$ zero-failure flight hours).
+\end{itemize}
+
+\begin{table}[t]
+\centering
+\caption{Positioning Against 2022--2026 Community Flight-Control and Safety-Filter Baselines.}
+\label{tab:ral_sota_positioning}
+\scriptsize
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{System / Baseline} & \textbf{6-DOF X8} & \textbf{Same-Arm} & \textbf{Bare-Metal} & \textbf{Reachability} \\
+\midrule
+\texttt{safe-control-gym}~\cite{yuan_safecontrolgym_2022} & 1D/2D & No & Python & MPSC \\
+\texttt{px4\_mpc}~\cite{lim_px4_mpc_2024} & Quad & No & Companion & None \\
+FT-NMPC+INDI~\cite{nan_ftc_nmpc_indi_2022} & Quad & Spin & Companion & None \\
+INDI-WLS~\cite{smeur_indi_wls_2017} & Quad & No & MCU & None \\
+Analytical HOCBF~\cite{ames_cbf_2019} & X8 & No & Companion & Myopic \\
+\textbf{Ours (HJ-CBVF+INDI-WLS)} & \textbf{X8 Coax} & \textbf{Option B1b} & \textbf{28.9\,KB M7} & \textbf{4D HJI-CBVF} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Limitations and Conclusion}
+\label{sec:conclusion}
+
+Three honest limitations bound our present evidence: (1)~per-seed \texttt{rliable} continuous IQM tables, physical STM32H753 \texttt{DWT->CYCCNT} empirical HWM traces, and multi-aircraft U-Space preemption runs remain explicitly labeled pending until executed on target hardware; (2)~full-envelope 6-DOF validation assumes representative coaxial aerodynamic and 1-RC Th\'evenin parameters rather than wind-tunnel calorimeter measurements; and (3)~supplemental \texttt{ESBMC} checks and empirical timing provide engineering assurance rather than DO-178C / DO-330 certification credit. Within these boundaries, our results demonstrate that fault-conditioned 4D HJI-CBVF filtering coupled to bare-metal \texttt{float64} INDI-WLS and Option~B1b active-spin recovery dramatically expands coaxial eVTOL survival inside a 28.9\,KB zero-heap Cortex-M7 footprint.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references_ral}
+
+\end{document}

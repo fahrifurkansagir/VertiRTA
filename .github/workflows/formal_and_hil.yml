@@ -1,0 +1,211 @@
+# SPDX-License-Identifier: Apache-2.0
+name: VertiRTA Formal Verification & Bare-Metal HIL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ARM_TOOLCHAIN_VERSION: "14.2.rel1"
+  ARM_TOOLCHAIN_LABEL: "14.2.Rel1"
+  RENODE_VERSION: "1.17.0"
+  ESBMC_VERSION: "8.7"
+
+jobs:
+  stm32h7-bare-metal-elf:
+    name: "STM32H753 Bare-Metal ITCM/DTCM ELF, Veneer & Footprint Gate"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pinned Arm GNU Toolchain 14.2.Rel1 (x86_64) & Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3-pytest python3-yaml curl xz-utils
+          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz" \
+            -o /tmp/arm-gnu-toolchain.tar.xz
+          sudo mkdir -p /opt/arm-gnu-toolchain
+          sudo tar -xJf /tmp/arm-gnu-toolchain.tar.xz -C /opt/arm-gnu-toolchain --strip-components=1
+          echo "/opt/arm-gnu-toolchain/bin" >> "${GITHUB_PATH}"
+
+      - name: Verify Public Hygiene & ASTM F3269-21 Isolation Gates
+        run: |
+          python3 scripts/ci/check_arch_isolation.py --repo-root . --out arch_isolation_report.json
+          python3 scripts/ci/check_public_hygiene.py --repo-root . --out public_hygiene_report.json
+
+      - name: Build Frozen libvertirta_flight_core.a (Cortex-M7 14.2.Rel1) & Verify Budget
+        run: |
+          cmake --preset arm-cortex-m7 \
+            -DCMAKE_C_FLAGS="-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Werror" \
+            -DCMAKE_CXX_FLAGS="-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -Os -fno-lto -fstack-usage -fcallgraph-info=su,da -Wstack-usage=4096 -Wvla -Werror"
+          cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
+          python3 scripts/ci/check_bare_metal_size.py \
+            --target build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --size-bin arm-none-eabi-size \
+            --max-flash-bytes 262144 \
+            --max-ram-bytes 131072 \
+            --out cm7_flight_core_size.json
+          python3 scripts/ci/check_no_heap_symbols.py \
+            --archive build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --nm-bin arm-none-eabi-nm \
+            --out cm7_flight_core_noheap.json
+          python3 scripts/ci/check_stack_usage.py \
+            --build-dir build/arm-cortex-m7/core/flight_core \
+            --max-frame-bytes 4096 \
+            --max-dag-bytes 16384 \
+            --out cm7_flight_core_stack.json
+
+      - name: Build STM32H753 HITL Bare-Metal ELF & Audit ITCM Veneers
+        run: |
+          if [ -f firmware/stm32h7_hitl/CMakeLists.txt ]; then
+            cmake -S firmware/stm32h7_hitl -B build/stm32h7_hitl -G Ninja \
+              -DVERTIRTA_FLIGHT_CORE_LIB="${PWD}/build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a"
+            cmake --build build/stm32h7_hitl
+            arm-none-eabi-readelf -S build/stm32h7_hitl/vertirta_stm32h7_hitl.elf
+            arm-none-eabi-objdump -d -j .itcm_text build/stm32h7_hitl/vertirta_stm32h7_hitl.elf > build/stm32h7_hitl/itcm_disasm.txt
+            if grep -qiE "e51ff004|04 f0 1f e5|bfcsel" build/stm32h7_hitl/itcm_disasm.txt; then
+              echo "ERROR: Corrupt GNU ld ITCM veneer opcode detected!" >&2
+              exit 1
+            fi
+          fi
+          PYTHONPATH=. pytest tests/firmware/test_stm32h7_tcm_elf.py tests/firmware/test_hitl_profiler_and_elf.py -v
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stm32h7-bare-metal-elf-${{ github.sha }}
+          path: |
+            cm7_flight_core_*.json
+            build/stm32h7_hitl/*.elf
+            build/stm32h7_hitl/*.map
+            build/stm32h7_hitl/itcm_disasm.txt
+          if-no-files-found: ignore
+
+  renode-dual-fcc-failover:
+    name: "Renode v1.17.0 Dual-FCC <20 ms CAN-FD Failover SIL (${{ matrix.arch }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            arm_host: x86_64
+            renode_tarball: renode-1.17.0.linux-portable-dotnet.tar.gz
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            arm_host: aarch64
+            renode_tarball: renode-1.17.0.linux-arm64-portable-dotnet.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pinned Arm 14.2.Rel1 & Renode v1.17.0 .NET Portable Tarball (Zero Mono/GTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake g++ python3-pytest python3-yaml python3-pip curl xz-utils libicu-dev
+          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-${{ matrix.arm_host }}-arm-none-eabi.tar.xz" \
+            -o /tmp/arm-gnu-toolchain.tar.xz
+          sudo mkdir -p /opt/arm-gnu-toolchain
+          sudo tar -xJf /tmp/arm-gnu-toolchain.tar.xz -C /opt/arm-gnu-toolchain --strip-components=1
+          echo "/opt/arm-gnu-toolchain/bin" >> "${GITHUB_PATH}"
+          curl -fsSL "https://github.com/renode/renode/releases/download/v${RENODE_VERSION}/${{ matrix.renode_tarball }}" \
+            -o /tmp/renode-portable.tar.gz
+          sudo mkdir -p /opt/renode
+          sudo tar -xzf /tmp/renode-portable.tar.gz -C /opt/renode --strip-components=1
+          echo "/opt/renode" >> "${GITHUB_PATH}"
+
+      - name: Build Dual-Node Cyphal ELFs, Host Catch2 Suite & Execute Tier-1 Functional SIL
+        run: |
+          cmake --preset arm-cortex-m7
+          cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
+          if [ -f firmware/renode_cyphal/CMakeLists.txt ]; then
+            cmake -S firmware/renode_cyphal -B build/renode_cyphal -G Ninja \
+              -DVERTIRTA_FLIGHT_CORE_LIB="${PWD}/build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a"
+            cmake --build build/renode_cyphal
+          fi
+          if [ -f tests/firmware/CMakeLists.txt ]; then
+            cmake -S tests/firmware -B build/tests_firmware -G Ninja
+            cmake --build build/tests_firmware
+            ctest --test-dir build/tests_firmware --output-on-failure
+          fi
+          PYTHONPATH=. pytest tests/firmware/test_dsdl_contract.py tests/firmware/test_renode_failover_contracts.py -v
+          # Tier-1 Functional & Protocol SIL ONLY (NOT hardware Cortex-M7 WCET)
+          if command -v renode-test >/dev/null 2>&1 && [ -f firmware/renode_cyphal/renode/failover_suite.robot ]; then
+            renode-test \
+              --variable PRIMARY_ELF:"${PWD}/build/renode_cyphal/vertirta_fcc_primary.elf" \
+              --variable SECONDARY_ELF:"${PWD}/build/renode_cyphal/vertirta_fcc_secondary.elf" \
+              --results-directory build/renode_results \
+              firmware/renode_cyphal/renode/failover_suite.robot
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: renode-failover-sil-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            build/renode_cyphal/*.elf
+            build/renode_results/**
+          if-no-files-found: ignore
+
+  esbmc-formal-x86_64:
+    name: "ESBMC v8.7 Bit-Precise Formal Verification (x86_64 --32 ONLY)"
+    # CRITICAL (DR-08 Section 3.1): ESBMC --32 MUST run strictly on ubuntu-24.04 x86_64;
+    # Linux ARM64 ESBMC releases fail --32 due to missing 32-bit libc headers.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pinned ESBMC v8.7 (x86_64) & 32-Bit Multilib Headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake gcc g++ gcc-multilib g++-multilib curl unzip python3-pytest python3-yaml
+          curl -fsSL "https://github.com/esbmc/esbmc/releases/download/v${ESBMC_VERSION}/esbmc-linux.zip" \
+            -o /tmp/esbmc-linux.zip
+          sudo mkdir -p /opt/esbmc
+          sudo unzip -q /tmp/esbmc-linux.zip -d /opt/esbmc
+          ESBMC_BIN_DIR="$(dirname "$(find /opt/esbmc -name esbmc -type f | head -n 1)")"
+          echo "${ESBMC_BIN_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Run Concrete Compile/Smoke Check & Live ESBMC v8.7 Proofs (Supplemental Engineering Verification)
+        run: |
+          PYTHONPATH=. pytest tests/firmware/test_formal_harnesses.py tests/firmware/test_formal_and_hil_workflow.py -v
+          bash verification/formal/esbmc/run_esbmc_suite.sh --compile-only --build-dir /tmp/vertirta_v3a_formal
+          bash verification/formal/esbmc/run_esbmc_suite.sh --solver bitwuzla --witness-dir formal_witnesses
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esbmc-v8.7-witnesses-${{ github.sha }}
+          path: formal_witnesses/**
+          if-no-files-found: ignore
+
+  misra-aligned-static-profile:
+    name: "MISRA-Aligned High-Integrity C++17 Static Profile (LLVM 22 + Cppcheck 2.22)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Arm 14.2.Rel1, clang-tidy & Pinned Cppcheck 2.22.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake g++ clang-tidy python3-pytest python3-yaml curl xz-utils libpcre3-dev
+          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz" \
+            -o /tmp/arm-gnu-toolchain.tar.xz
+          sudo mkdir -p /opt/arm-gnu-toolchain
+          sudo tar -xJf /tmp/arm-gnu-toolchain.tar.xz -C /opt/arm-gnu-toolchain --strip-components=1
+          echo "/opt/arm-gnu-toolchain/bin" >> "${GITHUB_PATH}"
+          curl -fsSL "https://github.com/danmar/cppcheck/archive/refs/tags/2.22.0.tar.gz" \
+            -o /tmp/cppcheck-2.22.0.tar.gz
+          tar -xzf /tmp/cppcheck-2.22.0.tar.gz -C /tmp
+          cmake -S /tmp/cppcheck-2.22.0 -B /tmp/cppcheck-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/cppcheck
+          sudo cmake --build /tmp/cppcheck-build --target install
+          echo "/opt/cppcheck/bin" >> "${GITHUB_PATH}"
+
+      - name: Execute MISRA-Aligned Static Profile & Contract Tests
+        run: |
+          python3 scripts/ci/check_public_hygiene.py --repo-root . --out static_public_hygiene.json
+          PYTHONPATH=. pytest tests/firmware/test_static_profile_contracts.py tests/firmware/test_formal_and_hil_workflow.py -v
+          bash verification/formal/misra_profile/run_static_profile.sh --strict-tools

@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA MISRA-Aligned High-Integrity C++17 Profile (LLVM 22 Compatible)
+# NOTE: Open-source clang-tidy provides a CI defect filter ONLY — NOT official MISRA C++:2023
+# compliance (see verification/formal/misra_profile/MISRA_GAP_REGISTER.md).
+#
+# LLVM 22.1.0 compatibility locks (DR-08 Section 3.5):
+#   1) Explicit `clang-analyzer-*` opt-in (dropped from LLVM 22 default check set).
+#   2) ZERO `hicpp-*` checks (subject to 2026 LLVM deprecation/removal RFC).
+---
+Checks: >-
+  -*,
+  clang-analyzer-*,
+  -clang-analyzer-cplusplus.NewDelete*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  cert-*,
+  -cert-err58-cpp,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-vararg,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  performance-*,
+  portability-*,
+  readability-const-return-type,
+  readability-implicit-bool-conversion,
+  readability-inconsistent-declaration-parameter-name,
+  readability-isolate-declaration,
+  readability-misleading-indentation,
+  readability-non-const-parameter,
+  readability-redundant-control-flow,
+  readability-uppercase-literal-suffix
+WarningsAsErrors: ''
+HeaderFilterRegex: '(core/flight_core/include|firmware/(stm32h7_hitl|renode_cyphal)/include)/.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: none
+CheckOptions:
+  - key: bugprone-narrowing-conversions.PedanticMode
+    value: 'true'
+  - key: bugprone-narrowing-conversions.WarnOnFloatingPointNarrowingConversion
+    value: 'true'
+  - key: bugprone-narrowing-conversions.WarnOnIntegerNarrowingConversion
+    value: 'true'
+  - key: readability-implicit-bool-conversion.AllowIntegerConditions
+    value: 'false'
+  - key: readability-implicit-bool-conversion.AllowPointerConditions
+    value: 'false'
+...

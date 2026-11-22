@@ -1,6 +1,6 @@
 # Canonical Aviation Standards & Regulatory Status Registry (Single Source of Truth)
 # Verified baseline: November 2026 — Do NOT claim binding compliance for DRAFT/PROPOSED items.
-registry_version: "vertirta.standards/v1.0.0"
+registry_version: "vertirta.standards/v2.0.0"
 verified_date: "2026-11-22"
 compliance_claim: "NONE_RESEARCH_TESTBED_ONLY"
 
@@ -112,3 +112,53 @@ standards:
     doi: "10.65391/r1386"
     status: "ACTIVE"
     role_in_vertirta: "CI-linked living safety case notation with mandatory Undeveloped markers on G5 (hardware qualification) and G6 (certification lifecycle)."
+
+  - id: "REG-EU-2022-1645-PART-IS"
+    authority: "EASA / EU"
+    title: "Commission Delegated Regulation (EU) 2022/1645 (Part-IS.D.OR — Information Security for Part-21 DOA/POA & Aerodromes)"
+    date: "2025-10-16"
+    status: "ACTIVE"
+    role_in_vertirta: "Design driver for safety-linked ISMS across design/production artifacts, HSM-signed .vrta archives, and supply-chain CVE pinning (libsodium >= 1.0.21, Fast DDS >= 2.14.6 / >= 3.4.1)."
+
+  - id: "REG-EU-2023-203-PART-IS"
+    authority: "EASA / EU"
+    title: "Commission Implementing Regulation (EU) 2023/203 (Part-IS.I.OR — Aviation & U-Space Information Security) + ED Decisions 2025/013-015/R & Reg. (EU) 2025/2293"
+    date: "2026-02-22"
+    status: "ACTIVE"
+    role_in_vertirta: "Mandatory for AOC/ATM/USSPs since 2026-02-22; NIS2 != Part-IS (no automatic equivalence; IS.I.OR.230 72h reporting non-substitutable). Drives 40 B VertiRtaSecureHeader + ReplayWindow128 closing the OMG DDS Security 1.2 IV_s replay gap, Mode B crypto, and <=10 s RTO cyber fail-safe FSM."
+
+  - id: "CIR-EU-2026-1821"
+    authority: "EASA / EU"
+    title: "Commission Implementing Regulation (EU) 2026/1821 (Amending CIR (EU) 2015/1018 Mandatory Occurrence Reporting for eVTOL/U-Space)"
+    date: "2026-07-27"
+    status: "ACTIVE"
+    role_in_vertirta: "Defines mandatory occurrence triggers for FATO incursions, U-Space encounters, envelope-protection activation, critical energy reserve, cyber-induced anomalies, and UAS/CMU failures driving M3 draft E5X forensic exports."
+
+  - id: "CDR-EU-2020-2034-ERCS"
+    authority: "EASA / EU"
+    title: "Commission Delegated Regulation (EU) 2020/2034 & CIR (EU) 2021/2082 (European Risk Classification Scheme — ERCS)"
+    date: "2020-10-06"
+    status: "ACTIVE"
+    role_in_vertirta: "Deterministic 2D ERCS severity-vs-barrier scoring (8-barrier model; Barrier #8 = 0 N/A on high-energy MAC/LOC-I; CICTT SCF-NP for rotor/control/SW/datalink faults; draft-only Incident classification)."
+
+  - id: "EUROCAE-ED-155A"
+    authority: "EUROCAE"
+    title: "EUROCAE ED-155A — Minimum Operational Performance Specification for Lightweight Flight Recording Systems"
+    date: "2025-03-01"
+    status: "ACTIVE"
+    role_in_vertirta: "Motivates power-loss-safe append-only VRTA0001 binary framing (128 B header + 256 B CRC-32C frames requiring zero end-of-file index) paired with append-only .vrta_events.jsonl sidecars."
+
+  - id: "SHGM-SHY-OLAY"
+    authority: "SHGM (Turkish DGCA)"
+    title: "SHGM SHY-OLAY — Sivil Havacilik Olay Raporlama Yonetmeligi (Official Gazette #33374, eff. 2027-03-18)"
+    date: "2026-09-18"
+    effective_date: "2027-03-18"
+    status: "PUBLISHED_EFFECTIVE_2027_03_18"
+    role_in_vertirta: "Turkish 72-hour mandatory occurrence reporting aligned with Reg. (EU) 376/2014 and ICAO ADREP taxonomy; drives bilingual TR/EN draft forensic narratives (never auto-classifying Accident or Serious Incident)."
+
+  - id: "SHGM-SHT-21-EK6"
+    authority: "SHGM (Turkish DGCA)"
+    title: "SHGM SHT-21 Ek-6 — Unmanned & VTOL Airworthiness Supplement (ICAO Annex 8 Alignment)"
+    date: "2026-11-26"
+    status: "ACTIVE"
+    role_in_vertirta: "Turkish airworthiness alignment context for M3 (>=150 kg) UAS/VTOL architectural traceability and future commercial certification dossier framing (zero compliance claimed)."

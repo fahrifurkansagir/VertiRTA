@@ -345,8 +345,11 @@ async def _handle_client(
                     await asyncio.sleep(period_s)
             return
 
-        # Static HTTP routes for :5180 live tactical console
-        if path == "/api/airspace.geojson":
+        # Static HTTP routes for :5180 live tactical console & container /healthz
+        if path == "/healthz":
+            body = b'{"status":"ok"}\n'
+            ctype = "application/json; charset=utf-8"
+        elif path == "/api/airspace.geojson":
             body = json.dumps(build_ltfj_ltbx_geometries()["geojson_feature_collection"]).encode("utf-8")
             ctype = "application/geo+json; charset=utf-8"
         elif path in ("/", "/index.html"):

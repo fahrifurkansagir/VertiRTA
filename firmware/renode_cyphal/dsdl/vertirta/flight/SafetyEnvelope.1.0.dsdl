@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA OpenCyphal v1.0 400 Hz Single-Frame CAN-FD Supervision Subject
+#
+# Fixed Subject-ID: 1024 (paired with mandatory uavcan.node.Heartbeat.1.0 on
+# fixed Subject-ID 7509 at 1 Hz / 7 B for OpenCyphal v1.0 network compliance).
+#
+# Wire-size lock (DR-08 Sec 2.2):
+#   Cyphal/CAN reserves 1 tail byte per frame (SOT/EOT/Toggle/Transfer-ID), so
+#   a single 64-byte CAN-FD frame carries at most 63 payload bytes (504 bits).
+#   This schema serializes to exactly 48 bytes (384 bits <= 504 bits), leaving
+#   15 bytes of single-frame headroom (49 B on-wire -> DLC 15, 160.6 us at
+#   1 Mbps nominal / 5 Mbps data per ISO 11898-1:2015 worst-case bit stuffing).
+
+uint16 FIXED_SUBJECT_ID     = 1024
+uint16 HEARTBEAT_SUBJECT_ID = 7509
+uint8  MAX_SINGLE_FRAME_B   = 63
+
+# 4 controlled coaxial X8 wrench axes in FRD: [Fz (N), Mx (N*m), My (N*m), Mz (N*m)]
+float32[4] wrench_min_frd   # 128 bits (16 B)
+float32[4] wrench_max_frd   # 128 bits (16 B)
+
+uint32 seq                  #  32 bits ( 4 B) monotonic 400 Hz supervision sequence
+uint32 t_us                 #  32 bits ( 4 B) FCC microsecond timestamp (wraps every 4295 s)
+
+uint8  fault_mask           #   8 bits ( 1 B) 8-bit coaxial rotor fault bitmask
+uint8  flight_regime        #   8 bits ( 1 B) vertirta::core::FlightRegime enum value
+uint8  tmr_state            #   8 bits ( 1 B) 3-IMU TMR voter state
+uint8  cel_latched          #   8 bits ( 1 B) Capability Envelope Limit / failover latch
+
+uint32 crc32c               #  32 bits ( 4 B) RFC 3720 Castagnoli CRC-32C (0x82F63B78) over bytes [0..43]
+
+@assert _offset_ == {384}
+@assert _offset_ <= {504}
+@sealed

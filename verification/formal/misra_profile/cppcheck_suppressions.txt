@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Audited Cppcheck 2.22.0 suppressions for VertiRTA MISRA-aligned static profile.
+# Policy: NEVER add blanket suppressions on core/flight_core/src/*.cpp.
+# Suppress only third-party C99 DAQP v0.10.0 upstream sources and missing bare-metal sys headers.
+missingIncludeSystem
+unmatchedSuppression
+*:*_deps/daqp-src/*
+*:*daqp_auxiliary_norec.c

@@ -6,13 +6,18 @@ Thank you for contributing to **VertiRTA**! All contributions are licensed under
 
 ---
 
-## 1. Developer Certificate of Origin (DCO) & License Firewall
+## 1. Governance: DCO 1.1 (No Corporate CLA), Permanent Apache-2.0 Core & License/CVE Firewall
 
-1. **DCO Sign-Off:** Every commit MUST include a `Signed-off-by:` trailer (`git commit -s`) certifying that you have the right to submit the code under `Apache-2.0`.
-2. **Zero-ShareAlike / Zero-NC License Firewall (Hard Gate):**
-   - Training datasets, pretrained teacher/student weights, and runtime libraries MUST be permissive (`Apache-2.0`, `MIT`, `BSD`, `etalab-2.0`, `CDLA-Permissive-1.0`, `CC BY 4.0`, `DL-DE-BY-2.0`).
-   - **Hard-Banned in Training or Runtime Dependencies:** `GPL` / `LGPL` / `AGPL`, `CC BY-SA`, `CC BY-NC*`, `ODbL` (OSM in training), `RescueNet`, `LoveDA`, `DroneDeploy`, `FlyAwareV2`, `DINOv3`, `SegFormer`, `Depth-Anything-V2-Base/Large/Giant`, `CohereForAI/aya-expanse-8b`, `ORB-SLAM3`, `SuperPoint`/`SuperGlue`.
-   - Eval-only datasets (`AeroScapes`, `ICG_Semantic_Drone`, `UAVScenes`) MUST remain strictly quarantined to evaluation scripts (`ml/slz_perception/data/license_gate.py`).
+1. **DCO 1.1 Sign-Off (No Corporate CLA):** VertiRTA is governed strictly under **Developer Certificate of Origin (`DCO 1.1`)** (`inbound = outbound` under `Apache-2.0`) with **No Corporate CLA** and no copyright assignment friction. Every commit MUST include a `Signed-off-by:` trailer (`git commit -s`).
+2. **Permanent Apache-2.0 Commitment:** `libvertirta_flight_core`, `libvertirta_rta_companion`, the append-only 256-byte `.vrta` (`VRTA0001`) binary flight-recorder specification/parsers, `VertiRTA-SDK` (`pip install vertirta`), and single-operator `VertiGCS` (including the static GitHub Pages WASM sandbox) remain **Permanent Apache-2.0**.
+3. **Zero-ShareAlike / Zero-NC License & CVE Firewall (`DR-01..DR-13` Hard Gate):**
+   - Training datasets, pretrained teacher/student weights, and runtime libraries MUST be permissive (`Apache-2.0`, `MIT`, `BSD`, `ISC`, `etalab-2.0`, `CDLA-Permissive-1.0`, `CC BY 4.0`, `DL-DE-BY-2.0`, `CC0`, Public Domain).
+   - **Hard-Banned in Runtime, Weights, or Bundled Training Sets:**
+     - *Licenses:* `GPL` / `LGPL` / `AGPL`, `CC BY-SA`, `CC BY-NC*`, `ODbL` (OSM in training).
+     - *VIO / SLAM / Vision:* `OpenVINS`, `VINS-Fusion`, `HybVIO`, `ORB-SLAM3`, `sqrtVINS`, `BlenderProc` (`bpy` GPL policy in runtime/training; offline `viz/blender/` & `tools/cfd_offline_gpl/` air-gapped with `ldd`/`nm` zero-GPL runtime gate), `UAVid`, `RescueNet`, `LoveDA`, `DroneDeploy`, `FlyAwareV2`, `DINOv3`, `DINOv2-SALAD`, `SegFormer`, `Depth-Anything-V2-Base/Large/Giant`, `Sample4Geo`, `EfficientLoFTR`, `Ultralytics`, `SuperPoint`/`SuperGlue`, `Deep Hough Transform`, `InsPLAD`, `DDOS`, `Drone-vs-Bird`.
+     - *LLM / Voice ASR & TTS:* `CohereForAI/aya-expanse-8b`, `OHF-Voice/piper1-gpl` (`piper-tts >= 1.7.0`), **all prebuilt `tr_TR` Piper voices** (`dfki`, `fahrettin`, `fettah`), `en_US-lessac`/`ryan`/`hfc`/`l2arctic`, `mms-tts-*`, `XTTS-v2`, `OmniVoice`, `UWB-ATCC`, `ATCO2`, `ESC-50`, `DEMAND`, unfiltered `FSD50K`.
+   - **Required Clean Stack & Security CVE Pins:** **`libsodium >= 1.0.21`** (Ed25519 subgroup fix), **`Fast DDS >= 2.14.6` / `>= 3.4.1`** (`CVE-2024-28231`/`2025-62799`/`2026-22590`), **`sherpa-onnx >= 2.0.0`** (PR `#4055` zero-`espeak-ng` GPL), **`Basalt`** (`BSD-3` VIO), **`XFeat + LighterGlue`** (`Apache-2.0`), **`MegaLoc`** (`MIT`), and **`TTPLA`** (`Apache-2.0`, decoupled `45°` forward wire head ONLY).
+   - **Eval-Only Quarantine:** `AeroScapes`, `ICG_Semantic_Drone`, and `UAVScenes` MUST remain strictly quarantined to evaluation scripts (`ml/slz_perception/data/license_gate.py`).
 
 ---
 

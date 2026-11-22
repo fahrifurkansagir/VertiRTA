@@ -1,0 +1,28 @@
+{
+  "name": "@vertirta/vertigcs",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "VertiRTA unified zero-token MapLibre GL JS + Deck.gl + Emscripten WASM ground control station and .vrta black-box replay sandbox",
+  "scripts": {
+    "dev": "vite --port 5180 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5180 --strictPort",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.4.1",
+    "@deck.gl/geo-layers": "^9.4.1",
+    "@deck.gl/layers": "^9.4.1",
+    "@deck.gl/maplibre": "^9.4.1",
+    "maplibre-gl": "^6.19.0",
+    "pmtiles": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.8"
+  }
+}

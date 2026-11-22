@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Renode v1.17.0 Dual-STM32H753 Lockstep OpenCyphal CAN-FD Failover Emulation Script (DR-08 Sec 2.1).
+#
+# CRITICAL LOCKS:
+#   - Tier-1 Functional & Protocol SIL ONLY (NOT hardware Cortex-M7 WCET).
+#   - SetGlobalQuantum "0.000025" (25 us) prevents coarse virtual-time CANHub sync lag.
+#   - Uses virtual CANHub ONLY; SocketCANBridge is strictly omitted to prevent the
+#     renode#598 dual-machine infinite packet reflection loop.
+
+include $ORIGIN/STM32H7_PWR.cs
+
+$primary_elf?=$ORIGIN/../../../build/renode_cyphal/vertirta_fcc_primary.elf
+$secondary_elf?=$ORIGIN/../../../build/renode_cyphal/vertirta_fcc_secondary.elf
+
+emulation SetGlobalQuantum "0.000025"
+emulation CreateCANHub "canHub"
+
+# Primary Flight Control Computer (OpenCyphal Node 10, 400 Hz SafetyEnvelope publisher)
+mach create "fcc_primary"
+machine LoadPlatformDescription $ORIGIN/stm32h753_avionics.repl
+connector Connect sysbus.fdcan1 canHub
+sysbus LoadELF $primary_elf
+
+# Secondary Safety Monitor FCC (OpenCyphal Node 11, 10.50 ms watchdog -> <20 ms takeover)
+mach create "fcc_secondary"
+machine LoadPlatformDescription $ORIGIN/stm32h753_avionics.repl
+connector Connect sysbus.fdcan1 canHub
+sysbus LoadELF $secondary_elf

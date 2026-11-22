@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VertiGCS — VertiRTA-X8-240 Command &amp; .vrta Replay Console</title>
+    <link rel="stylesheet" href="./src/styles/vertigcs.css" />
+  </head>
+  <body>
+    <div id="vertigcs-root">
+      <header class="topbar">
+        <div class="brand">
+          <span class="badge-live" id="mode-badge">SANDBOX WASM</span>
+          <strong>VertiGCS</strong>
+          <span class="subtitle">VertiRTA-X8-240 &bull; Kartal–Maltepe Coastal ODD</span>
+        </div>
+        <div class="disclaimer">
+          Research &amp; Simulation Testbed Only — NOT a certified airborne product.
+          Elevation ref: Copernicus DEM GLO-30 (DOI: 10.5270/ESA-c5d3d65, EGM2008 &rarr; WGS84 HAE).
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section id="map-viewport" class="viewport" aria-label="3D Tactical Corridor Map"></section>
+
+        <aside class="hud-rail">
+          <section class="panel" id="telemetry-panel">
+            <h2>Flight &amp; RTA Telemetry</h2>
+            <dl class="kv-grid">
+              <dt>Regime</dt><dd id="hud-regime">NOMINAL_8_ROTOR</dd>
+              <dt>Altitude (AGL / HAE)</dt><dd id="hud-alt">35.0 / 83.7 m</dd>
+              <dt>400 V Pack (SoC / V)</dt><dd id="hud-batt">80.0% / 403.2 V</dd>
+              <dt>TMR / &chi;&sup2;</dt><dd id="hud-tmr">3/3_NOMINAL / 0.00</dd>
+              <dt>CBVF Margin h(x)</dt><dd id="hud-cbvf">+25.0 m</dd>
+              <dt>LTFJ / LTBX Margin</dt><dd id="hud-ctr">1042 / 2995 m</dd>
+              <dt>Active Rotors</dt><dd id="hud-mask">0xFF (8/8)</dd>
+              <dt>CEL Spin Latch</dt><dd id="hud-cel">DISARMED</dd>
+            </dl>
+            <div class="rotor-bars" id="hud-rotors" aria-label="8-Rotor RPM Bars"></div>
+          </section>
+
+          <section class="panel" id="fault-panel">
+            <h2>Live Fault Injection (Sandbox)</h2>
+            <div class="btn-grid">
+              <button type="button" data-fault="single" data-target="2">Kill Rotor #3 (CSFL)</button>
+              <button type="button" data-fault="same_arm" data-target="0" class="danger">
+                Same-Arm Dual Kill (CEL 2.2 rad/s)
+              </button>
+              <button type="button" data-fault="imu" data-target="1">Inject IMU #1 Drift (TMR)</button>
+              <button type="button" data-fault="wind" data-target="0">12 m/s Coastal Wind Gust</button>
+              <button type="button" data-fault="reset" data-target="0" class="secondary">Reset Nominal Hover</button>
+            </div>
+          </section>
+
+          <section class="panel" id="replay-panel">
+            <h2>.vrta Black-Box Replay (VRTA0001)</h2>
+            <label class="dropzone" for="vrta-file-input" id="vrta-dropzone">
+              Drop <code>.vrta</code> log or click to inspect (128 B hdr + 256 B CRC32C frames)
+              <input id="vrta-file-input" type="file" accept=".vrta" hidden />
+            </label>
+            <div class="scrubber-row">
+              <button type="button" id="btn-play-pause">Pause</button>
+              <input type="range" id="replay-slider" min="0" max="100" value="0" />
+              <span id="replay-time">0.00 s</span>
+            </div>
+          </section>
+
+          <section class="panel" id="z3-panel">
+            <h2>Z3-STL Audit &amp; Viewport Adapter</h2>
+            <pre id="z3-audit-log">Adapter: MapLibre GL v6 + @deck.gl/maplibre v9.4 (MapView z&gt;=8, DPR&lt;=1.5)
+Status: SAT — Kartal ODD verified outside LTFJ NW J2 &amp; LTBX.</pre>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: Apache-2.0
+// VertiRTA STM32H753 Avionics Renode v1.17.0 Platform Overlay (DR-08 Sec 2.1).
+//
+// Tier-1 Functional & Protocol SIL ONLY — NOT hardware Cortex-M7 WCET.
+// Fixes documented upstream Renode STM32H7 gaps:
+//   1. Custom Miscellaneous.STM32H7_PWR at 0x58024800 (resolves renode#649, renode#857 VOSRDY hang)
+//   2. Explicit nvic systickFrequency: 480_000_000 (resolves renode#1009 static timer clock)
+//   3. DBGMCU->IDCODE Tag returning Rev V (0x20030450) so VOS0 + FDCAN safety interlock passes
+//   4. Full ITCM (64 KB), DTCM (128 KB), AXI_SRAM (512 KB), D2_SRAM1 (128 KB), and FDCAN1 MsgRAM
+
+using "platforms/cpus/stm32h753.repl"
+
+itcm: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x00010000
+
+dtcm: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x00020000
+
+axiSram: Memory.MappedMemory @ sysbus 0x24000000
+    size: 0x00080000
+
+d2Sram1: Memory.MappedMemory @ sysbus 0x30000000
+    size: 0x00020000
+
+fdcanMsgRam: Memory.MappedMemory @ sysbus 0x4000AC00
+    size: 0x00002800
+
+nvic:
+    systickFrequency: 480000000
+
+// Replace unmodeled PWR register block with custom C# model (loaded via dual_fcc_failover.resc).
+pwr: Miscellaneous.STM32H7_PWR @ sysbus 0x58024800
+
+// Expose STM32H753 Rev V (REV_ID = 0x2003, DEV_ID = 0x0450) at DBGMCU->IDCODE (0x5C001000).
+sysbus:
+    init:
+        Tag <0x5C001000 0x4> "DBGMCU_IDCODE_REV_V" 0x20030450
+        Tag <0x5800042C 0x4> "SYSCFG_PWRCR" 0x00000001

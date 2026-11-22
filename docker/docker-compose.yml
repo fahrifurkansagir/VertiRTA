@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: Apache-2.0
+# Hardened non-root VertiRTA Live Telemetry (:8891) + VertiGCS Web Console (:5180) Stack
+# Port Isolation Lock: strictly forbids 4173, 4174, 8765, 9222, 9223.
+
+services:
+  vertirta-sim:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sim
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    ports:
+      - "127.0.0.1:8891:8891"
+    volumes:
+      - ../config/istanbul_ltfj_airspace.yaml:/app/config/istanbul_ltfj_airspace.yaml:ro
+    mem_limit: 512m
+    cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8891/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  vertigcs-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vertigcs
+    user: "101:101"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+      - /var/cache/nginx:size=32m,noexec,nosuid
+    ports:
+      - "127.0.0.1:5180:5180"
+    depends_on:
+      vertirta-sim:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5180/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

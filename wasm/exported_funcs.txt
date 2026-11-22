@@ -1,0 +1,9 @@
+_vertirta_init
+_vertirta_reset
+_vertirta_step_batch
+_vertirta_inject_fault
+_vertirta_get_vrta_ptr
+_vertirta_get_vrta_size
+_vertirta_parse_vrta_frame
+_vertirta_egm2008_n_m
+_vertirta_eval_cbvf_margin

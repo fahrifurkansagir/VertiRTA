@@ -1,0 +1,108 @@
+{
+  "schema_version": "vertirta.ral_stats/v1.0.0",
+  "source_atlas": "artifacts/v1.0.0/tier1_atlas/tier1_10k_clopper_pearson.json",
+  "source_atlas_sha256": "5ed4bba011c951a02f4ec225902b08f497b7fa8c61d566987df8b0aebf86e230",
+  "seed": 20261122,
+  "method": "frechet_hoeffding_conservative_bound",
+  "iqm_status": "PENDING_PER_RUN_EXPORT",
+  "alpha": 0.05,
+  "runs_per_config": 10000,
+  "ab_total_simulations": 30000,
+  "wall_clock_total_s": 77.32,
+  "total_failures": 244,
+  "zero_failure_1e9_required_fh": 2995732273,
+  "csfl_n": 6500,
+  "csfl_k": 207,
+  "cel_n": 1500,
+  "cel_k": 0,
+  "ab_summary": {
+    "hj_cbvf__indi_wls": {
+      "csfl_pass_pct": 96.82,
+      "csfl_cp95_upper_pct": 3.57,
+      "cel_pass_pct": 100.0,
+      "cel_cp95_upper_pct": 0.2
+    },
+    "hocbf__indi_wls": {
+      "csfl_pass_pct": 44.85,
+      "csfl_cp95_upper_pct": 56.17,
+      "cel_pass_pct": 100.0,
+      "cel_cp95_upper_pct": 0.2
+    },
+    "hj_cbvf__stock_ca": {
+      "csfl_pass_pct": 96.82,
+      "csfl_cp95_upper_pct": 3.57,
+      "cel_pass_pct": 0.0,
+      "cel_cp95_upper_pct": 100.0
+    }
+  },
+  "holm_bonferroni_pairs": [
+    {
+      "name": "csfl:hj_cbvf__indi_wls_vs_hocbf__indi_wls",
+      "b": 3585,
+      "c": 207,
+      "n_discordant": 3792,
+      "p_exact": 0.0,
+      "holm_rank": 1,
+      "alpha_holm_step": 0.0125,
+      "p_holm": 0.0,
+      "significant_holm": true
+    },
+    {
+      "name": "cel:hj_cbvf__indi_wls_vs_hj_cbvf__stock_ca",
+      "b": 1500,
+      "c": 0,
+      "n_discordant": 1500,
+      "p_exact": 0.0,
+      "holm_rank": 2,
+      "alpha_holm_step": 0.01666667,
+      "p_holm": 0.0,
+      "significant_holm": true
+    },
+    {
+      "name": "csfl:hj_cbvf__indi_wls_vs_hj_cbvf__stock_ca",
+      "b": 207,
+      "c": 207,
+      "n_discordant": 414,
+      "p_exact": 1.0,
+      "holm_rank": 3,
+      "alpha_holm_step": 0.025,
+      "p_holm": 1.0,
+      "significant_holm": false
+    },
+    {
+      "name": "cel:hj_cbvf__indi_wls_vs_hocbf__indi_wls",
+      "b": 0,
+      "c": 0,
+      "n_discordant": 0,
+      "p_exact": 1.0,
+      "holm_rank": 4,
+      "alpha_holm_step": 0.05,
+      "p_holm": 1.0,
+      "significant_holm": false
+    }
+  ],
+  "iqm_metrics": {},
+  "cortex_m7": {
+    "flash_bytes": 28886,
+    "ram_bytes": 0,
+    "text_bytes": 28886,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "members_parsed": 11,
+    "max_flash_bytes": 262144,
+    "max_ram_bytes": 131072,
+    "functions_checked": 77,
+    "bounded_realigned_frames": 0,
+    "callgraph_nodes": 98,
+    "max_frame_bytes": 1496,
+    "max_dag_bytes": 2960,
+    "forbidden_heap_symbols": 0
+  },
+  "pending_evidence": {
+    "physical_stm32h7_hitl": "Pending (Physical STM32H7 HITL)",
+    "m2_uspace_preemption": "Pending (M2 U-Space)",
+    "per_run_rliable_iqm": "Pending (Per-Run Export)",
+    "arm64_cross_isa_ci": "Pending (ARM64 CI)"
+  },
+  "sha256": "4ced8e010674d2e2fe48f0ac5b2b6db858e91ae905f0bbe5959048f86ee669fc"
+}
