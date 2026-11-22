@@ -37,7 +37,11 @@ endif()
 if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/flight_core/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/rta_companion/CMakeLists.txt"
-     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/stl/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/copilot/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
     FetchContent_Declare(
       Catch2
       GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -53,6 +57,18 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/rta_companion/CMakeLists.txt")
     add_subdirectory(tests/rta_companion)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/stl/CMakeLists.txt")
+    add_subdirectory(tests/stl)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/copilot/CMakeLists.txt")
+    add_subdirectory(tests/copilot)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt")
+    add_subdirectory(core/slz_bayes/tests)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
+    add_subdirectory(sim/colab_egl/tests)
   endif()
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
     add_subdirectory(tests/determinism)
