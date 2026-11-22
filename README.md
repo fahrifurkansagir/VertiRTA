@@ -3,9 +3,10 @@
 **Vertical Run-Time Assurance & Fault-Tolerant Flight Control for a 240 kg Coaxial X8 Urban eVTOL (`VertiRTA-X8-240`)**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![4-Tier Determinism ARM64 CI](https://github.com/fahrifurkansagir/VertiRTA/actions/workflows/determinism.yml/badge.svg)](https://github.com/fahrifurkansagir/VertiRTA/actions/workflows/determinism.yml)
+[![VertiBench Co-Pilot ARM64 CI](https://github.com/fahrifurkansagir/VertiRTA/actions/workflows/vertibench_ci.yml/badge.svg)](https://github.com/fahrifurkansagir/VertiRTA/actions/workflows/vertibench_ci.yml)
 [![Core Standard](https://img.shields.io/badge/Flight_Core-C%2B%2B17_Freestanding_MCU-00599C.svg)](core/flight_core/CMakeLists.txt)
 [![RTA Companion](https://img.shields.io/badge/RTA_Companion-C%2B%2B20_Zero--Copy_mmap-00599C.svg)](core/rta_companion/CMakeLists.txt)
-[![Evidence Commit](https://img.shields.io/badge/v1.0.0_Evidence-ef9be75-2ea44f.svg)](BENCHMARKS.md)
 
 `VertiRTA` is a 100% open-source, deterministic flight-control and run-time assurance (RTA) stack engineered for a **`240 kg` coaxial X8 urban eVTOL** operating along the **Istanbul Maltepe – Dragos – Kartal coastal corridor**, tightly bounded by real DHMİ AIP Turkey **`LTFJ` (Sabiha Gökçen)** and **`LTBX` (Samandıra)** controlled airspace walls.
 
@@ -112,14 +113,14 @@ Measured via Release `vertirta_bench_cli` (`lut_loaded: true`: full `100 Hz` HJI
 
 | Tier | Target Runner / Arch | Mode / Scope | Ticks / Frames | `mean` (us) | `p50` (us) | `p99` (us) | `p99.9` (us) | `max` (us) | Steal / Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Tier 2** | `x86_64` (Local WSL2) | Same-ISA 0-ULP `.vrta` Replay (`corridor_faults.vrta`, `512,128 B`, `1,400` CEL frames) | `2,000` frames (`20.0 s`) | — | — | — | — | — | `PASS` (`run1 == run2` SHA-256) |
-| **Tier 2** | `x86_64 <-> arm64` CI | Cross-ISA Parity (`< 1e-12` continuous, `0` mode divergence) | `2,000` frames | — | — | — | — | — | `PENDING_GITHUB_ACTIONS_ARM64` |
+| **Tier 2** | `x86_64` & `arm64` | Same-ISA 0-ULP `.vrta` Replay (`corridor_faults.vrta`, `512,128 B`, `1,400` CEL frames) | `2,000` frames (`20.0 s`) | — | — | — | — | — | `PASS` (`run1 == run2` SHA-256) |
+| **Tier 2** | `x86_64 <-> arm64` CI | Cross-ISA Parity (`ubuntu-24.04` ↔ Azure Cobalt 100 `ubuntu-24.04-arm`) | `2,000` frames | — | — | — | — | — | **`PASS` (`max_abs_diff = 0.0`, `0` mode div)** |
 | **Tier 3** | `x86_64` (Local WSL2) | `CLOCK_THREAD_CPUTIME_ID` | `100,000` ticks | `1.2841` | `1.2400` | `1.9000` | `11.5690` | `55.3490` | `MEASURED_LOCAL` |
 | **Tier 4** | `x86_64` (Local WSL2) | `CLOCK_MONOTONIC_RAW` + `/proc/stat` | `50,000` ticks | `0.5780` | `0.5400` | `0.9500` | `1.5900` | `32.0690` | `0.0%` (`CLEAN`) |
-| **Tier 3** | `x86_64` (`ubuntu-24.04` CI) | `perf stat` / `valgrind --tool=callgrind` `Ir/tick` | `1,000` ticks | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING_GITHUB_ACTIONS_X86_PMU` |
-| **Tier 3/4** | `arm64` (`ubuntu-24.04-arm`) | Azure Cobalt 100 (`Ir/tick` + `CLOCK_MONOTONIC_RAW`) | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING_GITHUB_ACTIONS_ARM64` |
+| **Tier 3/4** | `x86_64` (`ubuntu-24.04` CI) | Callgrind `723,331 Ir/tick` + `CLOCK_MONOTONIC_RAW` | `20,000` ticks | `0.6570` | `0.6790` | `0.8430` | `4.0220` | `17.8920` | `0.0%` (`CLEAN / PASS`) |
+| **Tier 3/4** | `arm64` (`ubuntu-24.04-arm`) | Azure Cobalt 100: Callgrind `604,543 Ir/tick` + `CLOCK_MONOTONIC_RAW` | `20,000` ticks | `0.7212` | `0.7200` | **`0.7360`** | **`0.8640`** | `4.1440` | `0.0%` (`CLEAN / PASS`) |
 
-> **WCET Caveat:** User-space Linux timings (`BENCHMARKS.md` Tiers 3–4) are indicative CI regression telemetry ONLY and do **NOT** constitute DO-178C / EASA bare-metal RTOS WCET certification evidence. Raw artifacts: [`tier2_same_isa_x86_64.json`](artifacts/v1.0.0/tier2_same_isa_x86_64.json), [`tier3_thread_cputime_x86_64.json`](artifacts/v1.0.0/benchmarks/tier3_thread_cputime_x86_64.json), [`tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/tier4_wallclock_x86_64.json).
+> **WCET Caveat:** User-space Linux timings (`BENCHMARKS.md` Tiers 3–4) are indicative CI regression telemetry ONLY and do **NOT** constitute DO-178C / EASA bare-metal RTOS WCET certification evidence. Raw artifacts: local [`tier2_same_isa_x86_64.json`](artifacts/v1.0.0/tier2_same_isa_x86_64.json), [`tier3_thread_cputime_x86_64.json`](artifacts/v1.0.0/benchmarks/tier3_thread_cputime_x86_64.json), [`tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/tier4_wallclock_x86_64.json); live GitHub Actions run [`45057411524`](https://github.com/fahrifurkansagir/VertiRTA/actions/runs/45057411524) under [`artifacts/v1.0.0/benchmarks/cloud_ci/`](artifacts/v1.0.0/benchmarks/cloud_ci/tier2_cross_isa.json).
 
 ### 3. Live Tier-1 10,000-Run 6-DOF Survival Envelope Atlas + A/B Ablations (`30,000` Simulations)
 
@@ -155,9 +156,10 @@ Executed live via Release `vertirta_6dof_batch_cli` (`seed = 20261122`, total wa
 | Environment | What Runs & What Is Proven | Current `v1.0.0` Status |
 | --- | --- | --- |
 | **Local Linux / WSL2 (`x86_64` + `arm-none-eabi`)** | C++17/20 Release builds (`8/8` `ctest`), ASan/UBSan (`7/7`), TSan lock-free SPSC/Seqlock (`1M+` ops), Cortex-M7 Flash/RAM/stack/DAG/zero-heap gates, `ASTM F3269-21` isolation (`37` files), Tier-2 Same-ISA 0-ULP `.vrta` replay, Tier-3/4 local latency, live `30,000`-sim Tier-1 6-DOF Survival Atlas & A/B plots, `SCSC-141C` GSN v3 safety case generation | **VERIFIED LOCALLY (`ef9be75`)** |
-| **GitHub Actions CI (`.github/workflows/determinism.yml`)** | `ubuntu-24.04-arm` (Azure Cobalt 100) cross-ISA `< 1e-12` `.vrta` replay parity, ARM64 latency (`Sn8`–`Sn10`), and `ubuntu-24.04` `perf stat` / `callgrind` `Ir/tick` | **`PENDING_GITHUB_ACTIONS_ARM64` / `PENDING_GITHUB_ACTIONS_X86_PMU`** |
+| **GitHub Actions CI (`determinism.yml` + `vertibench_ci.yml`)** | `ubuntu-24.04-arm` (Azure Cobalt 100) cross-ISA **`0.0`** max diff / `0` mode div (`2,000` frames), ARM64 `p99 = 0.736 us` / `604,543 Ir/tick`, x86_64 `723,331 Ir/tick`, native ARM64 Microsoft Z3 C++20 Co-Pilot & `VertiBench-TR/EN` `< 0.15` Jaccard CI | **VERIFIED LIVE ON GITHUB ACTIONS ([`45057411524`](https://github.com/fahrifurkansagir/VertiRTA/actions/runs/45057411524) & [`45057411403`](https://github.com/fahrifurkansagir/VertiRTA/actions/runs/45057411403))** |
+| **Local Host GPU (`NVIDIA GTX 1650 SUPER`, `TU116`, `4 GB`)** | Live `PIDNet-S` (`1x3x512x512` Opset-17 ONNX) CUDA-Graph FP32 **`p50 = 8.06 ms` / `p99 = 9.06 ms` (`122.96 FPS`, `126 MiB` VRAM)** vs FP16 `28.67 ms` (`0.313x`) architecture silicon proof ([`local_gtx1650s_pidnet_arch_bench.json`](artifacts/v2.0.0/local_gtx1650s_pidnet_arch_bench.json)) | **LATENCY & VRAM VERIFIED LIVE (Accuracy `PENDING_COLAB_G4`)** |
 | **Local SITL Host (`PX4 v1.16` + `Gazebo Harmonic` + `ROS 2 Jazzy`)** | Tier-2 1,000-run hot-reset PX4/Gazebo SITL (`Sn5`) & Tier-3 50-run EGL LiDAR SITL (`Sn6`); PX4 overlay, 4-part `GZBridge` patch, Gazebo plugins/SDF, ROS 2 nodes, and runners are checked in and unit-tested | **`PENDING_LOCAL_PX4_GZ_SITL`** |
-| **Cloud GPU (Google Colab G4 Blackwell / L4)** | High-resolution JAX 4D HJI-CBVF & 2D CEL LUT synthesis ([`reachability/solve_cbvf_luts.py`](reachability/solve_cbvf_luts.py)) and offline Blender 5.2 LTS OptiX cinema renders ([`viz/blender/colab_render_cinema.ipynb`](viz/blender/colab_render_cinema.ipynb)) | **READY (ON-DEMAND COLAB)** |
+| **Cloud GPU (Google Colab `L4 24 GB` / optional `A100`)** | Turnkey GPU-right-sized notebooks ([`notebooks/README.md`](notebooks/README.md)): full `81x57x81x57` JAX 4D CBVF LUT, Blender 5.2/4.5 LTS OptiX 4K cinema, `Qwen3-4B` Z3-GRPO, and `PIDNet-S` distillation + 60-seed EGL ablation | **READY (ON-DEMAND COLAB `L4`)** |
 
 ---
 

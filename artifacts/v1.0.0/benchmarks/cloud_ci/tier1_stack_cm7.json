@@ -1,0 +1,17 @@
+{
+  "schema_version": "vertirta.tier1_stack_dag/v1.0.0",
+  "build_dir": "build/arm-cortex-m7/core/flight_core",
+  "functions_checked": 77,
+  "bounded_realigned_frames": 0,
+  "callgraph_nodes": 101,
+  "max_frame_bytes": 1472,
+  "limit_frame_bytes": 4096,
+  "max_dag_bytes": 2936,
+  "limit_dag_bytes": 16384,
+  "worst_call_chain": [
+    "_ZN8vertirta4core17IndiWlsController10step_400hzERKNS0_9IndiInputEPf",
+    "_ZN8vertirta4core17wls_alloc_8x4_f64EPA8_KdPS1_S4_S4_S4_S4_S4_dPah"
+  ],
+  "passed": true,
+  "sha256": "c86397398625100483c3f44a51658c72c7115787b49d6adb992c131fff48c25f"
+}

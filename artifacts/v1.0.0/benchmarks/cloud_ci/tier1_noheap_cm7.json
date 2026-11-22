@@ -1,0 +1,8 @@
+{
+  "schema_version": "vertirta.tier1_noheap/v1.0.0",
+  "archive": "build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a",
+  "nm_bin": "arm-none-eabi-nm",
+  "forbidden_symbols": [],
+  "passed": true,
+  "sha256": "70884c98d1da5b897746af96ad3188a67e1165fc9db3bf2a79429b494a1128dc"
+}

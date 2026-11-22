@@ -1,0 +1,11 @@
+{
+  "schema_version": "vertirta.arch_isolation/v1.0.0",
+  "scan_dirs": [
+    "core/flight_core",
+    "core/rta_companion"
+  ],
+  "files_scanned": 37,
+  "violations": [],
+  "passed": true,
+  "sha256": "81b5dd7af0d3ae182ab7c465482672107e988b4f54c801c93ba93379dcfde244"
+}

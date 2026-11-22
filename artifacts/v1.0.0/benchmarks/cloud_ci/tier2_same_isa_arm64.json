@@ -1,0 +1,8 @@
+{
+  "schema_version": "vertirta.tier2_same_isa/v1.0.0",
+  "sha256_run1": "c1a217314681936dc987dab329911257b8d339ce09501e1fa694bfe66c72374e",
+  "sha256_run2": "c1a217314681936dc987dab329911257b8d339ce09501e1fa694bfe66c72374e",
+  "golden_sha256": null,
+  "passed": true,
+  "sha256": "f7dd4e2bdaf3ffb48fd5c525c479d620e3ca6683819c1bf8a3391b6763b6fe37"
+}

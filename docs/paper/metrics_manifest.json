@@ -36,7 +36,11 @@
     "tier4_p99_us": 0.95,
     "tier4_p999_us": 1.59,
     "tier4_steal_pct": 0.0,
-    "arm64_ci_status": "PENDING_GITHUB_ACTIONS_ARM64",
+    "arm64_ci_status": "PASS (Cobalt 100: p99 0.736 us, 0.0 cross-ISA diff)",
+    "arm64_ci_p99_us": 0.736,
+    "arm64_ci_ir_per_tick": 604543,
+    "x86_ci_ir_per_tick": 723331,
+    "cross_isa_max_abs_diff": 0.0,
     "tier2_gazebo_1k_status": "PENDING_LOCAL_PX4_GZ_SITL",
     "tier3_lidar_50_status": "PENDING_LOCAL_PX4_GZ_SITL"
   },

@@ -1,8 +1,8 @@
 # VertiRTA — 4-Tier Execution Determinism & Bare-Metal Footprint Benchmarks (`v1.0.0`)
 
-> **Evidence Commit:** `ef9be75` (`main`) | **Artifact Directory:** [`artifacts/v1.0.0/`](artifacts/v1.0.0/)
+> **Evidence Commits:** `ef9be75` (local `v1.0.0` baseline) & `ff0f6fe` (live GitHub Actions CI run [`45057411524`](https://github.com/fahrifurkansagir/VertiRTA/actions/runs/45057411524)) | **Artifact Directory:** [`artifacts/v1.0.0/`](artifacts/v1.0.0/)
 > **Local Measurement Host:** WSL2 Ubuntu (x86_64, `g++ 15.2.0 -O2` strict IEEE-754 + `arm-none-eabi-g++ 14.2.1 -Os` Cortex-M7).
-> **Cloud Runner Status:** `ubuntu-24.04-arm` (Azure Cobalt 100) rows are explicitly marked **`PENDING_GITHUB_ACTIONS_ARM64`** until executed on GitHub Actions — zero cloud numbers are fabricated or extrapolated.
+> **Cloud Runner Status:** **VERIFIED LIVE** on public GitHub Actions **`ubuntu-24.04-arm` (Azure Cobalt 100)** and **`ubuntu-24.04` (x86_64)** — archived verbatim under [`artifacts/v1.0.0/benchmarks/cloud_ci/`](artifacts/v1.0.0/benchmarks/cloud_ci/).
 
 ## Execution Environment & WCET Scope Caveat
 
@@ -38,8 +38,8 @@
 ## Tier 2 — `.vrta` Deterministic Replay (`Same-ISA` & `x86_64 <-> ARM64`)
 
 - **Golden Fixture:** [`tests/fixtures/corridor_faults.vrta`](tests/fixtures/corridor_faults.vrta) (`2,000` frames @ `100 Hz` = `20.0 s`, `512128 B`, `1,400` CEL-latched frames, Castagnoli CRC-32C verified by `viz.cesium.vrta_reader`, SHA-256 `2f331efa044ad2fd7e702156649577df101fc05dc8bf1023241a2dda28b662fe`).
-- **Same-ISA x86_64 0-ULP SHA-256 Match (`run1 == run2`):** `True` (`c1a217314681936dc987dab329911257b8d339ce09501e1fa694bfe66c72374e`, artifact [`tier2_same_isa_x86_64.json`](artifacts/v1.0.0/tier2_same_isa_x86_64.json)).
-- **Cross-ISA (`x86_64 <-> ubuntu-24.04-arm` Cobalt 100):** `PENDING_GITHUB_ACTIONS_ARM64` (CI enforces `< 1e-12` continuous max-abs tolerance and `0` discrete mode divergences via `.github/workflows/determinism.yml`).
+- **Same-ISA x86_64 & ARM64 0-ULP SHA-256 Match (`run1 == run2`):** `True` (`c1a217314681936dc987dab329911257b8d339ce09501e1fa694bfe66c72374e`, artifacts [`tier2_same_isa_x86_64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier2_same_isa_x86_64.json) & [`tier2_same_isa_arm64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier2_same_isa_arm64.json)).
+- **Cross-ISA (`x86_64 <-> ubuntu-24.04-arm` Cobalt 100, `2,000` frames):** **`PASS`** — **`mode_divergences = 0`**, **`max_abs_diff = 0.0`** (`< 1e-12`, bit-identical SHA-256 across x86_64 and Armv9-A Neoverse N2! Artifact [`tier2_cross_isa.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier2_cross_isa.json)).
 
 ---
 
@@ -51,10 +51,12 @@ Measured on Release `vertirta_bench_cli` (`lut_loaded: true`: full `100 Hz` HJI-
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `x86_64` (Local WSL2 Ubuntu) | Tier 3 `CLOCK_THREAD_CPUTIME_ID` | `100000` | `1.2841` | `1.2400` | `1.9000` | `11.5690` | `55.3490` | `N/A` | `MEASURED_LOCAL` |
 | `x86_64` (Local WSL2 Ubuntu) | Tier 4 `CLOCK_MONOTONIC_RAW` + `/proc/stat` | `50000` | `0.5780` | `0.5400` | `0.9500` | `1.5900` | `32.0690` | `0.0%` | `CLEAN` |
-| `x86_64` (`ubuntu-24.04` CI) | Tier 3 `perf stat` / `valgrind --tool=callgrind` `Ir/tick` | `1000` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `N/A` | `PENDING_GITHUB_ACTIONS_X86_PMU` |
-| `arm64` (`ubuntu-24.04-arm` Azure Cobalt 100) | Tier 3 `Ir/tick` + Tier 4 `CLOCK_MONOTONIC_RAW` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING` | `PENDING_GITHUB_ACTIONS_ARM64` |
+| `x86_64` (`ubuntu-24.04` CI) | Tier 3 `valgrind --tool=callgrind` (`723,331 Ir/tick`) | `1000` | — | — | — | — | — | `N/A` | `PASS (<= 1.2M Ir/tick)` |
+| `x86_64` (`ubuntu-24.04` CI) | Tier 4 `CLOCK_MONOTONIC_RAW` + `/proc/stat` | `20000` | `0.6570` | `0.6790` | `0.8430` | `4.0220` | `17.8920` | `0.0%` | `CLEAN (PASS)` |
+| `arm64` (`ubuntu-24.04-arm` Cobalt 100) | Tier 3 `valgrind --tool=callgrind` (`604,543 Ir/tick`) | `1000` | — | — | — | — | — | `N/A` | `PASS (<= 1.2M Ir/tick)` |
+| `arm64` (`ubuntu-24.04-arm` Cobalt 100) | Tier 4 `CLOCK_MONOTONIC_RAW` + `/proc/stat` | `20000` | `0.7212` | `0.7200` | `0.7360` | `0.8640` | `4.1440` | `0.0%` | `CLEAN (PASS)` |
 
-Raw benchmark artifacts: [`tier3_thread_cputime_x86_64.json`](artifacts/v1.0.0/benchmarks/tier3_thread_cputime_x86_64.json), [`tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/tier4_wallclock_x86_64.json).
+Raw benchmark artifacts: local [`tier3_thread_cputime_x86_64.json`](artifacts/v1.0.0/benchmarks/tier3_thread_cputime_x86_64.json), [`tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/tier4_wallclock_x86_64.json); cloud CI [`cloud_ci/tier3_work_arm64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier3_work_arm64.json), [`cloud_ci/tier4_wallclock_arm64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier4_wallclock_arm64.json), [`cloud_ci/tier3_work_x86_64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier3_work_x86_64.json), [`cloud_ci/tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier4_wallclock_x86_64.json).
 
 ---
 
@@ -96,6 +98,6 @@ Stamped into [`docs/SAFETY_CASE.md`](docs/SAFETY_CASE.md) at commit `ef9be75` vi
 | `Sn5` | `PENDING_LOCAL_PX4_GZ_SITL` | Tier-2 1k PX4/Gazebo SITL (deferred to SITL host) |
 | `Sn6` | `PENDING_LOCAL_PX4_GZ_SITL` | Tier-3 50 EGL LiDAR SITL (deferred to SITL host) |
 | `Sn7` | `950f9821abbc7e4c5bfe13116d11a55c9fb9eebce9f87118f3c2805676a6bd5d` | [`tier1_structural.json`](artifacts/v1.0.0/benchmarks/tier1_structural.json) |
-| `Sn8` | `f7dd4e2bdaf3ffb48fd5c525c479d620e3ca6683819c1bf8a3391b6763b6fe37` | [`tier2_same_isa_x86_64.json`](artifacts/v1.0.0/tier2_same_isa_x86_64.json) (`x86_64 <-> ARM64` `PENDING_GITHUB_ACTIONS_ARM64`) |
-| `Sn9` | `c08da5de22cf7347d012b233a083194f863d8111b0729ab26892e623218b4c0b` | [`tier3_thread_cputime_x86_64.json`](artifacts/v1.0.0/benchmarks/tier3_thread_cputime_x86_64.json) (`ARM64`/`PMU` `PENDING_GITHUB_ACTIONS_ARM64`) |
-| `Sn10` | `4e21d42b8bbea9c49a215e26f69ead62d9fbc42dac605c23cb655566f842bac8` | [`tier4_wallclock_x86_64.json`](artifacts/v1.0.0/benchmarks/tier4_wallclock_x86_64.json) (`ARM64` `PENDING_GITHUB_ACTIONS_ARM64`) |
+| `Sn8` | `95bc8d08ec76bba21b87b6ec7ced0426612e5338f8ffe47a0fcc77fe3f8905b2` | [`cloud_ci/tier2_cross_isa.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier2_cross_isa.json) (`x86_64 <-> ARM64`: `0.0` max diff, `0` mode div) |
+| `Sn9` | `16b53ddc6f7870a9b8c9a4176c824202364ac9a544cf2bc562bb3c395b044e1c` | [`cloud_ci/tier3_work_arm64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier3_work_arm64.json) (`604,543 Ir/tick` ARM64; `723,331 Ir/tick` x86_64) |
+| `Sn10` | `a8ed92ba9b5513d770ea23e10499284627b9c256087f698944762954f31de73c` | [`cloud_ci/tier4_wallclock_arm64.json`](artifacts/v1.0.0/benchmarks/cloud_ci/tier4_wallclock_arm64.json) (`Cobalt 100`: `p99 = 0.736 us`, `0.0%` steal `CLEAN`) |

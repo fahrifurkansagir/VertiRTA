@@ -1,0 +1,10 @@
+{
+  "schema_version": "vertirta.tier3_work_units/v1.0.0",
+  "pmu_mode": "valgrind_callgrind_fallback",
+  "ticks": 1000,
+  "total_ir": 723331595,
+  "ir_per_tick": 723331,
+  "max_ir_per_tick": 1200000,
+  "passed": true,
+  "sha256": "afecbba1d3fcc9b76de5368ab6895f3ff72dc794a926478a1e775fde15e7a465"
+}

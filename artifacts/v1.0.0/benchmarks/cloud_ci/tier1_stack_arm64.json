@@ -1,0 +1,19 @@
+{
+  "schema_version": "vertirta.tier1_stack_dag/v1.0.0",
+  "build_dir": "build-noheap-arm64",
+  "functions_checked": 54,
+  "bounded_realigned_frames": 0,
+  "callgraph_nodes": 88,
+  "max_frame_bytes": 1584,
+  "limit_frame_bytes": 4096,
+  "max_dag_bytes": 4336,
+  "limit_dag_bytes": 16384,
+  "worst_call_chain": [
+    "main",
+    "/home/runner/work/VertiRTA/VertiRTA/tests/determinism/test_flight_core_noheap.cpp:_ZN12_GLOBAL__N_145test_coax_envelope_battery_indi_fdi_and_plantEv",
+    "_ZN8vertirta4core17IndiWlsController10step_400hzERKNS0_9IndiInputEPf",
+    "_ZN8vertirta4core17wls_alloc_8x4_f64EPA8_KdPS1_S4_S4_S4_S4_S4_dPah"
+  ],
+  "passed": true,
+  "sha256": "d83d705e947670d0d91bcbd1ce5b94e2200b7d54ce2c57aa2e45b77e9468261c"
+}
