@@ -50,8 +50,20 @@ def test_dockerfiles_are_multistage_nonroot_copy_full_viz_and_expose_healthz() -
         )
 
     sim_df = (REPO / "docker/Dockerfile.sim").read_text(encoding="utf-8")
-    for req in ("viz/geo", "viz/cesium", "viz/__init__.py", "config/istanbul_ltfj_airspace.yaml"):
-        assert req in sim_df, f"Dockerfile.sim missing runtime import dependency: {req}"
+    for req in (
+        "ubuntu:24.04",
+        "g++-14",
+        "corridor_faults.vrta",
+        "--vrta",
+        "viz/geo",
+        "viz/cesium",
+        "viz/__init__.py",
+        "config/istanbul_ltfj_airspace.yaml",
+    ):
+        assert req in sim_df, f"Dockerfile.sim missing runtime/build lock: {req}"
+
+    web_df = (REPO / "docker/Dockerfile.vertigcs").read_text(encoding="utf-8")
+    assert "emscripten/emsdk:4.0.4" in web_df, "Dockerfile.vertigcs must pin emsdk 4.0.4 matching CI"
 
     nginx_conf = (REPO / "docker/nginx.vertigcs.conf").read_bytes()
     assert b"\r" not in nginx_conf

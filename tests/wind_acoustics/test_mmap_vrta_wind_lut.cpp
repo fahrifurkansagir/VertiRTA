@@ -57,6 +57,19 @@ TEST_CASE(
   REQUIRE(lut.load(clean_fix.path_str(), /*verify_sha256=*/true) == true);
   REQUIRE(lut.is_loaded());
   REQUIRE(lut.header().max_lon_deg < kLtfjMaxAllowedLonDeg);
+  // Verify best-effort mlock() state transfers cleanly across move semantics & clears on unload.
+  {
+    MmapVrtaWindLut moved_lut;
+    REQUIRE(moved_lut.load(clean_fix.path_str(), /*verify_sha256=*/true));
+    const bool locked_before = moved_lut.is_mlocked();
+    MmapVrtaWindLut dst_lut(std::move(moved_lut));
+    REQUIRE_FALSE(moved_lut.is_loaded());
+    REQUIRE_FALSE(moved_lut.is_mlocked());
+    REQUIRE(dst_lut.is_loaded());
+    REQUIRE(dst_lut.is_mlocked() == locked_before);
+    dst_lut.unload();
+    REQUIRE_FALSE(dst_lut.is_mlocked());
+  }
 
   // 2) Query valid ENU inside Tier-1 rooftop nest and Tier-0 corridor
   lut.update_inflow(225.0 * vertirta::core::kPi / 180.0, 14.0);

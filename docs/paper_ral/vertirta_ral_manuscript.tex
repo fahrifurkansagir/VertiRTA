@@ -43,9 +43,16 @@ Existing open-source multirotor control benchmarks such as \texttt{safe-control-
 \section{Coaxial X8 Dynamics and 400\,Hz Bare-Metal Control}
 \label{sec:dynamics}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig1_rta_architecture.pdf}
+  \caption{Three-tier ASTM~F3269-21 Simplex Run-Time Assurance and dual-FCC architecture separating untrusted mission/U-Space inputs from the 100\,Hz companion HJI-CBVF-QP safety filter and the freestanding 28{,}886\,B ARM Cortex-M7 flight core.}
+  \label{fig:rta_arch}
+\end{figure*}
+
 \subsection{Physically Closed \texttt{X8-240} Coaxial and 1-RC Th\'evenin Model}
 
-We model a $m=240.0$\,kg single-passenger coaxial X8 eVTOL ($W=2{,}353.6$\,N, inertia $J=\mathrm{diag}(85,95,140)\,\text{kg}\cdot\text{m}^2$, four arms of length $L=1.35$\,m at $\pm 45^\circ/\pm 135^\circ$, eight rotors of radius $R=0.75$\,m, vehicle outer tip radius $R_{\text{veh}}=2.10$\,m, coaxial spacing $\Delta z=0.35$\,m, $z/D=0.233$). Nominal hover thrust-to-weight is $T/W=2.5$ ($T_{\max,\text{nom}}=5{,}886$\,N), with BLDC speed cap $\omega_{\max}=240$\,rad/s ($2{,}292$\,RPM), asymmetric spin-up/down time constants $\tau_{\text{up}}=85$\,ms / $\tau_{\text{down}}=120$\,ms, and aerodynamic coast-down $\tau_{\text{coast}}=424$\,ms.
+We model a $m=240.0$\,kg single-passenger coaxial X8 eVTOL ($W=2{,}353.6$\,N, inertia $J=\mathrm{diag}(85,95,140)\,\text{kg}\cdot\text{m}^2$, four arms of length $L=1.35$\,m at $\pm 45^\circ/\pm 135^\circ$, eight rotors of radius $R=0.75$\,m, vehicle outer tip radius $R_{\text{veh}}=2.10$\,m, coaxial spacing $\Delta z=0.35$\,m, $z/D=0.233$, Fig.~\ref{fig:rta_arch}). Nominal hover thrust-to-weight is $T/W=2.5$ ($T_{\max,\text{nom}}=5{,}886$\,N), with BLDC speed cap $\omega_{\max}=240$\,rad/s ($2{,}292$\,RPM), asymmetric spin-up/down time constants $\tau_{\text{up}}=85$\,ms / $\tau_{\text{down}}=120$\,ms, and aerodynamic coast-down $\tau_{\text{coast}}=424$\,ms.
 
 Under nominal hover, lower rotors $i\in\{4..7\}$ experience coaxial wake interference $\eta_{\text{coax},0}=0.85$ ($676.1$\,N ceiling at $400$\,V vs.\ $795.4$\,N upper). Upon upper-rotor failure $i\in\{0..3\}$, the coaxial lower partner $i+4$ immediately unblanks to $\eta_t=1.0$ ($+17.6\%$ thrust recovery). Propulsion power draws from a $68$\,kg 112S12P $400.0$\,V / $21.77$\,kWh 1-RC Th\'evenin NMC811 pack ($R_0=0.1363\,\Omega$, $R_1=0.0840\,\Omega$, $C_1=300$\,F). Winding constant $K_{e,\text{bus}}=1.36$\,V$\cdot$s/rad dynamically caps maximum rotor speed $\omega_{\lim}(V_{\text{term}})$ while preserving two-arm hover $T/W\ge 1.12$ down to $338$\,V under loaded sag.
 
@@ -81,12 +88,26 @@ To verify hardware portability without leaking C++ exceptions, RTTI, or dynamic 
   \item \textbf{Hardware Errata, Live SIL, and Supplemental Formal Proofs:} The STM32H753 HITL target enforces Silicon Rev~V verification (\texttt{DBGMCU->IDCODE==0x2003}, blocking safety-critical FDCAN arming on Rev~Y Erratum~2.24.2), \texttt{FLASH\_ACR.LATENCY=4}, 8-region W\^{}X MPU with bottom 1\,KiB ITCM null trap (\texttt{VTOR=0x00000400}), eager FPU (\texttt{LSPEN=0}), and \texttt{FPSCR[4:0]} polling. Live dual-FCC CAN-FD failover in Renode~v1.17.0 passes $3/3$ scenarios at $12.50$\,ms ($<20$\,ms gate, $4$ babbling-idiot CRC rejections; functional/protocol SIL only, \emph{not} hardware WCET), and live 32-bit \texttt{ESBMC v8.7.0} C++17 harnesses (\texttt{--32 --floatbv --nan-check --overflow-check}) verify $1{,}905/1{,}905$ properties across $6$ core modules ($0$ failed) as supplemental engineering verification alongside physical \texttt{DWT->CYCCNT} empirical HWM profiling (tracked as pending in Table~\ref{tab:ral_mcnemar_mcu})~\cite{gadelha_esbmc_2018}.
 \end{enumerate}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig3_renode_esbmc_latency_profile.pdf}
+  \caption{Verification and real-time budget profile: (a)~cross-ISA 100\,Hz RTA per-tick latency (local WSL2 x86\_64 and cloud ARM64 Cobalt~100 versus the 10{,}000\,$\mu$s frame cap); (b)~ARM Cortex-M7 bare-metal resource utilization; and (c)~live Renode dual-FCC SIL failover, M2 20-eVTOL U-Space timing, and live \texttt{ESBMC v8.7.0} formal verification gates (physical STM32H753 HWM remains pending).}
+  \label{fig:latency_formal}
+\end{figure*}
+
 \input{generated/ral_tables.tex}
 
 \section{Experimental Evaluation and SOTA Comparison}
 \label{sec:experiments}
 
-We evaluate the full 6-DOF closed-loop coaxial+Th\'evenin+Dryden plant on identical per-seed stratified Latin Hypercube scenarios (\texttt{seed=20261122}, strata S1--S6, $N=10{,}000$/config) across three configurations totaling $30{,}000$ paired simulations in $50.50$\,s on the real GPU-solved 4D JAX HJI-CBVF PDE LUT, plus $10{,}000$ paired PDE-vs-proxy ablation runs and $8{,}000$ coastal wind/speed cliff runs (Tables~\ref{tab:ral_survival_atlas}--\ref{tab:ral_mcnemar_mcu}). Statistical rigor follows exact one-sided 95\% Clopper--Pearson binomial bounds~\cite{clopper_pearson_1934}, exact two-sided per-seed McNemar tests~\cite{mcnemar_1947} with Holm--Bonferroni step-down correction~\cite{holm_1979}, and 1{,}000-resample \texttt{rliable} 25\%--75\% Interquartile Mean (IQM) 95\% bootstrap CIs (seed~42)~\cite{agarwal_rliable_2021}:
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig2_wind_cliff_and_paired_survival.pdf}
+  \caption{Paired 6-DOF experimental evaluation on the real GPU-solved 4D JAX HJI-CBVF PDE LUT: (a)~isolated CSFL ($n=6{,}500$) and same-arm CEL ($n=1{,}500$) survival rates with one-sided 95\% Clopper--Pearson lower bounds; (b)~coastal wind sweep ($0$--$22$\,m/s, $200$ runs/bin) showing stable 94.0\% survival and smooth margin taper; and (c)~cross-arm S3 approach-speed cliff at 18\,m/s headwind illustrating the $+6$\,m/s safe speed envelope expansion over analytical HOCBF.}
+  \label{fig:wind_cliff}
+\end{figure*}
+
+We evaluate the full 6-DOF closed-loop coaxial+Th\'evenin+Dryden plant on identical per-seed stratified Latin Hypercube scenarios (\texttt{seed=20261122}, strata S1--S6, $N=10{,}000$/config) across three configurations totaling $30{,}000$ paired simulations in $57.86$\,s on the real GPU-solved 4D JAX HJI-CBVF PDE LUT, plus $10{,}000$ paired PDE-vs-proxy ablation runs and $8{,}000$ coastal wind/speed cliff runs (Tables~\ref{tab:ral_survival_atlas}--\ref{tab:ral_mcnemar_mcu}, Figs.~\ref{fig:latency_formal}--\ref{fig:wind_cliff}). Statistical rigor follows exact one-sided 95\% Clopper--Pearson binomial bounds~\cite{clopper_pearson_1934}, exact two-sided per-seed McNemar tests~\cite{mcnemar_1947} with Holm--Bonferroni step-down correction~\cite{holm_1979}, and 1{,}000-resample \texttt{rliable} 25\%--75\% Interquartile Mean (IQM) 95\% bootstrap CIs (seed~42)~\cite{agarwal_rliable_2021}:
 \begin{itemize}
   \item \textbf{HJI-CBVF vs.\ Analytical HOCBF:} On the isolated CSFL pool (S2+S3+S5, $n=6{,}500$), \texttt{HJ-CBVF+INDI-WLS} achieves $95.98\%$ survival ($6{,}239/6{,}500$, $k=261$, CP95 upper failure bound $4.44\%$) versus $44.85\%$ ($2{,}915/6{,}500$) for myopic HOCBF ($+51.13$\,pp; exact paired discordant counts $(b=3{,}324, c=0)$, $p_{\text{Holm}}<10^{-16}$, zero seeds where HOCBF succeeded and HJ-CBVF failed). Proactive backward-reachable braking also cuts CSFL IQM peak tilt by $5.02^\circ$ ($15.60^\circ\,[15.16,16.04]$ vs.\ $20.62^\circ\,[20.06,21.17]$). Note that HOCBF's nominal CSFL IQM margin ($4.33$\,m) reflects velocity-blind Euclidean clearance $h=r-4.5$\,m rather than kinetic-energy-aware $V_f(r,v_r,z,v_z)$ ($3.55$\,m for Ours).
   \item \textbf{INDI-WLS Option~B1b vs.\ Stock CA:} On same-arm dual loss (S4, $n=1{,}500$), \texttt{HJ-CBVF+INDI-WLS} achieves $100.00\%$ CEL survival ($1{,}500/1{,}500$, $k=0$, CP95 upper bound $0.20\%$) with touchdown vertical speed IQM $0.50\,[0.50,0.50]$\,m/s ($4\times$ below the $2.0$\,m/s gate) versus $0.00\%$ ($0/1{,}500$, all roll capsizes) for stock allocation (exact paired $(1{,}500,0)$, $p_{\text{Holm}}<10^{-16}$).
@@ -116,7 +137,7 @@ Analytical HOCBF~\cite{ames_cbf_2019} & X8 & No & Companion & Myopic \\
 \section{Limitations and Conclusion}
 \label{sec:conclusion}
 
-Three honest limitations bound our present evidence: (1)~physical STM32H753 \texttt{DWT->CYCCNT} empirical HWM traces on target silicon and multi-aircraft M2 U-Space preemption runs remain explicitly labeled pending in Table~\ref{tab:ral_mcnemar_mcu} (while Renode v1.17.0 validates dual-FCC CAN-FD failover solely as functional/protocol SIL, not hardware WCET); (2)~full-envelope 6-DOF validation assumes representative coaxial aerodynamic and 1-RC Th\'evenin parameters rather than wind-tunnel calorimeter measurements; and (3)~supplemental \texttt{ESBMC} checks and empirical timing provide engineering assurance rather than DO-178C / DO-330 certification credit. Within these boundaries, our results demonstrate that GPU-solved fault-conditioned 4D HJI-CBVF filtering coupled to bare-metal \texttt{float64} INDI-WLS and Option~B1b active-spin recovery dramatically expands coaxial eVTOL survival inside a 28.9\,KB zero-heap Cortex-M7 footprint.
+Three honest limitations bound our present evidence: (1)~physical STM32H753 \texttt{DWT->CYCCNT} empirical HWM traces on target silicon remain explicitly labeled pending in Table~\ref{tab:ral_mcnemar_mcu} (while Renode v1.17.0 validates dual-FCC CAN-FD failover solely as functional/protocol SIL, not hardware WCET, and the M2 20-eVTOL U-Space fleet engine verifies $0.151$\,ms/tick tactical CBF-ORCA, $1.81$\,ms \texttt{QF\_IDL} scheduling, and $<500$\,ms Priority-0 CEL preemption in simulation); (2)~full-envelope 6-DOF validation assumes representative coaxial aerodynamic and 1-RC Th\'evenin parameters rather than wind-tunnel calorimeter measurements; and (3)~supplemental \texttt{ESBMC} checks and empirical timing provide engineering assurance rather than DO-178C / DO-330 certification credit. Within these boundaries, our results demonstrate that GPU-solved fault-conditioned 4D HJI-CBVF filtering coupled to bare-metal \texttt{float64} INDI-WLS and Option~B1b active-spin recovery dramatically expands coaxial eVTOL survival inside a 28.9\,KB zero-heap Cortex-M7 footprint.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references_ral}

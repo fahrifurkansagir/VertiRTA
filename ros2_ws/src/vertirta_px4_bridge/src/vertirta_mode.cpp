@@ -63,6 +63,8 @@ VertiRtaMode::VertiRtaMode(rclcpp::Node& node, const std::string& vehicle_namesp
         latest_yaw_sp_.store(msg->yaw_sp, std::memory_order_release);
         latest_yawspeed_sp_.store(msg->yawspeed_sp, std::memory_order_release);
         latest_vz_limit_.store(msg->vz_limit_mps, std::memory_order_release);
+        last_rta_cmd_rx_ns_.store(
+            static_cast<uint64_t>(node_.now().nanoseconds()), std::memory_order_release);
         if (msg->cel_latched != 0U) {
           cel_latched_.store(true, std::memory_order_release);
         }
@@ -113,21 +115,45 @@ void VertiRtaMode::accel_ned_to_attitude_thrust(
 }
 
 void VertiRtaMode::updateSetpoint(float /*dt_s*/) {
-  const Eigen::Vector3f a_safe(
+  const uint64_t now_ns = static_cast<uint64_t>(node_.now().nanoseconds());
+  const uint64_t last_rx_ns = last_rta_cmd_rx_ns_.load(std::memory_order_acquire);
+  const bool cel = is_cel_latched();
+
+  const std::array<float, 3> raw_a = {
       latest_ax_ned_.load(std::memory_order_acquire),
       latest_ay_ned_.load(std::memory_order_acquire),
-      latest_az_ned_.load(std::memory_order_acquire));
+      latest_az_ned_.load(std::memory_order_acquire),
+  };
+  const float raw_yawspeed = latest_yawspeed_sp_.load(std::memory_order_acquire);
+  const float raw_vz_limit = latest_vz_limit_.load(std::memory_order_acquire);
+
+  // Fail-closed 100 ms staleness deadman guard on /vertirta/internal/rta_cmd
+  const DeadmanFallbackOutput guarded = apply_rta_deadman_fallback(
+      now_ns, last_rx_ns, cel, raw_a, raw_yawspeed, raw_vz_limit);
+  if (guarded.deadman_triggered) {
+    if (!deadman_active_.exchange(true, std::memory_order_acq_rel)) {
+      RCLCPP_WARN(node_.get_logger(),
+                  "VertiRtaMode 100 ms rta_cmd deadman triggered — engaging fail-closed hold (cel=%d)",
+                  static_cast<int>(cel));
+    }
+  } else {
+    deadman_active_.store(false, std::memory_order_release);
+  }
+
+  const Eigen::Vector3f a_safe(guarded.accel_ned[0], guarded.accel_ned[1], guarded.accel_ned[2]);
   const float yaw_sp = latest_yaw_sp_.load(std::memory_order_acquire);
+  const float yawspeed_sp = guarded.yawspeed_sp;
+  const float vz_limit = guarded.vz_limit_mps;
   const float t_max = latest_t_max_n_.load(std::memory_order_acquire);
 
-  if (is_cel_latched()) {
+  if (cel) {
     // CEL Regime 3 (SAME_ARM_DUAL_LOSS): bypass full SO(3) attitude setpoint and stream
     // collective vertical thrust + Option B1b flat-spin command to PX4 mc_indi_wls_control.
     const float f_vert = std::max(0.0f, kMassKg * (kGravityMps2 - a_safe.z()));
     const float thr_norm = std::clamp(f_vert / std::max(t_max, 1.0f), 0.05f, 1.0f);
 
     px4_msgs::msg::VehicleThrustSetpoint thr{};
-    thr.timestamp = node_.now().nanoseconds() / 1000ULL;
+    thr.timestamp = now_ns / 1000ULL;
     thr.timestamp_sample = thr.timestamp;
     thr.xyz = {0.0f, 0.0f, -thr_norm};
     thrust_pub_->publish(thr);
@@ -138,8 +164,8 @@ void VertiRtaMode::updateSetpoint(float /*dt_s*/) {
     sp.accel_ned = {a_safe.x(), a_safe.y(), a_safe.z()};
     sp.thrust_des_n = f_vert;
     sp.yaw_sp = yaw_sp;
-    sp.yawspeed_sp = latest_yawspeed_sp_.load(std::memory_order_acquire);
-    sp.vz_limit_mps = latest_vz_limit_.load(std::memory_order_acquire);
+    sp.yawspeed_sp = yawspeed_sp;
+    sp.vz_limit_mps = vz_limit;
     sp.control_mode = px4_msgs::msg::VertirtaRtaSetpoint::MODE_CEL_CONTROLLED_LANDING;
     sp.cel_latched = 1U;
     sp.valid = 1U;
@@ -151,17 +177,17 @@ void VertiRtaMode::updateSetpoint(float /*dt_s*/) {
   Eigen::Quaternionf q_frd_ned;
   Eigen::Vector3f thrust_body_frd;
   accel_ned_to_attitude_thrust(a_safe, yaw_sp, t_max, q_frd_ned, thrust_body_frd);
-  attitude_setpoint_->update(q_frd_ned, thrust_body_frd, latest_yawspeed_sp_.load(std::memory_order_acquire));
+  attitude_setpoint_->update(q_frd_ned, thrust_body_frd, yawspeed_sp);
 
   // Sole publisher of /fmu/in/vertirta_rta_setpoint for PX4 internal mc_indi_wls_control (VERTIRTA_USE_INDI=1)
   px4_msgs::msg::VertirtaRtaSetpoint sp{};
-  sp.timestamp = node_.now().nanoseconds() / 1000ULL;
+  sp.timestamp = now_ns / 1000ULL;
   sp.timestamp_sample = sp.timestamp;
   sp.accel_ned = {a_safe.x(), a_safe.y(), a_safe.z()};
   sp.thrust_des_n = kMassKg * std::hypot(std::hypot(a_safe.x(), a_safe.y()), a_safe.z() - kGravityMps2);
   sp.yaw_sp = yaw_sp;
-  sp.yawspeed_sp = latest_yawspeed_sp_.load(std::memory_order_acquire);
-  sp.vz_limit_mps = latest_vz_limit_.load(std::memory_order_acquire);
+  sp.yawspeed_sp = yawspeed_sp;
+  sp.vz_limit_mps = vz_limit;
   sp.control_mode = px4_msgs::msg::VertirtaRtaSetpoint::MODE_ACCEL_NED;
   sp.cel_latched = 0U;
   sp.valid = 1U;

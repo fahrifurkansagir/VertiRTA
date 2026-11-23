@@ -2,13 +2,133 @@
 #include "vertirta/perception/slz_ort_engine.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
 namespace vertirta::perception {
+
+namespace {
+
+[[nodiscard]] bool ExtractJsonFloatField(
+    std::string_view json_text,
+    std::string_view key,
+    float& out_val) noexcept {
+  const std::string needle = "\"" + std::string(key) + "\"";
+  std::size_t pos = json_text.find(needle);
+  if (pos == std::string_view::npos) {
+    return false;
+  }
+  pos += needle.size();
+  while (pos < json_text.size() && std::isspace(static_cast<unsigned char>(json_text[pos]))) {
+    ++pos;
+  }
+  if (pos >= json_text.size() || json_text[pos] != ':') {
+    return false;
+  }
+  ++pos;
+  while (pos < json_text.size() && std::isspace(static_cast<unsigned char>(json_text[pos]))) {
+    ++pos;
+  }
+  if (pos >= json_text.size()) {
+    return false;
+  }
+  char buf[64]{};
+  std::size_t n = 0u;
+  while (pos < json_text.size() && n + 1u < sizeof(buf)) {
+    const char ch = json_text[pos];
+    if (std::isdigit(static_cast<unsigned char>(ch)) || ch == '-' || ch == '+' ||
+        ch == '.' || ch == 'e' || ch == 'E') {
+      buf[n++] = ch;
+      ++pos;
+    } else {
+      break;
+    }
+  }
+  if (n == 0u) {
+    return false;
+  }
+  buf[n] = '\0';
+  char* end_ptr = nullptr;
+  const double parsed = std::strtod(buf, &end_ptr);
+  if (end_ptr == buf || *end_ptr != '\0' || !std::isfinite(parsed)) {
+    return false;
+  }
+  out_val = static_cast<float>(parsed);
+  return std::isfinite(out_val);
+}
+
+}  // namespace
+
+CudaProviderTuning ResolveCudaProviderTuning(
+    const SlzOrtConfig& cfg,
+    bool is_windows_host) noexcept {
+  CudaProviderTuning out{};
+  out.arena_extend_strategy =
+      cfg.arena_extend_strategy.empty() ? "kSameAsRequested" : cfg.arena_extend_strategy;
+  out.enable_cuda_graph = cfg.enable_cuda_graph;
+
+  std::string algo = cfg.cudnn_conv_algo_search;
+  for (char& ch : algo) {
+    ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  }
+  if (algo.empty() || algo == "AUTO") {
+    if (is_windows_host) {
+      out.cudnn_conv_algo_search = "EXHAUSTIVE";
+      out.cudnn_conv_use_max_workspace = true;
+    } else {
+      out.cudnn_conv_algo_search = "HEURISTIC";
+      out.cudnn_conv_use_max_workspace = false;
+    }
+  } else {
+    out.cudnn_conv_algo_search = std::move(algo);
+    out.cudnn_conv_use_max_workspace = (out.cudnn_conv_algo_search == "EXHAUSTIVE");
+  }
+  return out;
+}
+
+bool ParseOodCalibrationJson(std::string_view json_text, SlzOrtConfig& cfg) noexcept {
+  float t_ood = 0.0f;
+  float t_prob = 0.0f;
+  float kappa_b = 0.0f;
+  float tau_ood = 0.0f;
+  if (!ExtractJsonFloatField(json_text, "T_ood", t_ood) ||
+      !ExtractJsonFloatField(json_text, "T_prob", t_prob) ||
+      !ExtractJsonFloatField(json_text, "kappa_b", kappa_b) ||
+      !ExtractJsonFloatField(json_text, "tau_ood", tau_ood)) {
+    return false;
+  }
+  if (!(t_ood > 1e-4f && t_ood <= 10.0f) ||
+      !(t_prob >= 0.5f && t_prob <= 3.0f) ||
+      !(kappa_b >= 0.0f && kappa_b <= 10.0f) ||
+      !std::isfinite(tau_ood)) {
+    return false;
+  }
+  cfg.t_ood = t_ood;
+  cfg.t_prob = t_prob;
+  cfg.kappa_b = kappa_b;
+  cfg.tau_ood = tau_ood;
+  return true;
+}
+
+bool LoadOodCalibrationJson(const std::string& path, SlzOrtConfig& cfg) {
+  if (path.empty()) {
+    return false;
+  }
+  std::ifstream ifs(path);
+  if (!ifs.is_open()) {
+    return false;
+  }
+  std::ostringstream oss;
+  oss << ifs.rdbuf();
+  return ParseOodCalibrationJson(oss.str(), cfg);
+}
 
 bool ComputeFreeEnergy(
     std::span<const float> seg_logits_5x512x512,
@@ -104,6 +224,12 @@ bool ApplyUpsampledBoundaryCompensation(
 }
 
 SlzOrtRunner::SlzOrtRunner(const SlzOrtConfig& cfg) : cfg_(cfg) {
+  if (!cfg_.ood_calibration_path.empty()) {
+    if (!LoadOodCalibrationJson(cfg_.ood_calibration_path, cfg_) && !cfg_.allow_mock_fallback) {
+      throw std::runtime_error(
+          "SlzOrtRunner: failed to load OOD calibration JSON: " + cfg_.ood_calibration_path);
+    }
+  }
 #ifdef VERTIRTA_HAS_ORT
   if (!cfg_.onnx_path.empty()) {
     try {
@@ -112,6 +238,7 @@ SlzOrtRunner::SlzOrtRunner(const SlzOrtConfig& cfg) : cfg_(cfg) {
       Ort::SessionOptions opts;
       opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
       opts.SetIntraOpNumThreads(1);
+      opts.SetInterOpNumThreads(1);
 
       if (cudaStreamCreate(&stream_) != cudaSuccess) {
         throw std::runtime_error("SlzOrtRunner: cudaStreamCreate failed");
@@ -154,13 +281,26 @@ SlzOrtRunner::SlzOrtRunner(const SlzOrtConfig& cfg) : cfg_(cfg) {
         opts.AppendExecutionProvider_TensorRT_V2(*trt_opts);
       }
 
+      const CudaProviderTuning tuning = ResolveCudaProviderTuning(cfg_);
       OrtCUDAProviderOptionsV2* cuda_opts = nullptr;
       Ort::ThrowOnError(api.CreateCUDAProviderOptions(&cuda_opts));
       std::unique_ptr<OrtCUDAProviderOptionsV2, decltype(api.ReleaseCUDAProviderOptions)>
           cuda_guard(cuda_opts, api.ReleaseCUDAProviderOptions);
-      const char* ckeys[] = {"device_id", "cudnn_conv_algo_search", "enable_cuda_graph"};
-      const char* cvals[] = {"0", "HEURISTIC", cfg_.enable_cuda_graph ? "1" : "0"};
-      Ort::ThrowOnError(api.UpdateCUDAProviderOptions(cuda_opts, ckeys, cvals, 3));
+      const char* ckeys[] = {
+          "device_id",
+          "arena_extend_strategy",
+          "cudnn_conv_algo_search",
+          "cudnn_conv_use_max_workspace",
+          "enable_cuda_graph",
+      };
+      const char* cvals[] = {
+          "0",
+          tuning.arena_extend_strategy.c_str(),
+          tuning.cudnn_conv_algo_search.c_str(),
+          tuning.cudnn_conv_use_max_workspace ? "1" : "0",
+          tuning.enable_cuda_graph ? "1" : "0",
+      };
+      Ort::ThrowOnError(api.UpdateCUDAProviderOptions(cuda_opts, ckeys, cvals, 5));
       Ort::ThrowOnError(api.UpdateCUDAProviderOptionsWithValue(
           cuda_opts, "user_compute_stream", stream_));
       opts.AppendExecutionProvider_CUDA_V2(*cuda_opts);

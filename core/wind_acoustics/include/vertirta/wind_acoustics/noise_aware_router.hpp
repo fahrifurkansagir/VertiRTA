@@ -36,6 +36,7 @@ struct NoiseRouterOutput {
   double tier1_noise_cost{0.0};
   uint16_t total_hazards_fed_to_rta{0};
   bool noise_preference_shed{false};  // True when Tier-2 safety / OEI / downdraft sheds Tier-1 noise
+  bool hemisphere_recomputed{false};  // True when 180-node acoustic hemisphere cache missed & refreshed
 };
 
 // Strictly two-tier lexicographic safety-subordinated noise-aware router:
@@ -56,6 +57,10 @@ class NoiseAwareRouter {
   }
   [[nodiscard]] const NoiseRouterConfig& config() const noexcept { return cfg_; }
   void set_config(const NoiseRouterConfig& cfg) noexcept { cfg_ = cfg; }
+  [[nodiscard]] uint64_t hemisphere_recompute_count() const noexcept {
+    return hemisphere_recompute_count_;
+  }
+  void invalidate_hemisphere_cache() noexcept { hemi_cache_valid_ = false; }
 
   // Zero-heap 100 Hz two-tier lexicographic step.
   [[nodiscard]] NoiseRouterOutput step_100hz(
@@ -79,6 +84,10 @@ class NoiseAwareRouter {
   const MmapVrtaWindLut* wind_lut_{nullptr};
   NoiseRouterConfig cfg_{};
   AeroacousticEngine acoustics_{20.0, 70.0, 101.325};
+  AcousticHemisphere180 cached_hemi_{};
+  AcousticFlightState cached_acoustic_state_{};
+  bool hemi_cache_valid_{false};
+  uint64_t hemisphere_recompute_count_{0u};
   std::array<IstanbulReceptor, kNumIstanbulReceptors> receptors_{};
   std::array<GroundReceptor, kNumIstanbulReceptors> ground_receptors_{};
 };

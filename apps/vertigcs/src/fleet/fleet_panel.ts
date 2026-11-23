@@ -9,6 +9,75 @@ export interface FleetPanelHandle {
   isEnabled(): boolean;
 }
 
+export interface FleetTableRowData {
+  id: string;
+  mode: string;
+  partIs: string;
+  socPct: string;
+  tempC: string;
+  stand: string;
+  alert: boolean;
+}
+
+const STAND_CODES = ["MLT", "DRG", "CVZ", "KRT"] as const;
+
+export function buildFleetTableRows(snap: FleetSnapshot): FleetTableRowData[] {
+  return snap.aircraft.map((ac, idx) => {
+    const mode = ac.celActive
+      ? "P0-CEL"
+      : ac.preempted
+        ? "YIELD"
+        : ac.lane === "SE_70M"
+          ? "SE-70m"
+          : "NW-105m";
+    const partIs =
+      ac.cyberState === "SEC_NOMINAL"
+        ? "NOM"
+        : ac.cyberState === "SEC_SUSPECT_PEER"
+          ? "SUSP"
+          : ac.cyberState === "SEC_USSP_QUARANTINE"
+            ? "QUAR"
+            : "RTB";
+    const vp = snap.vertiports[idx % snap.vertiports.length];
+    const standCode = vp ? `${STAND_CODES[idx % STAND_CODES.length]}-S${(idx % vp.standsTotal) + 1}` : "KRT-S1";
+    return {
+      id: `X8-${String(ac.id).padStart(2, "0")}`,
+      mode,
+      partIs,
+      socPct: ac.socPct.toFixed(0),
+      tempC: ac.packTempC.toFixed(1),
+      stand: vp?.fatoEmgReserved && ac.celActive ? `${vp.code.replace("VPT-", "")}-EMG` : standCode,
+      alert: ac.celActive || ac.cyberState !== "SEC_NOMINAL",
+    };
+  });
+}
+
+export function renderFleetTelemetryTable(
+  tbody: HTMLElement | null,
+  snap: FleetSnapshot | null
+): number {
+  if (!tbody) return 0;
+  tbody.replaceChildren();
+  if (!snap) return 0;
+
+  const doc = tbody.ownerDocument;
+  const rows = buildFleetTableRows(snap);
+  for (const row of rows) {
+    const tr = doc.createElement("tr");
+    if (row.alert) {
+      tr.setAttribute("data-alert", "1");
+    }
+    const cols = [row.id, row.mode, row.partIs, row.socPct, row.tempC, row.stand];
+    for (const val of cols) {
+      const td = doc.createElement("td");
+      td.textContent = val;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  return rows.length;
+}
+
 export function bindFleetPanel(
   onSnapshot: (snapshot: FleetSnapshot | null) => void,
   onStatus: (message: string) => void
@@ -20,12 +89,14 @@ export function bindFleetPanel(
   const btnReset = document.getElementById("btn-fleet-reset") as HTMLButtonElement | null;
   const summaryEl = document.getElementById("fleet-hud-summary");
   const logEl = document.getElementById("fleet-cyber-log");
+  const tableBodyEl = document.getElementById("fleet-table-body");
 
   const controller = new FleetCorridorController(20);
   let enabled = false;
   let timerId: number | null = null;
 
   const renderHud = (snap: FleetSnapshot | null) => {
+    renderFleetTelemetryTable(tableBodyEl, snap);
     if (!snap) {
       if (summaryEl) {
         summaryEl.textContent = "Standby (0/20 active) • 15°C Chilled Stands Ready (4×4)";

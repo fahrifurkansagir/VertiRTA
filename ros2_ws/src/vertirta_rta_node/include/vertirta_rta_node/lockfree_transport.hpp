@@ -178,21 +178,61 @@ struct RtaCommandEgressFrame {
   bool valid{false};
 };
 
-// Thread 3 (20 Hz ESDF / SLZ) -> Thread 2 (100 Hz RT) Seqlock snapshot POD
+// Fixed-capacity trivially copyable hazard slot transported lock-free via Seqlock (Thread 3 -> Thread 2)
+struct HazardPod {
+  double pos_ned[3]{0.0, 0.0, 0.0};
+  double vel_ned[3]{0.0, 0.0, 0.0};
+  float radius_h_m{0.0f};
+  float radius_z_m{0.0f};
+  float gamma{1.2f};
+  uint8_t kind{0U};  // 0=ESDF, 1=WIRE, 2=INTRUDER, 3=CTR, 4=TERRAIN
+  uint8_t pad[3]{0U, 0U, 0U};
+};
+
+// Thread 3 (20 Hz ESDF / SLZ / Wire / Intruder) -> Thread 2 (100 Hz RT) Seqlock snapshot POD
 struct PerceptionHazardSnapshot {
+  static constexpr std::size_t kMaxHazards = 15U;
+
   uint64_t version{0ULL};
   uint64_t stamp_ns{0ULL};
   uint8_t hazard_count{0U};
   uint8_t slz_count{0U};
   bool stale{false};
   uint8_t active_decision_state{0U};
+  float terrain_elev_m{0.0f};  // Local DEM elevation relative to Kartal datum [m]
   std::array<int32_t, 4> min_clearance_mm{0, 0, 0, 0};
   float best_slz_enu[3]{0.0f, 0.0f, 0.0f};
   float best_slz_p_safe{0.0f};
   float gimbal_pitch_rad{0.0f};
   float gimbal_yaw_rad{0.0f};
+  std::array<HazardPod, kMaxHazards> hazards{};
   uint64_t checksum{0ULL};
 };
+
+// Computes DEM-referenced AGL height [m] relative to Kartal datum (never assumes flat sea-level ground)
+[[nodiscard]] inline float compute_terrain_agl_m(
+    double pos_down_ned_m,
+    float terrain_elev_rel_datum_m) noexcept {
+  const double alt_rel_datum_m = -pos_down_ned_m;
+  const double agl = alt_rel_datum_m - static_cast<double>(terrain_elev_rel_datum_m);
+  return (agl > 0.0) ? static_cast<float>(agl) : 0.0f;
+}
+
+// Analytical Maltepe-Dragos-Kartal coastal terrain elevation relative to Kartal datum (12 m AMSL).
+// Positive inland (Dragos hill / Kartal hospital ridge up to +33 m), slightly negative toward Maltepe coast (-7 m).
+[[nodiscard]] inline float estimate_kartal_corridor_terrain_rel_m(
+    double east_m,
+    double north_m) noexcept {
+  // Coastal slope rising northeastward from Marmara shoreline (~0 m near coast, up to +33 m inland)
+  const double inland_m = 0.62 * east_m + 0.78 * north_m;
+  if (inland_m <= 0.0) {
+    // Seaward / Maltepe reclaimed shore (~5 m AMSL => -7 m relative to 12 m Kartal datum)
+    const double coast_drop = (inland_m < -1200.0) ? -7.0 : (7.0 * (inland_m / 1200.0));
+    return static_cast<float>(coast_drop);
+  }
+  const double rise = (inland_m / 1800.0) * 33.0;
+  return static_cast<float>((rise > 33.0) ? 33.0 : rise);
+}
 
 // Thread 2 (100 Hz RT) -> Thread 4 (Async .vrta Disk Writer) log record slot POD
 struct VrtaLogRecordSlot {

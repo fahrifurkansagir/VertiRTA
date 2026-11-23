@@ -22,17 +22,23 @@ from ml.slz_perception.train.train_slz_distill import (
     validate_training_startup_license,
 )
 from scripts.colab.run_l4_pidnet_distill import (
+    calibrate_dynamic_energy_margins,
     compute_binary_auroc_and_fpr95,
     compute_confusion_metrics,
     decode_carla_depth_meters,
+    extract_skyscenes_frame_id,
     filter_oem_region,
+    resolve_tu116_cuda_provider_options,
     run_startup_license_gate,
+    select_stage2_checkpoint,
     skyscenes_cam_rot_wc_enu,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 L4_METRICS_PATH = REPO_ROOT / "artifacts" / "v3.1.0" / "l4_pidnet_distill_metrics.json"
 GTX_PROOF_PATH = REPO_ROOT / "artifacts" / "v3.1.0" / "local_gtx1650s_pidnet_trained_proof.json"
+L4_V2_METRICS_PATH = REPO_ROOT / "artifacts" / "v3.5.1" / "l4_pidnet_v2_distill_metrics.json"
+GTX_V2_PROOF_PATH = REPO_ROOT / "artifacts" / "v3.5.1" / "local_gtx1650s_pidnet_v2_proof.json"
 
 
 def _write_synthetic_oem_html(path: Path) -> Path:
@@ -242,3 +248,121 @@ def test_v310_l4_distill_and_gtx1650s_trained_artifacts_contract() -> None:
     assert cg["trained_output_sanity"]["all_outputs_finite"] is True
     assert int(cg["trained_output_sanity"]["distinct_predicted_classes"]) >= 3
     assert float(cg["trained_output_sanity"]["normal_l2_norm_max_err"]) < 1e-3
+
+
+def test_v351_skyscenes_frame_id_dynamic_margins_fsr_gate_and_tu116_options() -> None:
+    # 1) SkyScenes frame-ID stem matching across mismatched modality suffixes
+    assert extract_skyscenes_frame_id("Images/Town01/008301_clrnoon.png") == "008301"
+    assert extract_skyscenes_frame_id("Segment/Town01/008301_semsegCarla_clrnoon.png") == "008301"
+    assert extract_skyscenes_frame_id("Depth/Town01/008301_depth_clrnoon.png") == "008301"
+    assert extract_skyscenes_frame_id("readme_no_digits.png") is None
+
+    # 2) Dynamic 5-class Stage-2 free-energy margins eliminate 19-class m_in=-23 gradient shock
+    m_in, m_out = calibrate_dynamic_energy_margins(-5.654)
+    assert -12.0 <= m_in <= -6.0
+    assert abs(m_in - (-7.654)) < 1e-3
+    assert abs(m_out - (-2.5)) < 1e-3
+    assert m_in < m_out
+
+    # 3) FSR-gated Stage-2 checkpoint selection rejects high-FSR regressions (> 0.08)
+    cands = [
+        {"epoch": 0, "val_miou": 0.42, "val_fsr": 0.053, "ood_auroc": 0.65},
+        {"epoch": 1, "val_miou": 0.45, "val_fsr": 0.211, "ood_auroc": 0.85},  # high FSR must be rejected!
+        {"epoch": 2, "val_miou": 0.43, "val_fsr": 0.060, "ood_auroc": 0.78},  # eligible & best combo
+    ]
+    idx, ok = select_stage2_checkpoint(cands, max_val_fsr=0.08)
+    assert ok is True and idx == 2
+
+    # Fallback picks minimum FSR when all exceed gate
+    bad_cands = [
+        {"epoch": 0, "val_miou": 0.45, "val_fsr": 0.14, "ood_auroc": 0.80},
+        {"epoch": 1, "val_miou": 0.40, "val_fsr": 0.09, "ood_auroc": 0.70},
+    ]
+    idx_fb, ok_fb = select_stage2_checkpoint(bad_cands, max_val_fsr=0.08)
+    assert ok_fb is False and idx_fb == 1
+
+    # 4) Platform-tuned TU116 ORT CUDA options
+    win_opts = resolve_tu116_cuda_provider_options(cuda_graph=True, algo_search="AUTO", platform_system="Windows")
+    assert win_opts["arena_extend_strategy"] == "kSameAsRequested"
+    assert win_opts["cudnn_conv_algo_search"] == "EXHAUSTIVE"
+    assert win_opts["cudnn_conv_use_max_workspace"] == "1"
+    assert win_opts["enable_cuda_graph"] == "1"
+
+    lin_opts = resolve_tu116_cuda_provider_options(cuda_graph=True, algo_search="AUTO", platform_system="Linux")
+    assert lin_opts["arena_extend_strategy"] == "kSameAsRequested"
+    assert lin_opts["cudnn_conv_algo_search"] == "HEURISTIC"
+    assert lin_opts["cudnn_conv_use_max_workspace"] == "0"
+    assert lin_opts["enable_cuda_graph"] == "1"
+
+
+def test_v351_l4_pidnet_v2_and_gtx1650s_proof_artifacts_contract() -> None:
+    assert L4_V2_METRICS_PATH.is_file(), f"Missing v3.5.1 Colab L4 v2 metrics: {L4_V2_METRICS_PATH}"
+    assert GTX_V2_PROOF_PATH.is_file(), f"Missing v3.5.1 GTX 1650 SUPER v2 proof: {GTX_V2_PROOF_PATH}"
+
+    l4_raw = L4_V2_METRICS_PATH.read_bytes()
+    gtx_raw = GTX_V2_PROOF_PATH.read_bytes()
+    assert b"\r" not in l4_raw and b"\r" not in gtx_raw, "v3.5.1 artifacts must use pure LF"
+    assert not l4_raw.startswith(b"\xef\xbb\xbf") and not gtx_raw.startswith(b"\xef\xbb\xbf")
+
+    l4 = json.loads(l4_raw.decode("utf-8"))
+    gtx = json.loads(gtx_raw.decode("utf-8"))
+
+    # 1) Colab L4 v2 training provenance, fixed SkyScenes ingestion & FSR <= 0.08 gate
+    assert l4["schema_version"] == "vertirta.slz_l4_distill_metrics/v3.5.1"
+    assert l4["weights_status"] == "TRAINED_COLAB_L4_DISTILLED_WEIGHTS"
+    assert "L4" in l4["hardware"]["gpu"]["name"]
+    assert l4["license_audit"]["zero_sharealike_verified"] is True
+    assert l4["datasets"]["train_samples_by_source"]["SkyScenes"] >= 150
+    assert l4["datasets"]["val_samples_by_source"]["SkyScenes"] >= 50
+
+    sky_src = next(s for s in l4["datasets"]["sources"] if s["source"] == "SkyScenes")
+    assert float(sky_src["facade_remap_fraction_of_building"]) > 0.25
+
+    val_m = l4["evaluation"]["permissive_validation"]
+    assert float(val_m["miou_present_classes"]) > 0.42
+    assert float(val_m["false_safe_rate_fsr"]) <= 0.08
+    assert float(val_m["safe_precision"]) >= 0.85
+
+    aero_m = l4["evaluation"]["quarantined_zero_shot_aeroscapes"]
+    assert aero_m["used_in_training"] is False and aero_m["used_in_calibration"] is False
+    assert float(aero_m["false_safe_rate_fsr"]) <= 0.05
+    assert float(aero_m["safe_precision"]) >= 0.75
+
+    s2 = l4["training"]["stage2_ood_oe"]
+    assert s2["fsr_gate_satisfied"] is True
+    assert -12.0 <= float(s2["m_in"]) <= -6.0
+    assert float(s2["m_in"]) < float(s2["m_out"])
+
+    cal = l4["ood_calibration"]
+    assert cal["T_ood"] == 1.0 and cal["kappa_b"] == 1.5
+    assert 0.5 <= float(cal["T_prob"]) <= 3.0
+    assert math.isfinite(float(cal["tau_ood"]))
+
+    exp = l4["export"]
+    assert int(exp["opset_version"]) >= 17
+    assert exp["zero_adaptive_avg_pool2d"] is True
+    assert exp["zero_dino_proj_nodes"] is True
+    assert exp["zero_dynamic_shape_ops"] is True
+    assert exp["onnx_checker_passed"] is True
+    assert re.fullmatch(r"[0-9a-f]{64}", exp["onnx_sha256"])
+
+    # 2) Physical GTX 1650 SUPER v2 proof: SHA-256 parity + p99 < 12.0 ms + all_local_gates_passed
+    assert gtx["schema_version"] == "vertirta.local_gpu_trained_proof/v3.5.1"
+    assert "GTX 1650 SUPER" in gtx["gpu"]["name"]
+    assert gtx["model"]["onnx_sha256"] == exp["onnx_sha256"]
+    assert gtx["model"]["onnx_sha256_verified_against_l4_metrics"] is True
+    assert "ort_cuda_fp32_cuda_graph" in gtx["benchmarks"]
+    assert "ort_cuda_wsl2_headless_fp32_cuda_graph" in gtx["benchmarks"]
+
+    rec_key = gtx["recommended_local_tu116_mode"]
+    rec = gtx["benchmarks"][rec_key]
+    assert float(rec["network_iobinding"]["p50_ms"]) < 12.0
+    assert float(rec["network_iobinding"]["p95_ms"]) < 12.0
+    assert float(rec["network_iobinding"]["p99_ms"]) < 12.0
+    assert rec["gates"]["e2e_ge_20hz"] is True
+    assert rec["gates"]["vram_lt_300mb"] is True
+    assert rec["outputs_finite"] is True
+    assert rec["trained_output_sanity"]["all_outputs_finite"] is True
+    assert int(rec["trained_output_sanity"]["distinct_predicted_classes"]) >= 3
+    assert float(rec["trained_output_sanity"]["normal_l2_norm_max_err"]) < 1e-3
+    assert gtx["all_local_gates_passed"] is True

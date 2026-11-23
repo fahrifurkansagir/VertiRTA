@@ -64,8 +64,9 @@ class SlzDistillCriterion(nn.Module):
         lambda_geom: float = 0.3,
         lambda_ood: float = 0.0,
         *,
-        m_in: float = -23.0,
-        m_out: float = -5.0,
+        lambda_fsr: float = 0.5,
+        m_in: float = -8.0,
+        m_out: float = -2.5,
         ood_temp: float = 1.0,
         ignore_index: int = 255,
         ood_index: int = 254,
@@ -77,6 +78,7 @@ class SlzDistillCriterion(nn.Module):
         self.lambda_dino = float(lambda_dino)
         self.lambda_geom = float(lambda_geom)
         self.lambda_ood = float(lambda_ood)
+        self.lambda_fsr = float(lambda_fsr)
         self.m_in = float(m_in)
         self.m_out = float(m_out)
         self.ood_temp = float(ood_temp)
@@ -85,10 +87,10 @@ class SlzDistillCriterion(nn.Module):
         self.geom_drop_top_frac = float(geom_drop_top_frac)
         self.bdry_pos_weight = float(bdry_pos_weight)
 
-        # 1.5x weight on classes 2 (Obstacle_Structure) & 3 (Dynamic_Human_Vehicle) to curb FSR
+        # 1.5x weight across ALL hazard classes {2: Obstacle, 3: Dynamic, 4: Water/Vegetation} to curb FSR
         self.register_buffer(
             "class_weights",
-            torch.tensor([1.0, 1.0, 1.5, 1.5, 1.0], dtype=torch.float32),
+            torch.tensor([1.0, 1.0, 1.5, 1.5, 1.5], dtype=torch.float32),
         )
 
     def _seg_ce_lovasz_loss(
@@ -178,6 +180,21 @@ class SlzDistillCriterion(nn.Module):
             pix_loss, _ = torch.topk(pix_loss, k=keep_k, largest=False)
         return pix_loss.mean()
 
+    def _false_safe_penalty(
+        self, seg_logits: torch.Tensor, labels: torch.Tensor
+    ) -> torch.Tensor:
+        """Asymmetric false-safe penalty on all true hazard pixels {2, 3, 4}."""
+        if self.lambda_fsr <= 0.0:
+            return seg_logits.float().sum() * 0.0
+        logits_f = seg_logits.float()
+        hazard_mask = (labels == 2) | (labels == 3) | (labels == 4)
+        if not bool(hazard_mask.any()):
+            return logits_f.sum() * 0.0
+        probs = F.softmax(logits_f, dim=1)
+        p_safe = (probs[:, 0] + probs[:, 1]).clamp(1e-6, 1.0 - 1e-6)
+        p_safe_haz = p_safe[hazard_mask]
+        return (p_safe_haz + 0.25 * (-torch.log((1.0 - p_safe_haz).clamp(min=1e-4)))).mean()
+
     def _energy_margin_loss(
         self, seg_logits: torch.Tensor, labels: torch.Tensor
     ) -> torch.Tensor:
@@ -210,12 +227,14 @@ class SlzDistillCriterion(nn.Module):
         valid_geom_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         l_seg = self._seg_ce_lovasz_loss(seg_logits, labels)
+        l_fsr = self._false_safe_penalty(seg_logits, labels)
         l_bdry = self._boundary_loss(bdry_prob, target_bdry)
         l_dino = self._dino_cosine_loss(student_dino, teacher_dino)
         l_geom = self._geom_normal_loss(surf_normals, target_normals, labels, valid_geom_mask)
         l_ood = self._energy_margin_loss(seg_logits, labels)
         return (
             l_seg
+            + self.lambda_fsr * l_fsr
             + self.lambda_bdry * l_bdry
             + self.lambda_dino * l_dino
             + self.lambda_geom * l_geom

@@ -219,3 +219,98 @@ def test_cesium_app_js_and_html_enforce_gtx1650_vram_and_swappable_basemap() -> 
     assert 'id="cesium-credits"' in html and 'id="cesiumContainer"' in html
     assert "app.js" in html
     assert "5180" in readme and "GTX 1650" in readme
+
+
+def _mask_ws_client_frame(opcode: int, payload: bytes) -> bytes:
+    mask = b"\x37\xfa\x21\x3d"
+    n = len(payload)
+    if n < 126:
+        hdr = struct.pack("!BB", 0x80 | opcode, 0x80 | n)
+    else:
+        hdr = struct.pack("!BBH", 0x80 | opcode, 0x80 | 126, n)
+    masked = bytes(b ^ mask[i & 3] for i, b in enumerate(payload))
+    return hdr + mask + masked
+
+
+def test_ws_server_bidirectional_ping_pong_fault_inject_and_close() -> None:
+    """Verify RFC 6455 bidirectional Ping->Pong, fault_inject->CEL override, cbvf_min_v, and Close."""
+    import asyncio
+    import json
+    from viz.cesium.ws_server import _handle_client
+
+    async def _read_server_frame(reader: asyncio.StreamReader) -> tuple[int, bytes]:
+        hdr = await asyncio.wait_for(reader.readexactly(2), timeout=3.0)
+        opcode = hdr[0] & 0x0F
+        length = hdr[1] & 0x7F
+        if length == 126:
+            length = struct.unpack("!H", await asyncio.wait_for(reader.readexactly(2), timeout=3.0))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", await asyncio.wait_for(reader.readexactly(8), timeout=3.0))[0]
+        body = await asyncio.wait_for(reader.readexactly(length), timeout=3.0) if length else b""
+        return opcode, body
+
+    async def _run_session() -> tuple[bytes, dict, int]:
+        static_dir = Path("viz/cesium").resolve()
+        server = await asyncio.start_server(
+            lambda r, w: _handle_client(r, w, static_dir=static_dir, vrta_path=None, pose_hz=50.0),
+            "127.0.0.1",
+            0,
+        )
+        port = server.sockets[0].getsockname()[1]
+        pong_payload = b""
+        cel_pkt: dict = {}
+        close_opcode = -1
+
+        async with server:
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+            writer.write(
+                (
+                    "GET /telemetry HTTP/1.1\r\n"
+                    "Host: 127.0.0.1\r\n"
+                    "Upgrade: websocket\r\n"
+                    "Connection: Upgrade\r\n"
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                    "Sec-WebSocket-Version: 13\r\n\r\n"
+                ).encode("ascii")
+            )
+            await writer.drain()
+            hs = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=3.0)
+            assert b"101 Switching Protocols" in hs
+
+            # 1) Send RFC 6455 masked Ping -> expect Pong with identical payload
+            writer.write(_mask_ws_client_frame(0x9, b"vrta-ping"))
+            # 2) Send fault_inject same_arm -> expect streamed frame with cel_latched=True & mask=0xEE
+            fault_json = json.dumps({"type": "fault_inject", "kind": "same_arm", "targetIdx": 0}).encode("utf-8")
+            writer.write(_mask_ws_client_frame(0x1, fault_json))
+            await writer.drain()
+
+            for _ in range(12):
+                op, data = await _read_server_frame(reader)
+                if op == 0xA:
+                    pong_payload = data
+                elif op == 0x1:
+                    pkt = json.loads(data.decode("utf-8"))
+                    if pkt["safety_avionics"].get("cel_latched") is True:
+                        cel_pkt = pkt
+                if pong_payload and cel_pkt:
+                    break
+
+            # 3) Send RFC 6455 masked Close -> expect Close echo
+            writer.write(_mask_ws_client_frame(0x8, struct.pack("!H", 1000)))
+            await writer.drain()
+            for _ in range(6):
+                op, _ = await _read_server_frame(reader)
+                if op == 0x8:
+                    close_opcode = op
+                    break
+            writer.close()
+            await writer.wait_closed()
+
+        return pong_payload, cel_pkt, close_opcode
+
+    pong_payload, cel_pkt, close_opcode = asyncio.run(_run_session())
+    assert pong_payload == b"vrta-ping"
+    assert cel_pkt["safety_avionics"]["cel_latched"] is True
+    assert cel_pkt["safety_avionics"]["cbvf_min_v"] == pytest.approx(25.0)
+    assert cel_pkt["propulsion"]["active_motor_mask"] == 0xEE
+    assert close_opcode == 0x8

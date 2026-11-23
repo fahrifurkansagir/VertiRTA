@@ -21,6 +21,7 @@ if str(SDK_DIR) not in sys.path:
     sys.path.append(str(SDK_DIR))
 
 import vertirta  # noqa: E402
+from vertirta import VertiFleetSim, VertiLiftCruiseSim  # noqa: E402
 from vertirta.cli import app  # noqa: E402
 from vertirta.env import VertiRtaCoaxialX8Env, crc32c_py, make_vrta_header_bytes, verify_vrta_frame_bytes  # noqa: E402
 from vertirta.vec_env import VertiVecEnv  # noqa: E402
@@ -151,3 +152,45 @@ def test_vertirta_cli_subcommands_and_port_guard(tmp_path: Path) -> None:
     assert res_help.exit_code == 0
     assert "Bo\u011faz" not in res_help.stdout and "Bosphorus" not in res_help.stdout
     assert "Kartal" in res_help.stdout
+
+
+def test_m2_fleet_sim_and_lift_cruise_sdk_bindings() -> None:
+    fleet = VertiFleetSim(n_agents=20, threads=2)
+    lc8 = VertiLiftCruiseSim(layout="8+1")
+    lc4 = VertiLiftCruiseSim(layout="4+1")
+
+    if os.environ.get("VERTIRTA_REQUIRE_NATIVE") == "1":
+        assert fleet.backend == "cpp_nanobind"
+        assert lc8.backend == "cpp_nanobind"
+
+    assert fleet.agent_count == 20
+    fleet.reset(seed=20261123)
+    fleet.inject_same_arm_cel(agent_idx=0, arm_idx=0)
+    summary = fleet.step_100hz()
+    assert summary["active_agents"] == 20
+    assert summary["airspace_breaches"] == 0
+    assert summary["max_rta_hazard_rows"] <= 14
+    assert fleet.agent_cel_latched(0) is True
+
+    # Part-IS spoofed USSP into LTFJ CTR (>= 29.1895 E) -> quarantine -> <= 10 s autonomous RTB
+    q = fleet.check_ussp_geofence(sig_valid=True, cmd_lon_deg=29.2100, cmd_agl_m=80.0, t_s=10.0)
+    assert q["cyber_state"] == "SEC_USSP_QUARANTINE"
+    assert q["drop_ussp_directives"] is True
+    assert q["emit_is_or_230_draft"] is True
+    rtb = fleet.step_cyber_time(t_s=20.0, ussp_auth_restored=False)
+    assert rtb["cyber_state"] == "SEC_AUTONOMOUS_RTB"
+    assert rtb["divert_to_nearest_fato_emg"] is True
+
+    # Lift+Cruise 8+1 hover OEI <= 79.2% T_max vs 4+1 rank-3 hover -> rank-4 transition
+    assert lc8.actuator_count == 12 and lc8.lift_rotor_count == 8
+    assert lc8.cruise_airspeed_mps == pytest.approx(38.0)
+    oei8 = lc8.audit_oei_trim(0.0, failed_lift_rotor=0)
+    assert oei8["trim_feasible_4dof"] is True
+    assert oei8["peak_thrust_ratio"] <= 0.793
+
+    assert lc4.actuator_count == 8 and lc4.lift_rotor_count == 4
+    oei4_hover = lc4.audit_oei_trim(0.0, failed_lift_rotor=0)
+    assert oei4_hover["trim_feasible_4dof"] is False
+    assert oei4_hover["effective_rank"] == 3
+    oei4_trans = lc4.audit_oei_trim(14.0, failed_lift_rotor=0)
+    assert oei4_trans["trim_feasible_4dof"] is True

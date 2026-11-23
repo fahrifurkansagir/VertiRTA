@@ -42,7 +42,7 @@ Generated deterministically from `verification/gsn/safety_case_gsn.yaml` via `ve
 
 <!-- GSN:BEGIN -->
 ```mermaid
-%% VertiRTA SCSC-141C GSN v3 Living Safety Case | commit=ef9be75
+%% VertiRTA SCSC-141C GSN v3 Living Safety Case | commit=bf8adb1 (v3.5.0)
 flowchart TD
     G1["G1: VertiRTA-X8-240 RTA software and simulation testbed upholds specified safety, conditional fault-recovery, and determinism invariants inside ODD.yaml."]
     C1(["C1: ODD.yaml (v1.0.0) & Maltepe-Dragos-Kartal Coastal Corridor bounded by LTFJ/LTBX CTR walls"])
@@ -99,3 +99,16 @@ flowchart TD
     style Sn10 fill:#E8F0FE,stroke:#1A73E8
 ```
 <!-- GSN:END -->
+
+---
+
+## 4. Live `v3.0.0–v3.5.0` Supplemental Verification & Multi-Aircraft Assurance Evidence (`commit=bf8adb1`)
+
+The frozen `v1.0.0` `SCSC-141C` GSN skeleton above (`Sn1–Sn10`, with **`G5 [UNDEVELOPED]`** and **`G6 [UNDEVELOPED]`** permanently locked) is supplemented by live verified `v3.0.0`–`v3.5.0` cloud CI and GPU evidence (`6/6` GitHub Actions workflows GREEN at tag `v3.5.0`, `bf8adb1`), with **`0 B` added to `libvertirta_flight_core.a`** (`28,886 B` Cortex-M7 Flash / `0 B` RAM / `2,960 B` DAG / `0` heap):
+
+| Supplemental Evidence Node | Scope & Artifact / Gate | Verified Measurement (`bf8adb1`) | Honest Assurance Boundary |
+| --- | --- | --- | --- |
+| **`Sn11` — Supplemental BMC (`ESBMC v8.7.0`)** | `.github/workflows/formal_and_hil.yml` (`ubuntu-24.04` x86_64 `--32`) | `6/6` direct-source harnesses (`tmr_voter`, `indi_wls`, `motor_fdi`, `coax_envelope`, `daqp_qp`, `cbvf_filter`), **`1,905 / 1,905`** properties `VERIFICATION SUCCESSFUL` (`0` failed); `Cppcheck 2.22.0` (`8/8`) + `clang-tidy` | Supplemental Engineering Verification ONLY (zero `DO-330` TQL-5 TQSP or certified `MISRA C++:2023` claim) |
+| **`Sn12` — Dual-FCC CAN-FD SIL (`Renode v1.17.0`)** | `firmware/renode_cyphal/` (`libcanard` + `o1heap v3.0.0` `32 KiB` DTCM outside `flight_core`) | **`3 / 3` scenarios PASS**, active-to-standby takeover **`12.50 ms < 20.0 ms`**, `4` babbling-idiot CRC rejects; STM32H753 ELF (`36,624 B` ITCM / `43,708 B` Flash / `0` veneers, `ES0392 Rev 16`) | Functional & Protocol SIL ONLY — NOT cycle-accurate hardware WCET (`Physical STM32H753 DWT->CYCCNT` remains **`PENDING_PHYSICAL_STM32H7_HITL`** inside `G5`) |
+| **`Sn13` — Real 4D JAX PDE & Paired 30k Atlas** | `artifacts/v3.1.0/{jax_4d_cbvf_l4_manifest,paired_30k_ral_stats}.json` (`sha256: 946db73b...`, `2772c2c4...`) | `81×57×81×57` WENO5/TVD-RK3 PDE (`soundness_passed: true`, `eps_grid=[0.880..0.687] m`); exact paired `30,000`-sim atlas (`57.86 s`): **`95.98%`** CSFL (`(3324,0)`, `p_holm < 10^-16`) / **`100.00%`** CEL (`(1500,0)`, `0.50 m/s` IQM `|v_z|`), `309` cliffs logged | Bounds conditional simulated recovery inside `ODD.yaml` ONLY; never proves `<= 10^-9 / FH` |
+| **`Sn14` — `M2` Zero-GPL, `Part-IS` & Fleet Z3** | `.github/workflows/m2_uspace_and_physics.yml` (`x86_64` + `arm64`), `scripts/ci/check_zero_gpl_symbols.py` | **`0` GPL violations across `20` targets + `core/`**; `25/25` root CTests; `Lift+Cruise 8+1` (`0` heap, `79.07%` hover OEI); `FleetSimEngine` `0.151 ms/tick` (`< 500 ms` P0 CEL); `Part-IS (EU) 2023/203` `40 B` header + `ReplayWindow128` + immutable `libsodium-1.0.22` (`RTO <= 10 s`); separate-context Fleet Z3 (`QF_IDL 1.81 ms` + `QF_LRA < 25 ms`, `100%` SMT-LIB2 parity) | Research protocol/simulation testbed ONLY (`NIS2 != Part-IS`; zero certified USSP, `Part-IS` ISMS, or `SC-VTOL` approval); official DHMİ AIP `LTBX` ARP confirmed **`40°59'26"N, 029°12'58"E`** with 28-day AIRAC expiry metadata in `config/istanbul_ltfj_airspace.yaml` |

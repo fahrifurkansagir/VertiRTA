@@ -63,7 +63,8 @@ def test_pidnet_static_pappm_onnx_export_and_losses(tmp_path: Path) -> None:
     out_dims = [[d.dim_value for d in o.type.tensor_type.shape.dim] for o in m.graph.output]
     assert out_dims == [[1, 5, 512, 512], [1, 3, 512, 512], [1, 1, 64, 64]]
 
-    crit = SlzDistillCriterion(0.4, 0.2, 0.2, 0.1, m_in=-23.0, m_out=-5.0)
+    crit = SlzDistillCriterion(0.4, 0.2, 0.2, 0.1, m_in=-8.0, m_out=-2.5, lambda_fsr=0.8)
+    assert crit.class_weights.tolist() == pytest.approx([1.0, 1.0, 1.5, 1.5, 1.5])
     lbl = torch.randint(0, 5, (2, 64, 64))
     lbl[:, :8, :8] = 254
     lbl[:, 8:12, :8] = 255
@@ -85,6 +86,17 @@ def test_pidnet_static_pappm_onnx_export_and_losses(tmp_path: Path) -> None:
     loss.backward()
     assert seg_in.grad is not None and torch.isfinite(seg_in.grad).all()
     assert dino_in.grad is not None and torch.isfinite(dino_in.grad).all()
+
+    # Asymmetric FSR penalty must strictly increase when true hazard Class 4 predicts Safe (0/1)
+    crit_fsr = SlzDistillCriterion(0.0, 0.0, 0.0, 0.0, lambda_fsr=1.0)
+    haz_lbl = torch.full((1, 8, 8), 4, dtype=torch.long)
+    safe_wrong_logits = torch.zeros((1, 5, 8, 8))
+    safe_wrong_logits[:, 0] = 6.0  # false-safe prediction on Class 4 hazard
+    haz_right_logits = torch.zeros((1, 5, 8, 8))
+    haz_right_logits[:, 4] = 6.0   # correct Class 4 hazard prediction
+    assert crit_fsr._false_safe_penalty(safe_wrong_logits, haz_lbl).item() > (
+        crit_fsr._false_safe_penalty(haz_right_logits, haz_lbl).item() + 1.0
+    )
 
     cal = calibrate_temperature_and_tau(
         torch.randn(1000, 5, generator=torch.Generator().manual_seed(0)) * 3.0,

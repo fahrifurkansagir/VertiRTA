@@ -31,7 +31,7 @@ export function parseLaunchMode(search: string): LaunchConfig {
   const params = new URLSearchParams(search.startsWith("?") ? search : `?${search}`);
   const rawMode = params.get("mode");
   const mode: LaunchMode = rawMode === "live" ? "live" : "sandbox";
-  const wsUrl = params.get("ws") || "ws://127.0.0.1:8891";
+  const wsUrl = params.get("ws") || "ws://127.0.0.1:8891/telemetry";
   const rawAdapter = params.get("adapter");
   const adapter: ViewportAdapterKind =
     rawAdapter === "cesium-bridge" ? "cesium-bridge" : "maplibre-deck";
@@ -97,14 +97,32 @@ export class SandboxWorkerTransport implements FlightTransport {
   private worker: Worker | null = null;
   private timerId: number | null = null;
   private recycleBuf: ArrayBuffer = new ArrayBuffer(256);
+  private workerReady = false;
+  private pendingFaults: FaultCommand[] = [];
 
   start(onSnapshot: (snap: TelemetrySnapshot) => void, onStatus?: (msg: string) => void): void {
     this.stop();
+    this.workerReady = false;
+    this.pendingFaults = [];
+    this.recycleBuf = new ArrayBuffer(256);
     this.worker = new Worker(new URL("../worker/flight_sim.worker.ts", import.meta.url), {
       type: "module",
     });
+    const flushPendingFaults = () => {
+      if (!this.worker || !this.workerReady || this.pendingFaults.length === 0) {
+        return;
+      }
+      const queued = this.pendingFaults.splice(0, this.pendingFaults.length);
+      for (const cmd of queued) {
+        this.worker.postMessage({ type: "fault", cmd });
+      }
+    };
     this.worker.onmessage = (ev: MessageEvent) => {
       const msg = ev.data as { type: string; buffer?: ArrayBuffer; detail?: string };
+      if (!this.workerReady && (msg.type === "status" || msg.type === "frame")) {
+        this.workerReady = true;
+        flushPendingFaults();
+      }
       if (msg.type === "frame" && msg.buffer) {
         try {
           const frame = parseVrtaFrame(msg.buffer);
@@ -119,7 +137,7 @@ export class SandboxWorkerTransport implements FlightTransport {
     };
     this.worker.postMessage({ type: "init" });
     this.timerId = window.setInterval(() => {
-      if (!this.worker || this.recycleBuf.byteLength !== 256) {
+      if (!this.worker || !this.workerReady || this.recycleBuf.byteLength !== 256) {
         return;
       }
       const out = this.recycleBuf;
@@ -129,7 +147,15 @@ export class SandboxWorkerTransport implements FlightTransport {
   }
 
   sendFault(cmd: FaultCommand): void {
-    this.worker?.postMessage({ type: "fault", cmd });
+    if (!this.worker) {
+      this.pendingFaults.push(cmd);
+      return;
+    }
+    if (!this.workerReady) {
+      this.pendingFaults.push(cmd);
+      return;
+    }
+    this.worker.postMessage({ type: "fault", cmd });
   }
 
   stop(): void {
@@ -139,11 +165,56 @@ export class SandboxWorkerTransport implements FlightTransport {
     }
     this.worker?.terminate();
     this.worker = null;
+    this.workerReady = false;
+    this.pendingFaults = [];
   }
+}
+
+export interface ReplayFaultCoordinator {
+  enterReplay(): void;
+  dispatchFault(cmd: FaultCommand): void;
+  isTransportActive(): boolean;
+}
+
+// Guarantees 1st fault click during .vrta replay immediately exits replay AND applies the fault
+// on the exact same click (no dropped first click during worker cold-init).
+export function createReplayFaultCoordinator(
+  transport: FlightTransport,
+  stopReplay: () => void,
+  onSnapshot: (snap: TelemetrySnapshot) => void,
+  onStatus: (msg: string) => void
+): ReplayFaultCoordinator {
+  let transportActive = true;
+
+  return {
+    enterReplay(): void {
+      if (transportActive) {
+        transport.stop();
+        transportActive = false;
+      }
+    },
+    dispatchFault(cmd: FaultCommand): void {
+      stopReplay();
+      if (!transportActive) {
+        transport.start(onSnapshot, onStatus);
+        transportActive = true;
+      }
+      transport.sendFault(cmd);
+      onStatus(`Fault command dispatched: ${cmd.kind} (target=${cmd.targetIdx})`);
+    },
+    isTransportActive(): boolean {
+      return transportActive;
+    },
+  };
 }
 
 export class LiveWsTransport implements FlightTransport {
   private ws: WebSocket | null = null;
+  private reconnectTimer: number | null = null;
+  private reconnectDelayMs = 500;
+  private manuallyStopped = false;
+  private onSnapshotCb: ((snap: TelemetrySnapshot) => void) | null = null;
+  private onStatusCb: ((msg: string) => void) | null = null;
 
   constructor(private readonly wsUrl: string) {
     const parsed = new URL(wsUrl);
@@ -154,39 +225,81 @@ export class LiveWsTransport implements FlightTransport {
 
   start(onSnapshot: (snap: TelemetrySnapshot) => void, onStatus?: (msg: string) => void): void {
     this.stop();
-    this.ws = new WebSocket(this.wsUrl);
-    this.ws.binaryType = "arraybuffer";
-    this.ws.onopen = () => onStatus?.(`Live WS connected: ${this.wsUrl}`);
-    this.ws.onerror = () => onStatus?.(`Live WS error on ${this.wsUrl}`);
-    this.ws.onmessage = (ev: MessageEvent) => {
+    this.manuallyStopped = false;
+    this.reconnectDelayMs = 500;
+    this.onSnapshotCb = onSnapshot;
+    this.onStatusCb = onStatus ?? null;
+    this.connect();
+  }
+
+  private connect(): void {
+    if (this.manuallyStopped || !this.onSnapshotCb) {
+      return;
+    }
+    const onSnapshot = this.onSnapshotCb;
+    const onStatus = this.onStatusCb;
+
+    const ws = new WebSocket(this.wsUrl);
+    this.ws = ws;
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => {
+      this.reconnectDelayMs = 500;
+      onStatus?.(`Live WS connected: ${this.wsUrl}`);
+    };
+    ws.onerror = () => onStatus?.(`Live WS error on ${this.wsUrl}`);
+    ws.onclose = () => {
+      if (this.manuallyStopped) return;
+      const delay = this.reconnectDelayMs;
+      this.reconnectDelayMs = Math.min(10000, this.reconnectDelayMs * 2);
+      onStatus?.(`Live WS disconnected — reconnecting in ${(delay / 1000).toFixed(1)} s`);
+      this.reconnectTimer = window.setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connect();
+      }, delay);
+    };
+    ws.onmessage = (ev: MessageEvent) => {
       if (ev.data instanceof ArrayBuffer && ev.data.byteLength === 256) {
-        const frame = parseVrtaFrame(ev.data);
-        onSnapshot(vrtaFrameToSnapshot(frame));
+        try {
+          const frame = parseVrtaFrame(ev.data);
+          onSnapshot(vrtaFrameToSnapshot(frame));
+        } catch (err) {
+          onStatus?.(`Live WS binary frame rejected: ${err instanceof Error ? err.message : String(err)}`);
+        }
         return;
       }
       if (typeof ev.data === "string") {
-        const pkt = JSON.parse(ev.data);
-        if (pkt.schema_ver === "vrta.ws.v1.2" && pkt.geodetic && pkt.propulsion && pkt.safety_avionics) {
+        let pkt: Record<string, unknown>;
+        try {
+          pkt = JSON.parse(ev.data) as Record<string, unknown>;
+        } catch {
+          onStatus?.("Live WS ignored malformed JSON payload");
+          return;
+        }
+        const geo = pkt.geodetic as Record<string, unknown> | undefined;
+        const prop = pkt.propulsion as Record<string, unknown> | undefined;
+        const safety = pkt.safety_avionics as Record<string, unknown> | undefined;
+        if (pkt.schema_ver === "vrta.ws.v1.2" && geo && prop && safety) {
+          const rawCbvf = safety.cbvf_min_v ?? safety.cbvf_min_margin_m;
           onSnapshot({
             seq: Number(pkt.seq ?? 0),
             simTimeS: Number(pkt.sim_time_s ?? 0),
-            latDeg: Number(pkt.geodetic.lat_deg),
-            lonDeg: Number(pkt.geodetic.lon_deg),
-            altAmslM: Number(pkt.geodetic.alt_amsl_m),
-            altHaeM: Number(pkt.geodetic.alt_hae_wgs84_m),
-            aglM: Number(pkt.geodetic.agl_m),
-            velEnu: pkt.geodetic.vel_enu_mps ?? [0, 0, 0],
-            rotorRpm: pkt.propulsion.rotor_rpm ?? new Array(8).fill(0),
-            vTermV: Number(pkt.safety_avionics.v_term_v),
-            socPct: Number(pkt.safety_avionics.soc_pct),
-            cbvfMinV: Number(pkt.safety_avionics.cbf_delta_u_norm ?? 0),
-            ltfjMarginM: Number(pkt.safety_avionics.dist_ltfj_ctr_m),
-            ltbxMarginM: Number(pkt.safety_avionics.dist_ltbx_ctr_m),
-            chi2Residual: 0,
-            activeMotorMask: Number(pkt.propulsion.active_motor_mask),
-            flightRegimeLabel: String(pkt.safety_avionics.flight_regime),
-            tmrStatusLabel: String(pkt.safety_avionics.tmr_status),
-            celLatched: Boolean(pkt.safety_avionics.cel_latched),
+            latDeg: Number(geo.lat_deg),
+            lonDeg: Number(geo.lon_deg),
+            altAmslM: Number(geo.alt_amsl_m),
+            altHaeM: Number(geo.alt_hae_wgs84_m),
+            aglM: Number(geo.agl_m),
+            velEnu: (geo.vel_enu_mps as [number, number, number]) ?? [0, 0, 0],
+            rotorRpm: (prop.rotor_rpm as number[]) ?? new Array(8).fill(0),
+            vTermV: Number(safety.v_term_v),
+            socPct: Number(safety.soc_pct),
+            cbvfMinV: rawCbvf !== undefined ? Number(rawCbvf) : 0,
+            ltfjMarginM: Number(safety.dist_ltfj_ctr_m),
+            ltbxMarginM: Number(safety.dist_ltbx_ctr_m),
+            chi2Residual: Number(safety.chi2_residual ?? 0),
+            activeMotorMask: Number(prop.active_motor_mask),
+            flightRegimeLabel: String(safety.flight_regime),
+            tmrStatusLabel: String(safety.tmr_status),
+            celLatched: Boolean(safety.cel_latched),
           });
         }
       }
@@ -200,6 +313,11 @@ export class LiveWsTransport implements FlightTransport {
   }
 
   stop(): void {
+    this.manuallyStopped = true;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.ws?.close();
     this.ws = null;
   }

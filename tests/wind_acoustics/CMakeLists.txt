@@ -53,3 +53,8 @@ foreach(_test_name
   target_compile_options(${_test_name} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wshadow)
   add_test(NAME ${_test_name} COMMAND ${_test_name})
 endforeach()
+set_tests_properties(
+  test_mmap_vrta_wind_lut
+  test_aeroacoustics_hemisphere
+  PROPERTIES RUN_SERIAL TRUE
+)

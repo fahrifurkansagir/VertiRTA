@@ -53,6 +53,7 @@ class Stage1Config:
     lambda_bdry: float = 0.4
     lambda_dino: float = 0.5
     lambda_geom: float = 0.3
+    lambda_fsr: float = 0.5
     lambda_ood: float = 0.0
     source_sampling_weights: dict[str, float] = field(
         default_factory=lambda: {
@@ -67,22 +68,24 @@ class Stage1Config:
 
 @dataclass(frozen=True)
 class Stage2Config:
-    """Stage-2 Free-Energy OOD outlier exposure fine-tuning hyperparameters (DR-7 Table B.2)."""
+    """Stage-2 Free-Energy OOD outlier exposure fine-tuning hyperparameters (v3.5.1 5-class calibrated)."""
 
     epochs: int = 20
     batch_size: int = 32
-    lr_start: float = 1e-5
-    lr_min: float = 1e-6
+    lr_start: float = 2e-5
+    lr_min: float = 5e-6
     poly_power: float = 0.9
     weight_decay: float = 1e-2
     amp_bf16: bool = True
     lambda_bdry: float = 0.4
     lambda_dino: float = 0.2
     lambda_geom: float = 0.2
-    lambda_ood: float = 0.1
-    m_in: float = -23.0
-    m_out: float = -5.0
-    anomaly_mix_prob: float = 0.10
+    lambda_fsr: float = 0.8
+    lambda_ood: float = 0.02
+    m_in: float = -8.0
+    m_out: float = -2.5
+    anomaly_mix_prob: float = 0.15
+    max_val_fsr_gate: float = 0.08
     source_sampling_weights: dict[str, float] = field(
         default_factory=lambda: {
             "FLAIR-1": 0.22,
@@ -96,18 +99,22 @@ class Stage2Config:
 
 @dataclass(frozen=True)
 class L4TrainProfile:
-    """Colab L4 (24 GB Ada Lovelace, BF16 AMP) training profile."""
+    """Colab L4 (24 GB Ada Lovelace, BF16 AMP) training profile (v3.5.1 FSR-gated)."""
 
     device: str = "cuda"
     batch_size: int = 16
     grad_accum: int = 2
-    stage1_epochs: int = 30
+    stage1_epochs: int = 24
     stage1_warmup_epochs: int = 3
     stage1_lr_start: float = 8e-4
     stage1_lr_min: float = 1e-5
+    stage1_lambda_fsr: float = 0.5
     stage2_epochs: int = 10
-    stage2_lr_start: float = 1e-4
-    stage2_lr_min: float = 1e-5
+    stage2_lr_start: float = 2e-5
+    stage2_lr_min: float = 5e-6
+    stage2_lambda_ood: float = 0.02
+    stage2_lambda_fsr: float = 0.8
+    max_val_fsr_gate: float = 0.08
     anomaly_mix_prob: float = 0.15
     amp_bf16: bool = True
     seed: int = 20261123

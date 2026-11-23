@@ -76,6 +76,7 @@ if(VERTIRTA_CYPHAL_BARE_METAL)
     "${CMAKE_CURRENT_LIST_DIR}/include"
   )
   target_compile_features(vertirta_cyphal_bsp PUBLIC cxx_std_17)
+  target_compile_definitions(vertirta_cyphal_bsp PRIVATE VERTIRTA_RENODE_SIL=1)
   target_compile_options(vertirta_cyphal_bsp PRIVATE
     $<$<COMPILE_LANGUAGE:ASM>:-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard>
     $<$<COMPILE_LANGUAGE:CXX>:${VERTIRTA_M7_FLAGS}

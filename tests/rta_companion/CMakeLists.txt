@@ -6,6 +6,7 @@ target_compile_options(test_lut_dryden PRIVATE
   $<$<BOOL:${VERTIRTA_ENABLE_STRICT_FP}>:${VERTIRTA_STRICT_FP_FLAGS}>
 )
 add_test(NAME test_lut_dryden COMMAND test_lut_dryden)
+set_tests_properties(test_lut_dryden PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_cbvf_safety_filter
   test_cbvf_safety_filter.cpp

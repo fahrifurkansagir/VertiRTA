@@ -5,7 +5,9 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "vertirta/perception/active_inspection_policy.hpp"
@@ -22,8 +24,11 @@ using vertirta::perception::BackprojectDepthRgbd;
 using vertirta::perception::CameraIntrinsics;
 using vertirta::perception::ComputeFreeEnergy;
 using vertirta::perception::CountCircularDiskCells;
+using vertirta::perception::LoadOodCalibrationJson;
 using vertirta::perception::MakeGimbalCameraPoseEnu;
 using vertirta::perception::OpticalAxisEnu;
+using vertirta::perception::ParseOodCalibrationJson;
+using vertirta::perception::ResolveCudaProviderTuning;
 using vertirta::perception::SlzBeliefGrid;
 using vertirta::perception::SlzCell;
 using vertirta::perception::SlzOrtConfig;
@@ -247,4 +252,85 @@ TEST_CASE("Mod A RGB-D backprojection, dynamic hazard decay, scrolling & zero-he
     REQUIRE(guard.alloc_count() == 0u);
     REQUIRE(guard.bytes_allocated() == 0u);
   }
+}
+
+TEST_CASE("TU116 CUDA EP tuning, OOD calibration JSON loader, fail-closed mock, and Brown-Conrady undistortion",
+          "[slz_bayes][v351]") {
+  // 1) Platform-aware TU116 CUDA EP tuning
+  SlzOrtConfig cfg{};
+  REQUIRE_FALSE(cfg.enable_fp16);
+  REQUIRE_FALSE(cfg.use_tensorrt);
+  REQUIRE(cfg.enable_cuda_graph);
+  REQUIRE(cfg.arena_extend_strategy == "kSameAsRequested");
+
+  const auto win_tuning = ResolveCudaProviderTuning(cfg, /*is_windows_host=*/true);
+  REQUIRE(win_tuning.arena_extend_strategy == "kSameAsRequested");
+  REQUIRE(win_tuning.cudnn_conv_algo_search == "EXHAUSTIVE");
+  REQUIRE(win_tuning.cudnn_conv_use_max_workspace);
+  REQUIRE(win_tuning.enable_cuda_graph);
+
+  const auto linux_tuning = ResolveCudaProviderTuning(cfg, /*is_windows_host=*/false);
+  REQUIRE(linux_tuning.arena_extend_strategy == "kSameAsRequested");
+  REQUIRE(linux_tuning.cudnn_conv_algo_search == "HEURISTIC");
+  REQUIRE_FALSE(linux_tuning.cudnn_conv_use_max_workspace);
+  REQUIRE(linux_tuning.enable_cuda_graph);
+
+  // 2) Valid & malformed ood_calibration.json parsing
+  const std::string valid_json = R"({
+    "T_ood": 1.0,
+    "T_prob": 1.9686,
+    "kappa_b": 1.5,
+    "tau_ood": -3.2959
+  })";
+  REQUIRE(ParseOodCalibrationJson(valid_json, cfg));
+  REQUIRE(cfg.t_ood == Approx(1.0f));
+  REQUIRE(cfg.t_prob == Approx(1.9686f));
+  REQUIRE(cfg.kappa_b == Approx(1.5f));
+  REQUIRE(cfg.tau_ood == Approx(-3.2959f));
+
+  SlzOrtConfig bad_cfg{};
+  const float orig_tau = bad_cfg.tau_ood;
+  REQUIRE_FALSE(ParseOodCalibrationJson(R"({"T_ood": 1.0, "T_prob": 9.9, "kappa_b": 1.5, "tau_ood": -3.0})", bad_cfg));
+  REQUIRE(bad_cfg.tau_ood == Approx(orig_tau));
+
+  // 3) Fail-closed when allow_mock_fallback == false and no ONNX path supplied
+  SlzOrtConfig strict_cfg{};
+  strict_cfg.onnx_path = "";
+  strict_cfg.allow_mock_fallback = false;
+  SlzOrtRunner strict_runner(strict_cfg);
+  REQUIRE_FALSE(strict_runner.is_ready());
+  REQUIRE_FALSE(strict_runner.is_mock_backend());
+  std::vector<float> rgb(vertirta::perception::kSlzRgbElements, 0.0f);
+  std::vector<float> logits(vertirta::perception::kSlzLogitsElements, 0.0f);
+  std::vector<float> normals(vertirta::perception::kSlzNormalsElements, 0.0f);
+  std::vector<float> bdry(vertirta::perception::kSlzBdryElements, 0.0f);
+  REQUIRE_FALSE(strict_runner.Run(rgb, logits, normals, bdry));
+
+  // 4) Brown-Conrady radial distortion exact inversion on off-axis ray (zero heap)
+  CameraIntrinsics dist_intr{};
+  dist_intr.width = 16u;
+  dist_intr.height = 16u;
+  dist_intr.fx = 20.0f;
+  dist_intr.fy = 20.0f;
+  dist_intr.cx = 8.0f;
+  dist_intr.cy = 8.0f;
+  dist_intr.k1 = -0.18f;
+  dist_intr.k2 = 0.03f;
+
+  // Forward-distort true normalized point (xu=0.25, yu=0.0) -> pixel u
+  const double xu_true = 0.25;
+  const double r2 = xu_true * xu_true;
+  const double xd = xu_true * (1.0 + dist_intr.k1 * r2 + dist_intr.k2 * r2 * r2);
+  dist_intr.cx = static_cast<float>(12.0 - xd * dist_intr.fx);  // places xd exactly at pixel u=12
+  std::array<float, 256> d_img{};
+  d_img.fill(20.0f);
+  const auto pose = MakeGimbalCameraPoseEnu({0.0, 0.0, 20.0}, 0.0, kPi * 0.5);
+  std::array<Vec3Enu, 256> pts{};
+  std::array<uint32_t, 256> pix{};
+  const std::size_t n = BackprojectDepthRgbd(d_img, dist_intr, pose, pts, pix, 1u);
+  REQUIRE(n == 256u);
+  // Nadir pose: optical +X_opt maps to camera -Y_cam = South (-Y_enu), so y_enu = -xu_true * z = -5.0 m
+  const std::size_t target_idx = 8u * 16u + 12u;
+  REQUIRE(pts[target_idx].y == Approx(-xu_true * 20.0).margin(1e-3));
+  REQUIRE(pts[target_idx].z == Approx(0.0).margin(1e-5));
 }

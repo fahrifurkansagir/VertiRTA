@@ -64,8 +64,14 @@ SiliconRevInfo inspect_silicon_rev() noexcept {
   SiliconRevInfo info{};
   info.dev_id = static_cast<uint16_t>(idc & 0x0FFFu);
   info.rev_id = static_cast<uint16_t>((idc >> 16u) & 0xFFFFu);
-  // Treat Renode/uninitialized 0x0000 as Rev V virtual platform; flag real Rev Y (0x1003).
-  if (info.rev_id == regs::kStm32h7RevV || info.rev_id == 0x0000u) {
+#ifdef VERTIRTA_RENODE_SIL
+  // Virtual Renode SIL target may leave DBGMCU_IDCODE uninitialized (0x0000); allow Rev V mode ONLY in SIL builds.
+  const bool rev_v_ok = (info.rev_id == regs::kStm32h7RevV || info.rev_id == 0x0000u);
+#else
+  // Physical STM32H753 silicon lock: strictly require verified Rev V (0x2003); block 0x0000/0x1003 (Erratum 2.24.2).
+  const bool rev_v_ok = (info.rev_id == regs::kStm32h7RevV);
+#endif
+  if (rev_v_ok) {
     info.is_rev_v = true;
     info.rev_y_fdcan_errata_flag = false;
     info.sysclk_hz = 480'000'000u;
@@ -135,11 +141,16 @@ void init_clocks_480mhz_or_fallback(SiliconRevInfo& rev) noexcept {
   regs::reg32(regs::kRccD2cfgr) = (4u << 8u) | (4u << 4u);
   regs::reg32(regs::kRccD3cfgr) = (4u << 4u);
 
-  // Configure PLL1 from HSI (64 MHz / M=4 = 16 MHz -> N=60 -> 960 MHz / P=2 = 480 MHz; or N=50 -> 400 MHz).
+  // Configure PLL1 from HSI (64 MHz / M=4 = 16 MHz):
+  //   Rev V: N=60 -> 960 MHz VCO -> DIVP1=/2 (480 MHz SYSCLK), DIVQ1=/12 (80 MHz FDCAN1 kernel clock)
+  //   Rev Y: N=50 -> 800 MHz VCO -> DIVP1=/2 (400 MHz SYSCLK), DIVQ1=/10 (80 MHz FDCAN1 kernel clock)
   const uint32_t pll_n = rev.is_rev_v ? 59u : 49u;  // (N - 1)
+  const uint32_t pll_q = rev.is_rev_v ? 11u : 9u;   // (Q - 1): /12 (Rev V) or /10 (Rev Y) -> 80 MHz PLL1Q
   regs::reg32(regs::kRccPllckselr) = (0u << 0u) | (4u << 4u);  // PLLSRC=HSI, DIVM1=4
-  regs::reg32(regs::kRccPllcfgr) = (1u << 16u) | (3u << 2u);   // DIVP1EN, PLL1RGE=8-16 MHz
-  regs::reg32(regs::kRccPll1divr) = (1u << 9u) | (pll_n << 0u);  // DIVP1=/2 (val=1)
+  regs::reg32(regs::kRccPllcfgr) =
+      (1u << 17u) | (1u << 16u) | (3u << 2u);  // DIVQ1EN | DIVP1EN | PLL1RGE=8-16 MHz
+  regs::reg32(regs::kRccPll1divr) =
+      (pll_q << 16u) | (1u << 9u) | (pll_n << 0u);  // DIVQ1=/12(RevV) /10(RevY), DIVP1=/2
   regs::reg32(regs::kRccCr) |= (1u << 24u);  // PLL1ON
   for (uint32_t spin = 0u; spin < 100000u; ++spin) {
     if ((regs::reg32(regs::kRccCr) & (1u << 25u)) != 0u) {

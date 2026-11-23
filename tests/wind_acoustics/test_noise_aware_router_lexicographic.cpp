@@ -211,3 +211,49 @@ TEST_CASE(
   REQUIRE(non_finite_count == 0);
   REQUIRE(qp_deadlocks == 0);
 }
+
+TEST_CASE("NoiseAwareRouter caches 180-node acoustic hemisphere across steady ticks and refreshes on >2% RPM or >2 m/s shift") {
+  const std::string repo_root(VERTIRTA_REPO_ROOT);
+  vertirta::rta::MmapCbvf4DLut cbvf_lut;
+  vertirta::rta::Cel2DLut cel_lut;
+  REQUIRE(cbvf_lut.load(repo_root + "/tests/fixtures/quick_test.vrta_lut", true));
+  REQUIRE(cel_lut.load(repo_root + "/tests/fixtures/quick_test.vrta_cel2d", true));
+  vertirta::rta::CbvfSafetyFilter sf(&cbvf_lut, &cel_lut);
+  NoiseAwareRouter router(&sf, nullptr, NoiseRouterConfig{});
+
+  const vertirta::core::CapabilityEnvelope env =
+      vertirta::core::CoaxEffectiveness::compute_envelope(
+          0x00u, 0u, 0x07u, 403.2f, 92.0f, 0.80f, 0.0f, 0.0f, 0.0f, 0u);
+  const vertirta::core::Vec3Ned pos{0.0, -300.0, -80.0};
+  const vertirta::core::Vec3Ned vel{12.0, 0.0, 0.0};
+
+  AcousticFlightState ac{};
+  ac.airframe = AcousticAirframeKind::kCoaxialX8_240;
+  ac.airspeed_mps = 12.0;
+  ac.lift_rpm = kX8HoverRpm;
+  ac.lift_thrust_total_n = 2353.596;
+
+  // 100 steady-state ticks with small (<1% RPM, <0.8 m/s speed) jitter -> strictly 1 synthesis
+  for (int tick = 0; tick < 100; ++tick) {
+    AcousticFlightState s = ac;
+    s.lift_rpm = ac.lift_rpm * (1.0 + 0.008 * std::sin(0.1 * static_cast<double>(tick)));
+    s.airspeed_mps = ac.airspeed_mps + 0.5 * std::cos(0.1 * static_cast<double>(tick));
+    const auto out = router.step_100hz(pos, vel, {0.0, 0.0, 0.0}, 0.0, env, s, {});
+    REQUIRE(out.hemisphere_recomputed == (tick == 0));
+  }
+  REQUIRE(router.hemisphere_recompute_count() == 1u);
+
+  // > 2% RPM shift triggers immediate cache refresh
+  AcousticFlightState ac_rpm = ac;
+  ac_rpm.lift_rpm = ac.lift_rpm * 1.035;
+  const auto out_rpm = router.step_100hz(pos, vel, {0.0, 0.0, 0.0}, 0.0, env, ac_rpm, {});
+  REQUIRE(out_rpm.hemisphere_recomputed == true);
+  REQUIRE(router.hemisphere_recompute_count() == 2u);
+
+  // > 2 m/s airspeed shift triggers immediate cache refresh
+  AcousticFlightState ac_spd = ac_rpm;
+  ac_spd.airspeed_mps = ac_rpm.airspeed_mps + 2.6;
+  const auto out_spd = router.step_100hz(pos, vel, {0.0, 0.0, 0.0}, 0.0, env, ac_spd, {});
+  REQUIRE(out_spd.hemisphere_recomputed == true);
+  REQUIRE(router.hemisphere_recompute_count() == 3u);
+}

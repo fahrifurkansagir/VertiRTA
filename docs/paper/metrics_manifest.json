@@ -51,9 +51,9 @@
     "z3_timeout_ms": 12,
     "pack_nominal_volts": 400.0,
     "pack_energy_kwh": 22.0,
-    "unsafe_rejection_pct": "PENDING_COLAB_G4",
-    "conformal_cov_pct": "PENDING_COLAB_G4",
-    "vertibench_human_audit": "PENDING_COLAB_G4"
+    "unsafe_rejection_pct": "PENDING_HUMAN_NATIVE_TR_V1",
+    "conformal_cov_pct": 96.25,
+    "vertibench_human_audit": "L4 Paraphrase (SFT 74.29%, GRPO 72.14%; Human TR Pending)"
   },
   "v2b_slz": {
     "slz_grid_mib": 1.5625,
@@ -62,11 +62,17 @@
     "slz_max_slope_deg": 8.0,
     "slz_max_roughness_m": 0.15,
     "staleness_limit_ms": 250,
-    "active_safe_touchdown_pct": "PENDING_COLAB_G4",
-    "active_false_commit_pct": "PENDING_COLAB_G4",
-    "aeroscape_miou_pct": "PENDING_COLAB_G4",
-    "ood_auroc": "PENDING_COLAB_G4",
-    "wsl2_vram_mb": "PENDING_LOCAL_GPU_SMOKE",
-    "wsl2_smoke_status": "PENDING_LOCAL_GPU_SMOKE"
+    "active_safe_touchdown_pct": "PENDING_COLAB_GAZEBO_EGL_60SEED",
+    "active_false_commit_pct": "PENDING_COLAB_GAZEBO_EGL_60SEED",
+    "aeroscape_miou_pct": 33.95,
+    "ood_auroc": 0.698,
+    "wsl2_vram_mb": "PENDING_WSL2_HEADLESS_CUDA",
+    "wsl2_smoke_status": "Win10 GTX 1650S Trained: 126.0 MiB, 8.67 ms p50 (WDDM p99 14.20 ms)"
+  },
+  "v3_1_provenance": {
+    "paired_30k_ral_stats_sha256": "2772c2c4b9cde28b0d679f48966ec3a7cb8269f04e2d3144f5274fa90e0a238b",
+    "l4_qwen3_4b_z3_grpo_eval_sha256": "b2a1d4173ff60f54ef222611eaa14426bf2cb56161c9c31c5adc0d22ce6badbe",
+    "pidnet_trained_onnx_sha256": "714a8404d2a4130abb26ece0daffe29b90ddf1f048ad0d3d025c9ebe67861efc",
+    "jax_4d_cbvf_manifest_sha256": "946db73b3c04171e502b93ba7e5df31622b6d0ee9ea97fdbd1f9cf3f51666078"
   }
 }

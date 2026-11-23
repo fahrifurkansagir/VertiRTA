@@ -13,6 +13,8 @@
 #include <px4_ros2/control/setpoint_types/experimental/attitude.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include "vertirta_px4_bridge/deadman_guard.hpp"
+
 namespace vertirta::px4_bridge {
 
 // 100 Hz px4-ros2-interface-lib ModeBase adapter (DR-2 Section 5.1 / Plan 1A Task 12):
@@ -66,6 +68,8 @@ class VertiRtaMode : public px4_ros2::ModeBase {
   std::atomic<float> latest_yaw_sp_{0.0f};
   std::atomic<float> latest_yawspeed_sp_{0.0f};
   std::atomic<float> latest_vz_limit_{2.5f};
+  std::atomic<uint64_t> last_rta_cmd_rx_ns_{0ULL};
+  std::atomic<bool> deadman_active_{false};
 };
 
 }  // namespace vertirta::px4_bridge

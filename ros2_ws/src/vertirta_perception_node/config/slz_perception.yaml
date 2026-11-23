@@ -6,14 +6,19 @@ vertirta_perception_node:
     rotor_radius_m: 0.75
     base_orbit_soc_12s_pct: 0.614
 
-    # PIDNet-S ONNX Runtime / GTX 1650 SUPER (TU116) budget locks
+    # PIDNet-S ONNX Runtime / GTX 1650 SUPER (TU116) budget locks (v3.5.1 hardened)
     onnx_model_path: ""
+    ood_calibration_path: ""
     onnx_input_size: 512
-    enable_fp16: true
+    enable_fp16: false
     use_tensorrt: false
-    allow_mock_fallback: true
+    enable_cuda_graph: true
+    arena_extend_strategy: "kSameAsRequested"
+    cudnn_conv_algo_search: "AUTO"
+    allow_mock_fallback: false
     vram_budget_mb: 300.0
     target_loop_hz: 20.0
+    max_rgb_depth_sync_ms: 2.0
 
     # 160x160 @ 0.5 m (1.5625 MiB) cell-local Bayesian SLZ grid & commit thresholds
     grid_dim: 160
@@ -24,7 +29,11 @@ vertirta_perception_node:
     step_max_m: 0.25
     p_safe_commit: 0.85
     tau_commit: 0.08
-    tau_ood: -8.0
+    # Calibrated v2 OOD defaults (overridden at startup whenever ood_calibration_path is set)
+    t_ood: 1.0
+    t_prob: 1.0839
+    kappa_b: 1.5
+    tau_ood: -2.6106
 
     # Perception staleness & isolated visualization ports
     staleness_warn_ms: 250

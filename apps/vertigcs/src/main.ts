@@ -7,6 +7,7 @@ import { bindFleetPanel } from "./fleet/fleet_panel";
 import {
   LiveWsTransport,
   SandboxWorkerTransport,
+  createReplayFaultCoordinator,
   parseLaunchMode,
   resolvePublicAssetUrl,
   type FlightTransport,
@@ -52,7 +53,6 @@ async function bootstrapVertiGcs(): Promise<void> {
 
   let pendingSnap: TelemetrySnapshot | null = null;
   let rafScheduled = false;
-  let transportActive = false;
 
   const scheduleRender = (snap: TelemetrySnapshot) => {
     pendingSnap = snap;
@@ -80,24 +80,23 @@ async function bootstrapVertiGcs(): Promise<void> {
     cfg.mode === "live" ? new LiveWsTransport(cfg.wsUrl) : new SandboxWorkerTransport();
 
   transport.start(scheduleRender, setStatus);
-  transportActive = true;
+
+  let stopReplayFn: () => void = () => {};
+  const replayFaultCoord = createReplayFaultCoordinator(
+    transport,
+    () => stopReplayFn(),
+    scheduleRender,
+    setStatus
+  );
 
   const scrubber = new VrtaReplayScrubber((snap) => {
-    if (transportActive) {
-      transport.stop();
-      transportActive = false;
-    }
+    replayFaultCoord.enterReplay();
     scheduleRender(snap);
   }, setStatus);
+  stopReplayFn = () => scrubber.stop();
 
   bindFaultPanel((cmd) => {
-    scrubber.stop();
-    if (!transportActive) {
-      transport.start(scheduleRender, setStatus);
-      transportActive = true;
-    }
-    transport.sendFault(cmd);
-    setStatus(`Fault command dispatched: ${cmd.kind} (target=${cmd.targetIdx})`);
+    replayFaultCoord.dispatchFault(cmd);
   });
 
   bindFleetPanel((fleetSnap) => {

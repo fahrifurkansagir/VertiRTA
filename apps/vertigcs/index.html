@@ -83,6 +83,24 @@
               <button type="button" id="btn-fleet-reset" class="secondary">Reset Nominal Fleet</button>
             </div>
             <pre id="fleet-cyber-log" style="margin-top: 8px">Fleet overlay paused — click Enable to launch 20-eVTOL Anatolian U-Space ops.</pre>
+            <details id="fleet-table-details" class="fleet-details">
+              <summary>20-eVTOL Fleet Telemetry Table (ID | Mode | Part-IS | SoC | Temp | Stand)</summary>
+              <div class="fleet-table-wrap">
+                <table class="fleet-table" id="fleet-telemetry-table" aria-label="20-eVTOL Fleet Telemetry">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Mode</th>
+                      <th>Part-IS</th>
+                      <th>SoC%</th>
+                      <th>Temp&deg;C</th>
+                      <th>Stand</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fleet-table-body"></tbody>
+                </table>
+              </div>
+            </details>
           </section>
 
           <section class="panel" id="z3-panel">

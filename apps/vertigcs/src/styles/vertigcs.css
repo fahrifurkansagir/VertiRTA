@@ -82,6 +82,8 @@ body,
   gap: 10px;
   padding: 10px;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
   background: #0c1522;
   border-left: 1px solid var(--border);
 }
@@ -91,6 +93,9 @@ body,
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .panel h2 {
@@ -116,6 +121,9 @@ body,
 .kv-grid dd {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .rotor-bars {
@@ -170,6 +178,9 @@ button {
   color: var(--text);
   font-size: 12px;
   cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 button:hover {
@@ -209,10 +220,76 @@ button.secondary {
   flex: 1;
 }
 
-#z3-audit-log {
+#z3-audit-log,
+#fleet-cyber-log {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
   font-size: 11px;
+  line-height: 1.35;
   color: #b7cde4;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+#fleet-hud-summary {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.fleet-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.fleet-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.fleet-table-wrap {
+  margin-top: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.fleet-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.fleet-table th,
+.fleet-table td {
+  padding: 3px 4px;
+  text-align: left;
+  border-bottom: 1px solid rgba(34, 52, 77, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-table th {
+  position: sticky;
+  top: 0;
+  background: #0c1828;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.fleet-table tr[data-alert="1"] td {
+  color: #ff8a65;
+  font-weight: 600;
 }

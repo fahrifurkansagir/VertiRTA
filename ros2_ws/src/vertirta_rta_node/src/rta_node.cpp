@@ -5,8 +5,10 @@
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <px4_msgs/msg/vertirta_capability_envelope.hpp>
@@ -18,6 +20,7 @@
 #include <vertirta_msgs/msg/wire_capsule_array.hpp>
 
 #include "vertirta_rta_node/lockfree_transport.hpp"
+#include "vertirta_rta_node/rta_safety_core.hpp"
 
 namespace vertirta::ros {
 
@@ -54,12 +57,12 @@ class VertiRtaNode : public rclcpp::Node {
 
     wire_sub_ = create_subscription<vertirta_msgs::msg::WireCapsuleArray>(
         "/vertirta/wire_capsules", 10,
-        [this](const vertirta_msgs::msg::WireCapsuleArray::SharedPtr msg) { latest_wire_stamp_ns_ = msg->stamp_ns; },
+        [this](const vertirta_msgs::msg::WireCapsuleArray::SharedPtr msg) { on_wires(*msg); },
         sub_opts);
 
     intruder_sub_ = create_subscription<vertirta_msgs::msg::IntruderArray>(
         "/vertirta/intruders", 10,
-        [this](const vertirta_msgs::msg::IntruderArray::SharedPtr msg) { latest_intruder_stamp_ns_ = msg->stamp_ns; },
+        [this](const vertirta_msgs::msg::IntruderArray::SharedPtr msg) { on_intruders(*msg); },
         sub_opts);
 
     // Single-publisher routing: publish internal command to VertiRtaMode (sole /fmu/in/* publisher)
@@ -137,60 +140,73 @@ class VertiRtaNode : public rclcpp::Node {
     latest_slz_stale_.store(msg.stale, std::memory_order_release);
   }
 
+  void on_wires(const vertirta_msgs::msg::WireCapsuleArray& msg) {
+    std::lock_guard<std::mutex> lk(hazard_stage_mtx_);
+    latest_wire_stamp_ns_ = msg.stamp_ns;
+    staged_wires_.clear();
+    const std::size_t n = std::min({msg.p0_enu.size(), msg.p1_enu.size(), msg.radius_m.size()});
+    staged_wires_.reserve(n);
+    const core::Vec3Enu ego_enu = core::ned_to_enu({latest_tel_.pos_ned[0], latest_tel_.pos_ned[1], latest_tel_.pos_ned[2]});
+    for (std::size_t i = 0U; i < n && staged_wires_.size() < 7U; ++i) {
+      const core::Vec3Enu p0{msg.p0_enu[i].x, msg.p0_enu[i].y, msg.p0_enu[i].z};
+      const core::Vec3Enu p1{msg.p1_enu[i].x, msg.p1_enu[i].y, msg.p1_enu[i].z};
+      const core::Vec3Enu seg = p1 - p0;
+      const double len2 = seg.norm_sq();
+      const double t = (len2 > 1e-6) ? std::clamp((ego_enu - p0).dot(seg) / len2, 0.0, 1.0) : 0.0;
+      const core::Vec3Ned closest_ned = core::enu_to_ned(p0 + seg * t);
+      HazardPod hp{};
+      hp.pos_ned[0] = closest_ned.x;
+      hp.pos_ned[1] = closest_ned.y;
+      hp.pos_ned[2] = closest_ned.z;
+      hp.radius_h_m = std::max(1.0f, msg.radius_m[i]);
+      hp.radius_z_m = std::max(1.0f, msg.radius_m[i]);
+      hp.gamma = 1.4f;
+      hp.kind = 1U;  // WIRE
+      staged_wires_.push_back(hp);
+    }
+  }
+
+  void on_intruders(const vertirta_msgs::msg::IntruderArray& msg) {
+    std::lock_guard<std::mutex> lk(hazard_stage_mtx_);
+    latest_intruder_stamp_ns_ = msg.stamp_ns;
+    staged_intruders_.clear();
+    const std::size_t n = std::min({msg.pos_enu.size(), msg.vel_enu.size(), msg.radius_horiz_m.size(), msg.half_height_m.size()});
+    staged_intruders_.reserve(n);
+    for (std::size_t i = 0U; i < n && staged_intruders_.size() < 8U; ++i) {
+      const core::Vec3Ned pos_ned = core::enu_to_ned({msg.pos_enu[i].x, msg.pos_enu[i].y, msg.pos_enu[i].z});
+      const core::Vec3Ned vel_ned = core::enu_to_ned({msg.vel_enu[i].x, msg.vel_enu[i].y, msg.vel_enu[i].z});
+      HazardPod hp{};
+      hp.pos_ned[0] = pos_ned.x;
+      hp.pos_ned[1] = pos_ned.y;
+      hp.pos_ned[2] = pos_ned.z;
+      hp.vel_ned[0] = vel_ned.x;
+      hp.vel_ned[1] = vel_ned.y;
+      hp.vel_ned[2] = vel_ned.z;
+      hp.radius_h_m = std::max(2.0f, msg.radius_horiz_m[i]);
+      hp.radius_z_m = std::max(2.0f, msg.half_height_m[i]);
+      hp.gamma = 1.3f;
+      hp.kind = 2U;  // INTRUDER
+      staged_intruders_.push_back(hp);
+    }
+  }
+
   // Thread 2: 100 Hz SCHED_FIFO real-time loop — strictly ZERO ROS calls, ZERO heap allocations
+  // Runs real vertirta::rta::CbvfSafetyFilter via RtaSafetyCore with DEM terrain-subtracted AGL.
   void run_rt_loop_100hz() noexcept {
     (void)try_configure_sched_fifo(80);
     TelemetryIngressFrame tel{};
-    bool cel_latched = false;
-    uint64_t rt_seq = 0;
+    RtaSafetyCore rta_core{nullptr, nullptr};
 
     while (running_.load(std::memory_order_acquire)) {
       const auto tick_start = std::chrono::steady_clock::now();
       (void)transport_.dds_to_rt_ring.pop_latest(tel);
       const PerceptionHazardSnapshot haz = transport_.map_to_rt_seqlock.read();
 
-      // Irreversible CEL latch on SAME_ARM_ACTIVE_SPIN (regime == 3)
-      if (tel.flight_regime == 3U) {
-        cel_latched = true;
-      }
-
-      // Guard unsigned timestamp subtraction against clock jitter (Review Focus #4)
-      const uint64_t age_ns =
-          (tel.stamp_ns >= haz.stamp_ns && haz.stamp_ns > 0ULL) ? (tel.stamp_ns - haz.stamp_ns) : 0ULL;
-      const bool stale_warn = haz.stale || (age_ns > kStaleWarnNs);
-      const bool stale_cap = (age_ns > kStaleCapNs);
-      const bool stale_divert = (age_ns > kStaleDivertNs);
-
-      // Compute safe bounded acceleration (capped to 8.0 m/s speed floor when stale > 1 s)
-      RtaCommandEgressFrame cmd{};
-      cmd.seq = ++rt_seq;
-      cmd.stamp_ns = tel.stamp_ns;
-      cmd.cel_latched = cel_latched;
-      cmd.perception_stale = stale_warn;
-      cmd.divert_requested = stale_divert;
-      cmd.valid = true;
-
-      if (cel_latched) {
-        cmd.control_mode = px4_msgs::msg::VertirtaRtaSetpoint::MODE_CEL_CONTROLLED_LANDING;
-        const float agl_m = static_cast<float>(-tel.pos_ned[2]);
-        cmd.vz_limit_mps = (agl_m > 10.0f) ? 2.5f : ((agl_m > 5.0f) ? 1.5f : 0.8f);
-        cmd.accel_ned = {0.0f, 0.0f, (tel.vel_ned[2] > cmd.vz_limit_mps) ? -1.5f : 0.0f};
-        cmd.yawspeed_sp = -2.2f;
-      } else {
-        cmd.control_mode = px4_msgs::msg::VertirtaRtaSetpoint::MODE_ACCEL_NED;
-        const float v_xy = std::hypot(tel.vel_ned[0], tel.vel_ned[1]);
-        float ax = 0.0f;
-        float ay = 0.0f;
-        if (stale_cap && v_xy > kStaleSpeedCapMps) {
-          const float scale = -1.5f * (v_xy - kStaleSpeedCapMps) / v_xy;
-          ax = tel.vel_ned[0] * scale;
-          ay = tel.vel_ned[1] * scale;
-        }
-        cmd.accel_ned = {ax, ay, 0.0f};
-        cmd.vz_limit_mps = tel.vz_sink_max;
-      }
-
+      const RtaCommandEgressFrame cmd = rta_core.step_100hz(tel, haz, {0.0, 0.0, 0.0}, 0.0);
       (void)transport_.rt_to_dds_ring.try_push(cmd);
+
+      const float agl_m = compute_terrain_agl_m(tel.pos_ned[2], haz.terrain_elev_m);
+      latest_agl_m_.store(agl_m, std::memory_order_release);
 
       VrtaLogRecordSlot rec{};
       rec.seq = cmd.seq;
@@ -201,21 +217,25 @@ class VertiRtaNode : public rclcpp::Node {
       rec.vel_enu[0] = tel.vel_ned[1];
       rec.vel_enu[1] = tel.vel_ned[0];
       rec.vel_enu[2] = -tel.vel_ned[2];
+      rec.a_safe_enu[0] = cmd.accel_ned[1];
+      rec.a_safe_enu[1] = cmd.accel_ned[0];
+      rec.a_safe_enu[2] = -cmd.accel_ned[2];
       rec.v_term_v = tel.v_term_v;
       rec.soc_pct = tel.soc * 100.0f;
+      rec.cbvf_min_v = cmd.cbvf_min_margin_m;
       rec.chi2_residual = tel.chi2_residual;
-      rec.agl_m = static_cast<float>(-tel.pos_ned[2]);
+      rec.agl_m = agl_m;
       rec.active_motor_mask = static_cast<uint8_t>(~tel.fault_bitmask);
       rec.flight_regime = tel.flight_regime;
       rec.tmr_state = tel.tmr_state;
-      rec.cel_latched = cel_latched ? 1U : 0U;
+      rec.cel_latched = cmd.cel_latched ? 1U : 0U;
       (void)transport_.rt_to_disk_ring.try_push(rec);
 
       std::this_thread::sleep_until(tick_start + std::chrono::milliseconds(10));
     }
   }
 
-  // Thread 3: 20 Hz perception/ESDF Seqlock publisher (isolated from RT loop)
+  // Thread 3: 20 Hz perception/ESDF/Wire/Intruder + DEM Terrain Seqlock publisher (isolated from RT loop)
   void run_map_sync_20hz() noexcept {
     uint64_t ver = 0;
     while (running_.load(std::memory_order_acquire)) {
@@ -224,6 +244,30 @@ class VertiRtaNode : public rclcpp::Node {
       snap.stamp_ns = latest_slz_stamp_ns_.load(std::memory_order_acquire);
       snap.slz_count = latest_slz_count_.load(std::memory_order_acquire);
       snap.stale = latest_slz_stale_.load(std::memory_order_acquire);
+
+      {
+        std::lock_guard<std::mutex> lk(hazard_stage_mtx_);
+        const double east_m = latest_tel_.pos_ned[1];
+        const double north_m = latest_tel_.pos_ned[0];
+        snap.terrain_elev_m = estimate_kartal_corridor_terrain_rel_m(east_m, north_m);
+        uint8_t h_idx = 0U;
+        for (const auto& intr : staged_intruders_) {
+          if (h_idx >= PerceptionHazardSnapshot::kMaxHazards) break;
+          snap.hazards[h_idx++] = intr;
+        }
+        for (const auto& wire : staged_wires_) {
+          if (h_idx >= PerceptionHazardSnapshot::kMaxHazards) break;
+          snap.hazards[h_idx++] = wire;
+        }
+        snap.hazard_count = h_idx;
+        if (latest_intruder_stamp_ns_ > snap.stamp_ns) {
+          snap.stamp_ns = latest_intruder_stamp_ns_;
+        }
+        if (latest_wire_stamp_ns_ > snap.stamp_ns) {
+          snap.stamp_ns = latest_wire_stamp_ns_;
+        }
+      }
+
       transport_.map_to_rt_seqlock.publish(snap);
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
@@ -379,7 +423,7 @@ class VertiRtaNode : public rclcpp::Node {
       snap.vel_enu.x = latest_tel_.vel_ned[1];
       snap.vel_enu.y = latest_tel_.vel_ned[0];
       snap.vel_enu.z = -latest_tel_.vel_ned[2];
-      snap.agl_m = static_cast<float>(-latest_tel_.pos_ned[2]);
+      snap.agl_m = latest_agl_m_.load(std::memory_order_acquire);
 
       // Locked 400 V / 22 kWh HV pack telemetry contract (Plan 1A + Plan 2)
       snap.pack_nominal_volts = 400.0f;
@@ -420,6 +464,10 @@ class VertiRtaNode : public rclcpp::Node {
   std::atomic<uint64_t> latest_slz_stamp_ns_{0};
   std::atomic<uint8_t> latest_slz_count_{0};
   std::atomic<bool> latest_slz_stale_{false};
+  std::atomic<float> latest_agl_m_{0.0f};
+  std::mutex hazard_stage_mtx_{};
+  std::vector<HazardPod> staged_wires_{};
+  std::vector<HazardPod> staged_intruders_{};
   float latest_p_hover_w_{36230.0f};
   float latest_spin_ref_{0.0f};
   float latest_spin_meas_{0.0f};

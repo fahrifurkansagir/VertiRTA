@@ -1,23 +1,80 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveMapLibreWorkerUrl } from "../src/adapters/maplibre_deck_adapter";
+import { buildIstanbulTacticalStyle } from "../src/geo/istanbul_coastline_style";
 import { HudRingStore } from "../src/ui/hud_store";
 import {
+  createReplayFaultCoordinator,
   parseLaunchMode,
   resolvePublicAssetUrl,
   resolveWasmModuleUrl,
+  type FlightTransport,
 } from "../src/transport/flight_transport";
+import type { FaultCommand } from "../src/types/telemetry";
 
 describe("VertiGCS dual-mode controller, ring-buffer HUD, and frozen Istanbul corridor GeoJSON", () => {
-  it("resolves sandbox mode by default and enforces port isolation in live mode", () => {
+  it("resolves sandbox mode by default with /telemetry WS path and enforces port isolation", () => {
     expect(parseLaunchMode("")).toEqual({
       mode: "sandbox",
-      wsUrl: "ws://127.0.0.1:8891",
+      wsUrl: "ws://127.0.0.1:8891/telemetry",
       adapter: "maplibre-deck",
     });
     expect(parseLaunchMode("?mode=live&ws=ws://127.0.0.1:5180/telemetry").mode).toBe("live");
     expect(() => parseLaunchMode("?mode=live&ws=ws://127.0.0.1:4173/telemetry")).toThrow(/forbidden/i);
     expect(() => parseLaunchMode("?mode=live&ws=ws://127.0.0.1:9222/telemetry")).toThrow(/forbidden/i);
+  });
+
+  it("resolves MapLibre GL v6 worker URL for Pages /VertiRTA/ subpath and uses zero-token offline coastal style", () => {
+    expect(
+      resolveMapLibreWorkerUrl(
+        "/VertiRTA/assets/maplibre-gl-worker-abc.mjs",
+        "https://fahrifurkansagir.github.io/VertiRTA/"
+      )
+    ).toBe("https://fahrifurkansagir.github.io/VertiRTA/assets/maplibre-gl-worker-abc.mjs");
+    expect(
+      resolveMapLibreWorkerUrl("./assets/maplibre-gl-worker-abc.mjs", "http://127.0.0.1:5180/")
+    ).toBe("http://127.0.0.1:5180/assets/maplibre-gl-worker-abc.mjs");
+
+    const style = buildIstanbulTacticalStyle();
+    expect(style.sources).toHaveProperty("istanbul-land");
+    expect(style.sources).toHaveProperty("istanbul-arterials");
+    expect(JSON.stringify(style)).not.toMatch(/https?:\/\//i); // 100% offline zero-token GeoJSON
+  });
+
+  it("exits .vrta replay and delivers the injected fault on the very first click", () => {
+    const events: string[] = [];
+    const faults: FaultCommand[] = [];
+    const fakeTransport: FlightTransport = {
+      start() {
+        events.push("start");
+      },
+      stop() {
+        events.push("stop");
+      },
+      sendFault(cmd) {
+        events.push(`fault:${cmd.kind}:${cmd.targetIdx}`);
+        faults.push(cmd);
+      },
+    };
+    let replayStopped = 0;
+    const coord = createReplayFaultCoordinator(
+      fakeTransport,
+      () => {
+        replayStopped++;
+        events.push("stopReplay");
+      },
+      () => {},
+      () => {}
+    );
+
+    coord.enterReplay();
+    expect(coord.isTransportActive()).toBe(false);
+    coord.dispatchFault({ kind: "same_arm", targetIdx: 0 });
+    expect(replayStopped).toBe(1);
+    expect(coord.isTransportActive()).toBe(true);
+    expect(faults).toEqual([{ kind: "same_arm", targetIdx: 0 }]);
+    expect(events).toEqual(["stop", "stopReplay", "start", "fault:same_arm:0"]);
   });
 
   it("resolves GitHub Pages /VertiRTA/ subpath and local ./ asset & WASM URLs cleanly", () => {

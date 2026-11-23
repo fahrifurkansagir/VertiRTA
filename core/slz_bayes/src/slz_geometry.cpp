@@ -79,12 +79,19 @@ std::size_t BackprojectDepthRgbd(
   const double inv_fy = 1.0 / static_cast<double>(intr.fy);
   const double cx = static_cast<double>(intr.cx);
   const double cy = static_cast<double>(intr.cy);
+  const bool has_distortion = (intr.k1 != 0.0f || intr.k2 != 0.0f || intr.p1 != 0.0f ||
+                               intr.p2 != 0.0f || intr.k3 != 0.0f);
+  const double k1 = static_cast<double>(intr.k1);
+  const double k2 = static_cast<double>(intr.k2);
+  const double p1 = static_cast<double>(intr.p1);
+  const double p2 = static_cast<double>(intr.p2);
+  const double k3 = static_cast<double>(intr.k3);
   const bool write_idx = (pixel_indices_out.size() >= points_out.size());
 
   std::size_t written = 0u;
   for (uint32_t v = 0; v < intr.height && written < points_out.size(); v += step) {
     const std::size_t row_off = static_cast<std::size_t>(v) * intr.width;
-    const double y_norm = (static_cast<double>(v) - cy) * inv_fy;
+    const double yd = (static_cast<double>(v) - cy) * inv_fy;
 
     for (uint32_t u = 0; u < intr.width && written < points_out.size(); u += step) {
       const std::size_t pix = row_off + u;
@@ -93,9 +100,27 @@ std::size_t BackprojectDepthRgbd(
         continue;
       }
 
+      const double xd = (static_cast<double>(u) - cx) * inv_fx;
+      double xu = xd;
+      double yu = yd;
+      if (has_distortion) {
+        // 5-iteration fixed-point Brown-Conrady undistortion (zero heap, < 1e-6 rad residual).
+        for (int iter = 0; iter < 5; ++iter) {
+          const double r2 = xu * xu + yu * yu;
+          const double r4 = r2 * r2;
+          const double r6 = r4 * r2;
+          const double rad = 1.0 + k1 * r2 + k2 * r4 + k3 * r6;
+          const double dx_tan = 2.0 * p1 * xu * yu + p2 * (r2 + 2.0 * xu * xu);
+          const double dy_tan = p1 * (r2 + 2.0 * yu * yu) + 2.0 * p2 * xu * yu;
+          const double inv_rad = (std::fabs(rad) > 1e-6) ? (1.0 / rad) : 1.0;
+          xu = (xd - dx_tan) * inv_rad;
+          yu = (yd - dy_tan) * inv_rad;
+        }
+      }
+
       const double zd = static_cast<double>(z);
-      const double x_opt = (static_cast<double>(u) - cx) * inv_fx * zd;
-      const double y_opt = y_norm * zd;
+      const double x_opt = xu * zd;
+      const double y_opt = yu * zd;
       const double z_opt = zd;
 
       // Deterministic optical -> camera body -> ENU transform (bypasses gz-sensors#545).

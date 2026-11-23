@@ -87,9 +87,31 @@ NoiseRouterOutput NoiseAwareRouter::step_100hz(
                                  MmapVrtaWindLut::kConservativeFallbackSigmaMps};
   }
 
-  // 2) Synthesize acoustic hemisphere and measure current 64-receptor dBA footprint
-  AcousticHemisphere180 hemi{};
-  acoustics_.synthesize_hemisphere(acoustic_state, hemi);
+  // 2) Event-driven 180-node acoustic hemisphere cache (DR-09 Sec 3.2):
+  //    Refresh ONLY when |dRPM|/RPM > 2%, |dV_air| > 2 m/s, or airframe/heading/FPA shifts materially.
+  auto rel_diff_gt_2pct = [](double a, double b) noexcept {
+    const double denom = std::max(std::abs(b), 1.0);
+    return (std::abs(a - b) / denom) > 0.02;
+  };
+  const bool need_hemi_refresh =
+      !hemi_cache_valid_ ||
+      (acoustic_state.airframe != cached_acoustic_state_.airframe) ||
+      (acoustic_state.lift_rotors_locked != cached_acoustic_state_.lift_rotors_locked) ||
+      rel_diff_gt_2pct(acoustic_state.lift_rpm, cached_acoustic_state_.lift_rpm) ||
+      rel_diff_gt_2pct(acoustic_state.pusher_rpm, cached_acoustic_state_.pusher_rpm) ||
+      (std::abs(acoustic_state.airspeed_mps - cached_acoustic_state_.airspeed_mps) > 2.0) ||
+      (std::abs(acoustic_state.flight_path_angle_deg - cached_acoustic_state_.flight_path_angle_deg) > 1.0) ||
+      (std::abs(acoustic_state.coax_z_over_d - cached_acoustic_state_.coax_z_over_d) > 1e-3) ||
+      (std::abs(core::wrap_pi_d(acoustic_state.heading_enu_rad - cached_acoustic_state_.heading_enu_rad)) > 0.05);
+
+  if (need_hemi_refresh) {
+    acoustics_.synthesize_hemisphere(acoustic_state, cached_hemi_);
+    cached_acoustic_state_ = acoustic_state;
+    hemi_cache_valid_ = true;
+    ++hemisphere_recompute_count_;
+    out.hemisphere_recomputed = true;
+  }
+  const AcousticHemisphere180& hemi = cached_hemi_;
   out.tier1_noise_cost = eval_softplus_noise_cost(
       hemi, pos_enu, vel_enu, &out.max_receptor_dba, &out.kartal_hospital_dba);
 

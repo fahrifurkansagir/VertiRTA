@@ -8,15 +8,29 @@
 import { MapLibreOverlay } from "@deck.gl/maplibre";
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import * as maplibregl from "maplibre-gl";
+import maplibreWorkerAssetUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { buildFleetDeckLayers } from "../fleet/fleet_deck_layer";
 import type { FleetSnapshot } from "../fleet/fleet_types";
+import { buildIstanbulTacticalStyle } from "../geo/istanbul_coastline_style";
 import { COPERNICUS_GLO30_ATTRIBUTION, KARTAL_DATUM } from "../geo/istanbul_datum";
 import type { TelemetrySnapshot } from "../types/telemetry";
 import type { GeoViewportOptions, IGeoViewportAdapter } from "./geo_viewport_adapter";
 
 export const FORBIDDEN_PORTS = new Set<number>([4173, 4174, 8765, 9222, 9223]);
 export const MAX_VERTIGCS_DPR = 1.5;
+
+export function resolveMapLibreWorkerUrl(
+  assetUrl: string = maplibreWorkerAssetUrl,
+  pageHref?: string
+): string {
+  const base =
+    pageHref ??
+    (typeof window !== "undefined" && window.location?.href
+      ? window.location.href
+      : "http://127.0.0.1:5180/");
+  return new URL(assetUrl, base).href;
+}
 
 export function selectProjectionMode(zoom: number): "mercator" | "globe" {
   // GlobeView restricted strictly to continental overview (z < 6); z >= 8 locked to MapView (mercator)
@@ -55,6 +69,9 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
   private readonly maxTrailPts = 240;
 
   async mount(opts: GeoViewportOptions): Promise<void> {
+    if (typeof maplibregl.setWorkerUrl === "function") {
+      maplibregl.setWorkerUrl(resolveMapLibreWorkerUrl());
+    }
     if (!pmtilesRegistered) {
       const protocol = new Protocol();
       maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -64,18 +81,7 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
     this.airspaceUrl = opts.airspaceGeoJsonUrl;
 
     const dpr = clampDevicePixelRatio(typeof window !== "undefined" ? window.devicePixelRatio : 1.0);
-    const baseStyle: maplibregl.StyleSpecification = {
-      version: 8,
-      name: "VertiGCS Zero-Token Istanbul Tactical Dark",
-      sources: {},
-      layers: [
-        {
-          id: "bg-sea-land",
-          type: "background",
-          paint: { "background-color": "#0b1420" },
-        },
-      ],
-    };
+    const baseStyle: maplibregl.StyleSpecification = buildIstanbulTacticalStyle();
 
     this.map = new maplibregl.Map({
       container: opts.container,

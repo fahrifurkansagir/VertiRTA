@@ -56,6 +56,21 @@ struct TransitionCommand {
   const bool* esc_valid{nullptr};
 };
 
+struct TransitionSensorFrame {
+  core::Vec3Frd gyro_meas_frd{};        // Noisy/voted IMU angular velocity [rad/s]
+  core::Vec3Frd accel_meas_frd{};       // Noisy/voted IMU specific force [m/s^2] (non-gravitational)
+  double pitot_airspeed_mps{0.0};       // Pitot-static indicated airspeed [m/s]
+  bool pitot_valid{true};               // False on blocked/iced/faulty Pitot tube -> GNSS/EKF failover
+  double gnss_ekf_airspeed_mps{0.0};    // EKF2 GNSS-groundspeed airspeed estimate fallback [m/s]
+  bool gnss_ekf_valid{true};
+  double aoa_vane_rad{0.0};             // Optional alpha-vane measurement [rad]
+  bool aoa_vane_valid{false};
+  std::array<double, kMaxActuators> esc_thrust_meas_n{};  // Bidirectional DShot ESC_STATUS thrust [N]
+  std::array<bool, kMaxActuators> esc_valid{};            // Per-channel DShot frame/CRC validity
+  bool use_esc_telemetry{false};                          // Enables per-channel DShot staleness supervision
+  uint16_t esc_stale_ticks_limit{10u};                    // 25 ms @ 400 Hz before setting esc_stale_mask bit
+};
+
 struct TransitionOutput {
   std::array<double, kMaxActuators> u_cmd{};
   std::array<double, kMaxControls> nu_hedge{};  // Pseudo-Control Hedging residual
@@ -65,9 +80,11 @@ struct TransitionOutput {
   double glide_target_airspeed_mps{0.0};
   double estimated_ld_ratio{0.0};
   TransitionFaultMode fault_mode{TransitionFaultMode::kNominal};
+  uint16_t esc_stale_mask{0u};
   uint8_t wls_iters{0u};
   bool rotors_locked_cruise{false};
   bool aoa_barrier_active{false};
+  bool pitot_failover_active{false};
   bool valid{false};
 };
 
@@ -80,9 +97,17 @@ class TransitionIndiWlsController {
 
   void reset(const AirframeState6Dof& initial_state) noexcept;
 
+  // Backward-compatible simulation overload (synthesizes clean TransitionSensorFrame from plant model).
   [[nodiscard]] TransitionOutput step_400hz(
       const AirframeState6Dof& state,
       const core::Vec3Ned& wind_ned,
+      const TransitionCommand& cmd) noexcept;
+
+  // Real-world sensor-driven overload: consumes noisy IMU gyro/accel, Pitot-static with blocked-tube
+  // GNSS/EKF failover, optional AoA vane, and bidirectional DShot ESC telemetry with staleness guard.
+  [[nodiscard]] TransitionOutput step_400hz_with_sensors(
+      const AirframeState6Dof& state_ekf,
+      const TransitionSensorFrame& sensors,
       const TransitionCommand& cmd) noexcept;
 
  private:
@@ -108,6 +133,8 @@ class TransitionIndiWlsController {
   core::Vec3Frd accel_f_{};
   std::array<double, kMaxActuators> u_hat_{};
   std::array<double, kMaxActuators> u_f_{};
+  std::array<double, kMaxActuators> u_cmd_prev_{};
+  std::array<uint16_t, kMaxActuators> esc_stale_ticks_{};
   std::array<int8_t, kMaxActuators> wls_warm_{};
 };
 

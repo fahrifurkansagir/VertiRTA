@@ -122,6 +122,7 @@ def encode_ws_telemetry_frame(
     flight_regime: str = "NOMINAL_8_ROTOR",
     cel_latched: bool = False,
     cbf_delta_u_norm: float = 0.0,
+    cbvf_min_v: float = 0.0,
     active_slz_id: str = "SLZ_KARTAL_VERTIPORT",
     dist_ltfj_ctr_m: float = 1042.0,
     dist_ltbx_ctr_m: float = 2995.0,
@@ -194,6 +195,7 @@ def encode_ws_telemetry_frame(
             "flight_regime": str(flight_regime),
             "cel_latched": bool(cel_latched),
             "cbf_delta_u_norm": float(cbf_delta_u_norm),
+            "cbvf_min_v": float(cbvf_min_v),
             "active_slz_id": str(active_slz_id),
             "dist_ltfj_ctr_m": float(dist_ltfj_ctr_m),
             "dist_ltbx_ctr_m": float(dist_ltbx_ctr_m),
@@ -269,6 +271,7 @@ def vrta_frame_to_ws_packet(
         flight_regime=_FLIGHT_REGIME_LABELS.get(frame.flight_regime, f"REGIME_{frame.flight_regime}"),
         cel_latched=bool(frame.cel_latched),
         cbf_delta_u_norm=delta_u,
+        cbvf_min_v=float(frame.cbvf_min_v),
         dist_ltfj_ctr_m=frame.ltfj_margin_m,
         dist_ltbx_ctr_m=frame.ltbx_margin_m,
         cbvf_update_seq=frame.seq // 20,
@@ -286,6 +289,61 @@ def _encode_ws_text_frame(payload_text: str) -> bytes:
     else:
         header = struct.pack("!BBQ", 0x81, 127, n)
     return header + data
+
+
+def _encode_ws_control_frame(opcode: int, payload: bytes = b"") -> bytes:
+    """Encode an unmasked server-to-client RFC 6455 control frame (Pong=0xA, Close=0x8)."""
+    data = payload[:125]
+    return struct.pack("!BB", 0x80 | (opcode & 0x0F), len(data)) + data
+
+
+async def _read_ws_client_frame(reader: asyncio.StreamReader) -> tuple[int, bytes] | None:
+    """Decode one client-to-server RFC 6455 frame (supports masked control & text frames)."""
+    try:
+        hdr = await reader.readexactly(2)
+    except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError):
+        return None
+    opcode = hdr[0] & 0x0F
+    masked = bool(hdr[1] & 0x80)
+    length = hdr[1] & 0x7F
+    try:
+        if length == 126:
+            length = struct.unpack("!H", await reader.readexactly(2))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", await reader.readexactly(8))[0]
+        if length > 65536:
+            return (0x8, b"")
+        mask_key = await reader.readexactly(4) if masked else b""
+        raw = await reader.readexactly(length) if length > 0 else b""
+    except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError):
+        return None
+    if masked and raw:
+        data = bytes(b ^ mask_key[i & 3] for i, b in enumerate(raw))
+    else:
+        data = raw
+    return (opcode, data)
+
+
+def _apply_live_fault_override(pkt: dict[str, Any], live_state: dict[str, Any]) -> dict[str, Any]:
+    """Apply live client-injected fault_mask / CEL override onto outgoing telemetry packet."""
+    fault_mask = int(live_state.get("fault_mask", 0)) & 0xFF
+    if fault_mask == 0 and not live_state.get("cel_latched", False):
+        return pkt
+    active_mask = (~fault_mask) & 0xFF
+    failed = [i for i in range(8) if not (active_mask & (1 << i))]
+    pkt["propulsion"]["active_motor_mask"] = active_mask
+    pkt["propulsion"]["failed_motor_indices"] = failed
+    pkt["propulsion"]["smoke_active"] = bool(failed)
+    pkt["propulsion"]["rotor_rpm"] = [
+        0.0 if not (active_mask & (1 << i)) else float(pkt["propulsion"]["rotor_rpm"][i])
+        for i in range(8)
+    ]
+    if live_state.get("cel_latched", False):
+        pkt["safety_avionics"]["cel_latched"] = True
+        pkt["safety_avionics"]["flight_regime"] = "CEL_SAME_ARM_ACTIVE_SPIN"
+    elif failed:
+        pkt["safety_avionics"]["flight_regime"] = f"DEGRADED_{8 - len(failed)}_ROTOR"
+    return pkt
 
 
 async def _handle_client(
@@ -328,21 +386,106 @@ async def _handle_client(
             writer.write(handshake.encode("ascii"))
             await writer.drain()
 
-            if vrta_path is not None and vrta_path.exists():
-                vrta_hdr, frames = read_vrta_file(vrta_path)
-                stride = max(1, int(round(100.0 / max(1.0, pose_hz))))
-                period_s = 1.0 / max(1.0, pose_hz)
-                bridge = VertiRTAGeodesyBridge(
-                    anchor_lat_deg=vrta_hdr.datum_lat_deg,
-                    anchor_lon_deg=vrta_hdr.datum_lon_deg,
-                    anchor_h_amsl_m=vrta_hdr.datum_amsl_m,
-                    fixed_geoid_n_m=vrta_hdr.egm2008_n_m,
-                )
-                for frame in frames[::stride]:
-                    pkt = vrta_frame_to_ws_packet(frame, vrta_hdr, bridge=bridge)
-                    writer.write(_encode_ws_text_frame(json.dumps(pkt)))
+            live_state: dict[str, Any] = {
+                "fault_mask": 0,
+                "cel_latched": False,
+                "closed": False,
+            }
+            write_lock = asyncio.Lock()
+
+            async def _ws_send(frame_bytes: bytes) -> None:
+                async with write_lock:
+                    writer.write(frame_bytes)
                     await writer.drain()
-                    await asyncio.sleep(period_s)
+
+            async def _read_client_loop() -> None:
+                while not live_state["closed"]:
+                    msg = await _read_ws_client_frame(reader)
+                    if msg is None:
+                        live_state["closed"] = True
+                        return
+                    opcode, payload = msg
+                    if opcode == 0x8:  # Close
+                        live_state["closed"] = True
+                        try:
+                            await _ws_send(_encode_ws_control_frame(0x8, payload[:2]))
+                        except (ConnectionResetError, BrokenPipeError):
+                            pass
+                        return
+                    if opcode == 0x9:  # Ping -> Pong
+                        try:
+                            await _ws_send(_encode_ws_control_frame(0xA, payload))
+                        except (ConnectionResetError, BrokenPipeError):
+                            live_state["closed"] = True
+                            return
+                    elif opcode == 0x1:  # Text JSON fault injection
+                        try:
+                            cmd = json.loads(payload.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            continue
+                        if isinstance(cmd, dict) and cmd.get("type") == "fault_inject":
+                            kind = str(cmd.get("kind", ""))
+                            target = int(cmd.get("targetIdx", 0))
+                            if kind == "reset":
+                                live_state["fault_mask"] = 0
+                                live_state["cel_latched"] = False
+                            elif kind == "single":
+                                live_state["fault_mask"] |= 1 << (target % 8)
+                            elif kind == "same_arm":
+                                arm = target % 4
+                                live_state["fault_mask"] |= (1 << arm) | (1 << (arm + 4))
+                                live_state["cel_latched"] = True
+
+            reader_task = asyncio.create_task(_read_client_loop())
+            period_s = 1.0 / max(1.0, pose_hz)
+            try:
+                if vrta_path is not None and vrta_path.exists():
+                    vrta_hdr, frames = read_vrta_file(vrta_path)
+                    stride = max(1, int(round(100.0 / max(1.0, pose_hz))))
+                    bridge = VertiRTAGeodesyBridge(
+                        anchor_lat_deg=vrta_hdr.datum_lat_deg,
+                        anchor_lon_deg=vrta_hdr.datum_lon_deg,
+                        anchor_h_amsl_m=vrta_hdr.datum_amsl_m,
+                        fixed_geoid_n_m=vrta_hdr.egm2008_n_m,
+                    )
+                    for frame in frames[::stride]:
+                        if live_state["closed"]:
+                            break
+                        pkt = vrta_frame_to_ws_packet(frame, vrta_hdr, bridge=bridge)
+                        pkt = _apply_live_fault_override(pkt, live_state)
+                        await _ws_send(_encode_ws_text_frame(json.dumps(pkt)))
+                        await asyncio.sleep(period_s)
+                else:
+                    # Synthetic Kartal live hover telemetry fallback when launched without --vrta
+                    seq = 0
+                    while not live_state["closed"]:
+                        pkt = encode_ws_telemetry_frame(
+                            seq=seq,
+                            sim_time_s=seq * period_s,
+                            lat_deg=40.8860,
+                            lon_deg=29.1880,
+                            alt_amsl_m=47.0,
+                            geoid_n_m=36.7,
+                            agl_m=35.0,
+                            q_enu_flu=(1.0, 0.0, 0.0, 0.0),
+                            active_motor_mask=0xFF,
+                            cbvf_ring_lat_lon_hae=[[40.8860, 29.1880, 83.7]],
+                            soc_pct=80.0,
+                            v_term_v=403.2,
+                            cbvf_min_v=25.0,
+                            playback_mode="LIVE_SIM_FALLBACK",
+                        )
+                        pkt = _apply_live_fault_override(pkt, live_state)
+                        await _ws_send(_encode_ws_text_frame(json.dumps(pkt)))
+                        seq += 1
+                        await asyncio.sleep(period_s)
+            finally:
+                live_state["closed"] = True
+                reader_task.cancel()
+                try:
+                    await reader_task
+                except asyncio.CancelledError:
+                    pass
             return
 
         # Static HTTP routes for :5180 live tactical console & container /healthz

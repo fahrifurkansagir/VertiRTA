@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Multi-stage hardened runtime container for VertiRTA C++20 CLI + WebSocket Telemetry Bridge (:8891)
 
-FROM debian:bookworm-slim AS builder
+FROM ubuntu:24.04 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake ninja-build git ca-certificates \
+    gcc-14 g++-14 cmake ninja-build git ca-certificates pkg-config \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -14,12 +14,16 @@ COPY include ./include
 COPY tools ./tools
 
 RUN cmake -S /src -B /build -G Ninja \
+      -DCMAKE_C_COMPILER=gcc-14 \
+      -DCMAKE_CXX_COMPILER=g++-14 \
       -DCMAKE_BUILD_TYPE=Release \
       -DVERTIRTA_BUILD_COMPANION=ON \
       -DVERTIRTA_BUILD_TESTS=OFF \
       -DVERTIRTA_ENABLE_STRICT_FP=ON \
   && cmake --build /build --target vertirta_replay_cli vertirta_6dof_batch_cli -j \
-  && strip /build/tools/cli/vertirta_replay_cli /build/tools/cli/vertirta_6dof_batch_cli
+  && strip /build/tools/cli/vertirta_replay_cli /build/tools/cli/vertirta_6dof_batch_cli \
+  && mkdir -p /out/data \
+  && /build/tools/cli/vertirta_replay_cli --generate-fixture /out/data/corridor_faults.vrta --ticks 1000
 
 FROM python:3.11-slim-bookworm AS runtime
 
@@ -30,6 +34,7 @@ RUN groupadd -g 10001 vertirta \
 WORKDIR /app
 COPY --from=builder /build/tools/cli/vertirta_replay_cli /usr/local/bin/vertirta_replay_cli
 COPY --from=builder /build/tools/cli/vertirta_6dof_batch_cli /usr/local/bin/vertirta_6dof_batch_cli
+COPY --from=builder /out/data/corridor_faults.vrta /app/data/corridor_faults.vrta
 COPY viz/__init__.py /app/viz/__init__.py
 COPY viz/cesium /app/viz/cesium
 COPY viz/geo /app/viz/geo
@@ -42,4 +47,4 @@ ENV PYTHONUNBUFFERED=1
 USER 10001:10001
 EXPOSE 8891
 
-CMD ["python", "-m", "viz.cesium.ws_server", "--host", "0.0.0.0", "--port", "8891"]
+CMD ["python", "-m", "viz.cesium.ws_server", "--host", "0.0.0.0", "--port", "8891", "--vrta", "/app/data/corridor_faults.vrta"]

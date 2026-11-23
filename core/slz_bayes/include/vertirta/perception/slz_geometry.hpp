@@ -19,6 +19,12 @@ struct CameraIntrinsics {
   uint32_t height{512u};
   float z_min_m{0.8f};
   float z_max_m{150.0f};
+  // Optional Brown-Conrady radial/tangential lens distortion (all 0 = pinhole fast path).
+  float k1{0.0f};
+  float k2{0.0f};
+  float p1{0.0f};
+  float p2{0.0f};
+  float k3{0.0f};
 };
 
 // Row-major 3x3 rotation matrix.

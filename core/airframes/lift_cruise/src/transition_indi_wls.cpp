@@ -18,6 +18,30 @@ constexpr double kB2_15 = 0.011906332234389828;
 constexpr double kA1_15 = -1.6692031429311931;
 constexpr double kA2_15 = 0.7168284718687524;
 
+[[nodiscard]] core::Vec3Ned rotate_frd_to_ned_q(
+    const core::QuatPx4FrdNed& q,
+    const core::Vec3Frd& v) noexcept {
+  const double n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+  const double inv = (n > 1e-12) ? (1.0 / n) : 1.0;
+  const double w = q.w * inv, x = q.x * inv, y = q.y * inv, z = q.z * inv;
+
+  const double r00 = 1.0 - 2.0 * (y * y + z * z);
+  const double r01 = 2.0 * (x * y - w * z);
+  const double r02 = 2.0 * (x * z + w * y);
+  const double r10 = 2.0 * (x * y + w * z);
+  const double r11 = 1.0 - 2.0 * (x * x + z * z);
+  const double r12 = 2.0 * (y * z - w * x);
+  const double r20 = 2.0 * (x * z - w * y);
+  const double r21 = 2.0 * (y * z + w * x);
+  const double r22 = 1.0 - 2.0 * (x * x + y * y);
+
+  return {
+      r00 * v.x + r01 * v.y + r02 * v.z,
+      r10 * v.x + r11 * v.y + r12 * v.z,
+      r20 * v.x + r21 * v.y + r22 * v.z,
+  };
+}
+
 void quat_to_euler_zyx(const core::QuatPx4FrdNed& q, double& roll, double& pitch, double& yaw) noexcept {
   const double n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
   const double inv = (n > 1e-12) ? (1.0 / n) : 1.0;
@@ -289,6 +313,8 @@ void TransitionIndiWlsController::reset(const AirframeState6Dof& initial_state) 
   for (uint8_t i = 0; i < kMaxActuators; ++i) {
     u_hat_[i] = initial_state.u_act[i];
     u_f_[i] = initial_state.u_act[i];
+    u_cmd_prev_[i] = initial_state.u_act[i];
+    esc_stale_ticks_[i] = 0u;
     act_lpf_[i].reset(initial_state.u_act[i]);
   }
 }
@@ -296,6 +322,31 @@ void TransitionIndiWlsController::reset(const AirframeState6Dof& initial_state) 
 TransitionOutput TransitionIndiWlsController::step_400hz(
     const AirframeState6Dof& state,
     const core::Vec3Ned& wind_ned,
+    const TransitionCommand& cmd) noexcept {
+  const auto dyn_now = dynamics_.eval_dynamics(state, wind_ned, cmd.fault_mask);
+  TransitionSensorFrame sensors{};
+  sensors.gyro_meas_frd = state.omega_frd;
+  sensors.accel_meas_frd = dyn_now.accel_body_frd;
+  sensors.pitot_airspeed_mps = dyn_now.airspeed_mps;
+  sensors.pitot_valid = true;
+  sensors.gnss_ekf_airspeed_mps = dyn_now.airspeed_mps;
+  sensors.gnss_ekf_valid = true;
+  sensors.aoa_vane_rad = dyn_now.alpha_rad;
+  sensors.aoa_vane_valid = true;
+  if (cmd.esc_thrust_n != nullptr && cmd.esc_valid != nullptr) {
+    sensors.use_esc_telemetry = true;
+    const uint8_t p_idx = dynamics_.pusher_index();
+    for (uint8_t i = 0; i <= p_idx && i < kMaxActuators; ++i) {
+      sensors.esc_thrust_meas_n[i] = cmd.esc_thrust_n[i];
+      sensors.esc_valid[i] = cmd.esc_valid[i];
+    }
+  }
+  return step_400hz_with_sensors(state, sensors, cmd);
+}
+
+TransitionOutput TransitionIndiWlsController::step_400hz_with_sensors(
+    const AirframeState6Dof& state,
+    const TransitionSensorFrame& sensors,
     const TransitionCommand& cmd) noexcept {
   if (!initialized_) {
     reset(state);
@@ -309,32 +360,81 @@ TransitionOutput TransitionIndiWlsController::step_400hz(
   const uint8_t e_idx = dynamics_.elevator_index();
   const uint8_t r_idx = dynamics_.rudder_index();
 
-  // 1. Synchronized 15 Hz Butterworth filtering of IMU rates, specific force, and actuators (Smeur sync)
-  const auto dyn_now = dynamics_.eval_dynamics(state, wind_ned, cmd.fault_mask);
-  const double v_air = dyn_now.airspeed_mps;
-  const double alpha = dyn_now.alpha_rad;
+  // 1. Sensor arbitration (Pitot-static with blocked-tube GNSS/EKF failover, AoA vane fallback, IMU NaN guard)
+  double roll_s = 0.0, pitch_s = 0.0, yaw_s = 0.0;
+  quat_to_euler_zyx(state.q_frd_ned, roll_s, pitch_s, yaw_s);
+
+  double v_air = 0.0;
+  const bool pitot_ok = sensors.pitot_valid && core::is_finite_d(sensors.pitot_airspeed_mps) &&
+                        sensors.pitot_airspeed_mps >= 0.0 && sensors.pitot_airspeed_mps <= 65.0;
+  if (pitot_ok) {
+    v_air = sensors.pitot_airspeed_mps;
+    out.pitot_failover_active = false;
+  } else {
+    out.pitot_failover_active = true;
+    const bool gnss_ok = sensors.gnss_ekf_valid && core::is_finite_d(sensors.gnss_ekf_airspeed_mps) &&
+                         sensors.gnss_ekf_airspeed_mps >= 0.0 && sensors.gnss_ekf_airspeed_mps <= 65.0;
+    v_air = gnss_ok ? sensors.gnss_ekf_airspeed_mps : core::clamp_d(state.vel_ned.norm(), 0.0, 65.0);
+  }
+
+  double alpha = 0.0;
+  if (sensors.aoa_vane_valid && core::is_finite_d(sensors.aoa_vane_rad)) {
+    alpha = core::clamp_d(sensors.aoa_vane_rad, -0.60, 0.60);
+  } else if (v_air > 4.0) {
+    const double gamma_est = std::atan2(-state.vel_ned.z, std::max(v_air, 4.0));
+    alpha = core::clamp_d(pitch_s - gamma_est, -0.60, 0.60);
+  }
   out.airspeed_mps = v_air;
   out.alpha_rad = alpha;
 
+  const core::Vec3Frd gyro_in = sensors.gyro_meas_frd.is_finite() ? sensors.gyro_meas_frd : gyro_f_;
+  const core::Vec3Frd accel_in = sensors.accel_meas_frd.is_finite() ? sensors.accel_meas_frd : accel_f_;
+
+  // Synchronized 15 Hz Butterworth filtering of IMU rates, specific force, and actuators (Smeur sync)
   gyro_f_prev_ = gyro_f_;
   gyro_f_ = {
-      gyro_lpf_[0].step(state.omega_frd.x),
-      gyro_lpf_[1].step(state.omega_frd.y),
-      gyro_lpf_[2].step(state.omega_frd.z),
+      gyro_lpf_[0].step(gyro_in.x),
+      gyro_lpf_[1].step(gyro_in.y),
+      gyro_lpf_[2].step(gyro_in.z),
   };
   const core::Vec3Frd dgyro_f = (gyro_f_ - gyro_f_prev_) * (1.0 / kDt400);
   accel_f_ = {
-      accel_lpf_[0].step(dyn_now.accel_body_frd.x),
-      accel_lpf_[1].step(dyn_now.accel_body_frd.y),
-      accel_lpf_[2].step(dyn_now.accel_body_frd.z),
+      accel_lpf_[0].step(accel_in.x),
+      accel_lpf_[1].step(accel_in.y),
+      accel_lpf_[2].step(accel_in.z),
   };
 
-  EffectivenessMatrix eff{};
-  dynamics_.compute_effectiveness(state, wind_ned, cmd.fault_mask, kDt400, eff);
+  // Evaluate airspeed-scheduled effectiveness from arbitrated (v_air, alpha) without oracle wind_ned
+  AirframeState6Dof eff_state = state;
+  const core::Vec3Frd v_air_frd{v_air * std::cos(alpha), 0.0, v_air * std::sin(alpha)};
+  eff_state.vel_ned = rotate_frd_to_ned_q(state.q_frd_ned, v_air_frd);
 
+  EffectivenessMatrix eff{};
+  dynamics_.compute_effectiveness(eff_state, {0.0, 0.0, 0.0}, cmd.fault_mask, kDt400, eff);
+
+  // Per-channel actuator state tracking with bidirectional DShot staleness supervision
+  const uint16_t stale_lim = std::max<uint16_t>(sensors.esc_stale_ticks_limit, 1u);
   for (uint8_t i = 0; i < n_act; ++i) {
-    if (cmd.esc_thrust_n != nullptr && cmd.esc_valid != nullptr && i <= p_idx && cmd.esc_valid[i]) {
-      u_hat_[i] = cmd.esc_thrust_n[i];
+    const bool is_prop = (i <= p_idx);
+    if (sensors.use_esc_telemetry && is_prop) {
+      const bool ch_ok = sensors.esc_valid[i] && core::is_finite_d(sensors.esc_thrust_meas_n[i]);
+      if (ch_ok) {
+        esc_stale_ticks_[i] = 0u;
+        u_hat_[i] = core::clamp_d(sensors.esc_thrust_meas_n[i], eff.u_min[i], eff.u_max[i]);
+      } else {
+        if (esc_stale_ticks_[i] < 65535u) {
+          ++esc_stale_ticks_[i];
+        }
+        if (esc_stale_ticks_[i] >= stale_lim) {
+          out.esc_stale_mask |= static_cast<uint16_t>(1u << i);
+        }
+        // Graceful fallback to internal 1st-order actuator lag observer when DShot drops out
+        const double tau = std::max(0.01, eff.tau_act_s[i]);
+        const double k_lag = 1.0 - std::exp(-kDt400 / tau);
+        const bool ch_failed = (cmd.fault_mask & static_cast<uint16_t>(1u << i)) != 0u;
+        const double target = ch_failed ? 0.0 : core::clamp_d(u_cmd_prev_[i], eff.u_min[i], eff.u_max[i]);
+        u_hat_[i] = core::clamp_d(u_hat_[i] + k_lag * (target - u_hat_[i]), eff.u_min[i], eff.u_max[i]);
+      }
     } else {
       u_hat_[i] = state.u_act[i];
     }
@@ -344,7 +444,8 @@ TransitionOutput TransitionIndiWlsController::step_400hz(
   // 2. Envelope Protection & Fault Policy State Machine (V_stall, OEI, Pusher Failure)
   const uint16_t lift_mask = static_cast<uint16_t>(cmd.fault_mask & ((1u << n_lift) - 1u));
   const bool pusher_failed = (cmd.fault_mask & static_cast<uint16_t>(1u << p_idx)) != 0u;
-  const double v_stall_nz = LiftCruiseDynamics::kStallSpeed1gMps * std::sqrt(std::max(dyn_now.load_factor_nz, 0.5));
+  const double load_factor_nz = std::max(-accel_f_.z / LiftCruiseDynamics::kGravity, 0.5);
+  const double v_stall_nz = LiftCruiseDynamics::kStallSpeed1gMps * std::sqrt(load_factor_nz);
   double target_v = core::clamp_d(cmd.target_airspeed_mps, 0.0, LiftCruiseDynamics::kVneAirspeedMps);
 
   double eta_target = quintic_hermite_blend(v_air);
@@ -455,15 +556,15 @@ TransitionOutput TransitionIndiWlsController::step_400hz(
   const double yaw_err = core::wrap_pi_d(cmd.target_heading_rad - yaw);
   const double phi_des = 0.0;
 
-  // PD rotational virtual acceleration demands [p_dot, q_dot, r_dot]
-  const double p_dot_des = core::clamp_d(14.0 * (phi_des - roll) - 6.5 * state.omega_frd.x, -6.0, 6.0);
-  double q_dot_des = core::clamp_d(16.0 * (theta_des - pitch) - 7.5 * state.omega_frd.y, -6.0, 6.0);
-  const double r_dot_des = core::clamp_d(6.0 * yaw_err - 4.0 * state.omega_frd.z, -4.0, 4.0);
+  // PD rotational virtual acceleration demands [p_dot, q_dot, r_dot] using filtered gyro rates
+  const double p_dot_des = core::clamp_d(14.0 * (phi_des - roll) - 6.5 * gyro_f_.x, -6.0, 6.0);
+  double q_dot_des = core::clamp_d(16.0 * (theta_des - pitch) - 7.5 * gyro_f_.y, -6.0, 6.0);
+  const double r_dot_des = core::clamp_d(6.0 * yaw_err - 4.0 * gyro_f_.z, -4.0, 4.0);
 
   // AoA ceiling barrier (alpha_max = 12.0 deg = 0.20944 rad, DR-09 Sec 1.5)
   constexpr double kAlphaMaxRad = 12.0 * core::kDegToRad;
   if (v_air > 8.0 && alpha > 0.75 * kAlphaMaxRad) {
-    const double q_dot_cap = 12.0 * (kAlphaMaxRad - alpha) - 4.5 * state.omega_frd.y;
+    const double q_dot_cap = 12.0 * (kAlphaMaxRad - alpha) - 4.5 * gyro_f_.y;
     if (q_dot_des > q_dot_cap) {
       q_dot_des = q_dot_cap;
       out.aoa_barrier_active = true;
@@ -557,6 +658,7 @@ TransitionOutput TransitionIndiWlsController::step_400hz(
       cmd_i = core::clamp_d(cmd_i, eff.u_min[i], eff.u_max[i]);
     }
     out.u_cmd[i] = cmd_i;
+    u_cmd_prev_[i] = cmd_i;
     if (!core::is_finite_d(cmd_i)) {
       all_finite = false;
     }

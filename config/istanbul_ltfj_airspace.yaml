@@ -2,6 +2,10 @@
 # DISCLAIMER: Simulation reference only — NOT for real-world aeronautical navigation.
 schema_version: 1
 corridor_name: Maltepe-Dragos-Kartal Coastal Corridor
+airac_cycle: "2611"
+airac_effective_utc: "2026-10-29T00:00:00Z"
+airac_expires_utc: "2026-11-26T00:00:00Z"
+airac_authority: "DHMI AIP Turkey (simulation snapshot; refresh every 28-day AIRAC cycle and live IHATTYS/NOTAM feed before any real-world operation)"
 
 datum:
   name: Kartal Coastal Vertiport
@@ -45,10 +49,10 @@ airspace:
   ltbx_ctr:
     icao: LTBX
     name: Istanbul Samandira CTR (AIP Turkey AD 2 LTBX)
-    # DHMI AD 2 LTBX ARP 40d59m26sN (verify against current AD 2.17 PDF; DR-6 cited 40d59m56sN)
+    # Verified 2026-11-23 against official DHMI AIP Turkey (dhmi.gov.tr / aip.aero): 405926N-0291258E
     arp_lat_deg: 40.990556
     arp_lon_deg: 29.216111
-    arp_verification_note: "Verify 40d59m26sN vs 40d59m56sN against current DHMI AD 2.17 PDF before operational use"
+    arp_verification_note: "Verified 2026-11-23 against official DHMI AIP Turkey (dhmi.gov.tr / aip.aero): LTBX ARP = 40d59m26sN 029d12m58sE (405926N-0291258E = 40.990556 N, 29.216111 E); supersedes legacy 40d59m56sN draft typo."
     radius_nm: 5.0
     radius_m: 9260.0
     floor_amsl_m: 0.0

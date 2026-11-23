@@ -6,6 +6,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 
 #ifdef VERTIRTA_HAS_ORT
 #include <cuda_runtime_api.h>
@@ -36,15 +37,47 @@ inline constexpr std::size_t kSlzBdryElements =
 struct SlzOrtConfig {
   std::string onnx_path{};
   std::string trt_cache_dir{};
-  bool use_tensorrt{true};
-  bool enable_fp16{true};
+  std::string ood_calibration_path{};
+  bool use_tensorrt{false};
+  bool enable_fp16{false};
   bool enable_cuda_graph{true};
   bool allow_mock_fallback{true};
+  std::string arena_extend_strategy{"kSameAsRequested"};
+  std::string cudnn_conv_algo_search{"AUTO"};
   float t_ood{1.0f};
   float t_prob{1.25f};
   float kappa_b{1.5f};
   float tau_ood{-8.0f};
 };
+
+struct CudaProviderTuning {
+  std::string arena_extend_strategy{"kSameAsRequested"};
+  std::string cudnn_conv_algo_search{"HEURISTIC"};
+  bool cudnn_conv_use_max_workspace{false};
+  bool enable_cuda_graph{true};
+};
+
+// Resolves platform-specific ORT CUDA ExecutionProvider tuning for TU116 (4 GB GTX 1650 SUPER):
+//   "AUTO" -> Windows WDDM: EXHAUSTIVE + max_workspace=1; Linux/WSL2: HEURISTIC + max_workspace=0.
+[[nodiscard]] CudaProviderTuning ResolveCudaProviderTuning(
+    const SlzOrtConfig& cfg,
+#ifdef _WIN32
+    bool is_windows_host = true
+#else
+    bool is_windows_host = false
+#endif
+) noexcept;
+
+// Parses ood_calibration.json text (T_ood, T_prob, kappa_b, tau_ood) into cfg with finite bounds checks.
+// Zero external JSON dependencies; leaves cfg unchanged and returns false on any malformed/out-of-range value.
+[[nodiscard]] bool ParseOodCalibrationJson(
+    std::string_view json_text,
+    SlzOrtConfig& cfg) noexcept;
+
+// Loads ood_calibration.json from disk and updates cfg.{t_ood, t_prob, kappa_b, tau_ood}.
+[[nodiscard]] bool LoadOodCalibrationJson(
+    const std::string& path,
+    SlzOrtConfig& cfg);
 
 // Computes per-pixel Helmholtz Free Energy: E(u) = -T * log(sum_c exp(f_c(u) / T))
 // from NCHW seg_logits [5, 512, 512]. Zero heap allocations.

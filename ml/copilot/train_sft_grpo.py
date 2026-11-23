@@ -64,6 +64,9 @@ class GrpoPolicyConfig:
     vllm_gpu_memory_utilization: float = 0.30
     sft_epochs: int = 2
     max_grpo_steps: int = 120
+    grpo_grad_accum: int = 2
+    grpo_learning_rate: float = 5.0e-6
+    grpo_temperature: float = 0.85
     save_merged_bf16: bool = False
     target_modules: tuple[str, ...] = field(default=LORA_TARGET_MODULES)
 
@@ -100,6 +103,10 @@ class GrpoPolicyConfig:
             )
         if self.batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.grpo_grad_accum < 1:
+            raise ValueError(f"grpo_grad_accum must be >= 1, got {self.grpo_grad_accum}")
+        if not (0.1 <= self.grpo_temperature <= 2.0):
+            raise ValueError(f"grpo_temperature must lie in [0.1, 2.0], got {self.grpo_temperature}")
         if not (0.10 <= self.vllm_gpu_memory_utilization <= 0.85):
             raise ValueError(
                 f"vllm_gpu_memory_utilization must lie in [0.10, 0.85], got {self.vllm_gpu_memory_utilization}"
@@ -329,13 +336,14 @@ def run_colab_sft_grpo(
     # when TRL expects completions-per-step, or cfg.batch_size prompts depending on TRL version.
     grpo_raw_kwargs: dict[str, Any] = {
         "output_dir": str(grpo_dir),
-        "learning_rate": 5.0e-6,
+        "learning_rate": cfg.grpo_learning_rate,
         "lr_scheduler_type": "cosine",
         "warmup_ratio": 0.10,
         "max_grad_norm": 0.5,
         "per_device_train_batch_size": cfg.num_generations,
-        "gradient_accumulation_steps": 2,
+        "gradient_accumulation_steps": cfg.grpo_grad_accum,
         "num_generations": cfg.num_generations,
+        "temperature": cfg.grpo_temperature,
         "max_completion_length": cfg.max_completion_length,
         "max_prompt_length": 384,
         "loss_type": cfg.loss_type,
@@ -444,6 +452,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--num-generations", type=int, default=8, help="GRPO rollout group size G (default 8).")
     parser.add_argument("--sft-epochs", type=int, default=2, help="Stage-1 SFT epochs (default 2).")
     parser.add_argument("--max-grpo-steps", type=int, default=120, help="Stage-2 Z3-GRPO optimizer steps.")
+    parser.add_argument("--grpo-grad-accum", type=int, default=2, help="GRPO gradient accumulation steps.")
+    parser.add_argument("--grpo-lr", type=float, default=5.0e-6, help="GRPO learning rate.")
+    parser.add_argument("--grpo-temperature", type=float, default=0.85, help="GRPO rollout sampling temperature.")
     parser.add_argument("--no-vllm", action="store_true", help="Disable colocate vLLM to prevent L4 24 GB OOM (default).")
     parser.add_argument("--use-vllm", action="store_true", help="Opt-in to colocate vLLM rollout engine.")
     parser.add_argument(
@@ -468,6 +479,9 @@ def main(argv: list[str] | None = None) -> int:
         num_generations=args.num_generations,
         sft_epochs=args.sft_epochs,
         max_grpo_steps=args.max_grpo_steps,
+        grpo_grad_accum=args.grpo_grad_accum,
+        grpo_learning_rate=args.grpo_lr,
+        grpo_temperature=args.grpo_temperature,
         use_vllm=use_vllm,
         vllm_gpu_memory_utilization=args.vllm_gpu_util,
         save_merged_bf16=args.save_merged_bf16,

@@ -32,6 +32,32 @@ if(NOT TARGET vertirta::flight_core)
   )
 endif()
 
+if(NOT TARGET vertirta::rta_companion
+   AND EXISTS "${VERTIRTA_REPO_ROOT}/core/rta_companion/CMakeLists.txt")
+  add_subdirectory(
+    "${VERTIRTA_REPO_ROOT}/core/rta_companion"
+    "${CMAKE_CURRENT_BINARY_DIR}/rta_companion"
+    EXCLUDE_FROM_ALL
+  )
+endif()
+if(NOT TARGET vertirta::uspace_fleet
+   AND EXISTS "${VERTIRTA_REPO_ROOT}/core/uspace_fleet/CMakeLists.txt")
+  set(VERTIRTA_REQUIRE_LIBSODIUM OFF CACHE BOOL "Optional libsodium in Python SDK wheel" FORCE)
+  add_subdirectory(
+    "${VERTIRTA_REPO_ROOT}/core/uspace_fleet"
+    "${CMAKE_CURRENT_BINARY_DIR}/uspace_fleet"
+    EXCLUDE_FROM_ALL
+  )
+endif()
+if(NOT TARGET vertirta::airframes_lc
+   AND EXISTS "${VERTIRTA_REPO_ROOT}/core/airframes/lift_cruise/CMakeLists.txt")
+  add_subdirectory(
+    "${VERTIRTA_REPO_ROOT}/core/airframes/lift_cruise"
+    "${CMAKE_CURRENT_BINARY_DIR}/airframes_lc"
+    EXCLUDE_FROM_ALL
+  )
+endif()
+
 find_package(Python 3.11 REQUIRED
   COMPONENTS Interpreter Development.Module
   OPTIONAL_COMPONENTS Development.SABIModule
@@ -60,6 +86,15 @@ nanobind_add_module(_vertirta_native
 )
 
 target_link_libraries(_vertirta_native PRIVATE vertirta::flight_core)
+if(TARGET vertirta::uspace_fleet AND TARGET vertirta::airframes_lc)
+  target_link_libraries(_vertirta_native PRIVATE
+    vertirta::uspace_fleet
+    vertirta::airframes_lc
+  )
+  target_compile_definitions(_vertirta_native PRIVATE VERTIRTA_SDK_HAS_M2=1)
+else()
+  target_compile_definitions(_vertirta_native PRIVATE VERTIRTA_SDK_HAS_M2=0)
+endif()
 target_compile_features(_vertirta_native PRIVATE cxx_std_20)
 if(NOT MSVC)
   target_compile_options(_vertirta_native PRIVATE -Wall -Wextra -Wpedantic)

@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// VertiRTA v3.0.0 — nanobind C++20 Python SDK bindings wrapping frozen vertirta::flight_core.
+// VertiRTA v3.5.1 — nanobind C++20 Python SDK bindings wrapping vertirta::flight_core & M2 engines.
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -11,13 +18,6 @@
 #include <thread>
 #include <vector>
 
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/array.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/tuple.h>
-#include <nanobind/stl/vector.h>
-
 #include "vertirta/core/coax_envelope.hpp"
 #include "vertirta/core/frames.hpp"
 #include "vertirta/core/indi_wls.hpp"
@@ -26,6 +26,12 @@
 #include "vertirta/core/sim_plant_6dof.hpp"
 #include "vertirta/core/tmr_voter.hpp"
 #include "vertirta/core/vrta_recorder.hpp"
+
+#if defined(VERTIRTA_SDK_HAS_M2) && VERTIRTA_SDK_HAS_M2
+#include "vertirta/airframes/lift_cruise_dynamics.hpp"
+#include "vertirta/uspace/fleet_sim_engine.hpp"
+#include "vertirta/uspace/part_is_security.hpp"
+#endif
 
 namespace nb = nanobind;
 
@@ -524,6 +530,108 @@ uint32_t py_crc32c_bytes(const nb::bytes& data) {
   return crc32c(data.c_str(), data.size());
 }
 
+#if defined(VERTIRTA_SDK_HAS_M2) && VERTIRTA_SDK_HAS_M2
+const char* cyber_state_name(vertirta::uspace::CyberState st) noexcept {
+  switch (st) {
+    case vertirta::uspace::CyberState::SEC_NOMINAL:
+      return "SEC_NOMINAL";
+    case vertirta::uspace::CyberState::SEC_SUSPECT_PEER:
+      return "SEC_SUSPECT_PEER";
+    case vertirta::uspace::CyberState::SEC_USSP_QUARANTINE:
+      return "SEC_USSP_QUARANTINE";
+    case vertirta::uspace::CyberState::SEC_AUTONOMOUS_RTB:
+      return "SEC_AUTONOMOUS_RTB";
+    default:
+      return "SEC_UNKNOWN";
+  }
+}
+
+class NativeFleetSim {
+ public:
+  explicit NativeFleetSim(uint32_t n_agents = 20U, uint32_t threads = 1U)
+      : engine_(n_agents, threads) {}
+
+  void reset(uint64_t seed = 20261123ULL) {
+    engine_.reset_corridor_schedule(seed);
+    fsm_.reset();
+  }
+
+  void inject_same_arm_cel(uint32_t agent_idx, uint32_t arm_idx = 0U) {
+    engine_.inject_same_arm_cel(agent_idx, arm_idx);
+  }
+
+  nb::dict step_100hz() {
+    vertirta::uspace::FleetTickSummary s{};
+    {
+      nb::gil_scoped_release release;
+      s = engine_.step_100hz();
+    }
+    nb::dict out;
+    out["tick_index"] = s.tick_index;
+    out["active_agents"] = s.active_agents;
+    out["cel_active_agents"] = s.cel_active_agents;
+    out["airspace_breaches"] = s.airspace_breaches;
+    out["max_rta_hazard_rows"] = s.max_rta_hazard_rows;
+    out["min_inter_agent_sep_m"] = s.min_inter_agent_sep_m;
+    out["sim_time_s"] = s.sim_time_s;
+    return out;
+  }
+
+  [[nodiscard]] uint32_t agent_count() const noexcept { return engine_.agent_count(); }
+  [[nodiscard]] bool agent_cel_latched(uint32_t agent_idx) const noexcept {
+    return engine_.agent_cel_latched(agent_idx);
+  }
+
+  nb::dict check_ussp_geofence(bool sig_valid, double cmd_lon_deg, double cmd_agl_m, double t_s) {
+    const auto act = fsm_.on_ussp_command_check(sig_valid, cmd_lon_deg, cmd_agl_m, t_s);
+    nb::dict out;
+    out["cyber_state"] = std::string(cyber_state_name(fsm_.state()));
+    out["drop_ussp_directives"] = act.drop_ussp_directives;
+    out["emit_is_or_230_draft"] = act.emit_is_or_230_draft;
+    return out;
+  }
+
+  nb::dict step_cyber_time(double t_s, bool ussp_auth_restored = false) {
+    const auto act = fsm_.step_time(t_s, ussp_auth_restored);
+    nb::dict out;
+    out["cyber_state"] = std::string(cyber_state_name(fsm_.state()));
+    out["divert_to_nearest_fato_emg"] = act.divert_to_nearest_fato_emg;
+    out["elapsed_quarantine_s"] = act.elapsed_quarantine_s;
+    return out;
+  }
+
+ private:
+  vertirta::uspace::FleetSimEngine engine_;
+  vertirta::uspace::CyberResilienceFsm fsm_{};
+};
+
+class NativeLiftCruiseSim {
+ public:
+  explicit NativeLiftCruiseSim(const std::string& layout = "8+1")
+      : dyn_(layout == "4+1" ? vertirta::airframes::LiftCruiseLayout::kFourPlusOne
+                             : vertirta::airframes::LiftCruiseLayout::kEightPlusOne) {}
+
+  [[nodiscard]] uint8_t actuator_count() const noexcept { return dyn_.actuator_count(); }
+  [[nodiscard]] uint8_t lift_rotor_count() const noexcept { return dyn_.lift_rotor_count(); }
+  [[nodiscard]] double cruise_airspeed_mps() const noexcept { return dyn_.cruise_airspeed_mps(); }
+  [[nodiscard]] double max_airspeed_mps() const noexcept { return dyn_.max_airspeed_mps(); }
+  [[nodiscard]] double best_glide_ld_ratio() const noexcept { return dyn_.best_glide_ld_ratio(); }
+
+  nb::dict audit_oei_trim(double v_airspeed_mps, uint8_t failed_lift_rotor = 0U) const {
+    const auto res = dyn_.audit_oei_trim_feasibility(v_airspeed_mps, failed_lift_rotor);
+    nb::dict out;
+    out["trim_feasible_4dof"] = res.trim_feasible_4dof;
+    out["peak_thrust_ratio"] = res.peak_thrust_ratio;
+    out["effective_rank"] = res.effective_rank;
+    out["v_airspeed_mps"] = v_airspeed_mps;
+    return out;
+  }
+
+ private:
+  vertirta::airframes::LiftCruiseDynamics dyn_;
+};
+#endif
+
 }  // namespace
 
 NB_MODULE(_vertirta_native, m) {
@@ -595,4 +703,34 @@ NB_MODULE(_vertirta_native, m) {
            nb::arg("rew_out"),
            nb::arg("term_out"),
            nb::arg("cel_out"));
+
+#if defined(VERTIRTA_SDK_HAS_M2) && VERTIRTA_SDK_HAS_M2
+  m.attr("HAS_M2_BINDINGS") = true;
+
+  nb::class_<NativeFleetSim>(m, "NativeFleetSim")
+      .def(nb::init<uint32_t, uint32_t>(),
+           nb::arg("n_agents") = 20U, nb::arg("threads") = 1U)
+      .def_prop_ro("agent_count", &NativeFleetSim::agent_count)
+      .def("reset", &NativeFleetSim::reset, nb::arg("seed") = 20261123ULL)
+      .def("inject_same_arm_cel", &NativeFleetSim::inject_same_arm_cel,
+           nb::arg("agent_idx"), nb::arg("arm_idx") = 0U)
+      .def("step_100hz", &NativeFleetSim::step_100hz)
+      .def("agent_cel_latched", &NativeFleetSim::agent_cel_latched, nb::arg("agent_idx"))
+      .def("check_ussp_geofence", &NativeFleetSim::check_ussp_geofence,
+           nb::arg("sig_valid"), nb::arg("cmd_lon_deg"), nb::arg("cmd_agl_m"), nb::arg("t_s"))
+      .def("step_cyber_time", &NativeFleetSim::step_cyber_time,
+           nb::arg("t_s"), nb::arg("ussp_auth_restored") = false);
+
+  nb::class_<NativeLiftCruiseSim>(m, "NativeLiftCruiseSim")
+      .def(nb::init<const std::string&>(), nb::arg("layout") = "8+1")
+      .def_prop_ro("actuator_count", &NativeLiftCruiseSim::actuator_count)
+      .def_prop_ro("lift_rotor_count", &NativeLiftCruiseSim::lift_rotor_count)
+      .def_prop_ro("cruise_airspeed_mps", &NativeLiftCruiseSim::cruise_airspeed_mps)
+      .def_prop_ro("max_airspeed_mps", &NativeLiftCruiseSim::max_airspeed_mps)
+      .def_prop_ro("best_glide_ld_ratio", &NativeLiftCruiseSim::best_glide_ld_ratio)
+      .def("audit_oei_trim", &NativeLiftCruiseSim::audit_oei_trim,
+           nb::arg("v_airspeed_mps"), nb::arg("failed_lift_rotor") = 0U);
+#else
+  m.attr("HAS_M2_BINDINGS") = false;
+#endif
 }

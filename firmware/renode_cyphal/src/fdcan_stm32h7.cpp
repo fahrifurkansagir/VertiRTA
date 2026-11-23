@@ -108,9 +108,12 @@ bool fdcan1_init(const vertirta::bsp::SiliconRevInfo& rev) noexcept {
   const std::uint32_t clk_rb = vertirta::bsp::regs::reg32(kRccApb1henr);
   (void)clk_rb;
 
-  // Enter initialization mode (INIT=1) then enable configuration change (CCE=1).
+  // Enter initialization mode (INIT=1) then enable configuration change (CCE=1); fail-closed on timeout.
   vertirta::bsp::regs::reg32(kFdcanCccr) |= kCccrInit;
-  (void)wait_init_bit(true);
+  if (!wait_init_bit(true)) {
+    g_fdcan1_ready = false;
+    return false;
+  }
   vertirta::bsp::regs::reg32(kFdcanCccr) |= kCccrCce;
 
   // Configure CAN-FD + BRS with BOTH EFBI=0 (Erratum 2.24.3) and DAR=0 (Erratum 2.24.4) cleared.
@@ -149,9 +152,13 @@ bool fdcan1_init(const vertirta::bsp::SiliconRevInfo& rev) noexcept {
   vertirta::bsp::regs::reg32(kFdcanTxbc) =
       (0u << 30u) | (kTxFifoCount << 24u) | (kTxFifoWordOffset << 2u);
 
-  // Leave initialization mode -> normal CAN-FD bus operation.
+  // Leave initialization mode -> normal CAN-FD bus operation; fail-closed if kernel clock stalls INIT clear.
   vertirta::bsp::regs::reg32(kFdcanCccr) &= ~(kCccrInit | kCccrCce);
-  (void)wait_init_bit(false);
+  if (!wait_init_bit(false)) {
+    vertirta::bsp::regs::reg32(kFdcanCccr) |= kCccrInit;
+    g_fdcan1_ready = false;
+    return false;
+  }
   vertirta::bsp::regs::dsb();
   vertirta::bsp::regs::isb();
 

@@ -105,10 +105,27 @@ def test_paper_ral_is_double_anonymous_honest_and_computes_mcnemar_and_iqm() -> 
     assert report["iqm_status"] == "PENDING_PER_RUN_EXPORT"
     assert report["holm_bonferroni_pairs"][0]["significant_holm"] is True
 
-    # Generated artifacts on disk match live paired v3.1.0 computation
+    # Generated artifacts on disk match live paired v3.1.0 computation & v3.5.1 figure/M2 sync
     gen_json = json.loads((ral_dir / "generated/ral_stats_summary.json").read_text(encoding="utf-8"))
     gen_tex = (ral_dir / "generated/ral_tables.tex").read_text(encoding="utf-8")
     assert gen_json["method"] == "paired_per_seed_exact"
     assert gen_json["iqm_status"] == "COMPUTED_FROM_PER_RUN_VECTORS"
     assert "95.98" in gen_tex and "44.85" in gen_tex and "100.00" in gen_tex and "28{,}886" in gen_tex
+    assert "Pending (M2 U-Space)" not in gen_tex and "0.151" in gen_tex and "1.81" in gen_tex
+    assert "57.86" in tex and "50.50" not in tex
     assert "TBD" not in gen_tex and "TODO" not in gen_tex
+
+    # Verify all 3 double-anonymous vector PDF figures exist, are wired in tex, and contain zero leaks
+    for fig_name in (
+        "fig1_rta_architecture.pdf",
+        "fig2_wind_cliff_and_paired_survival.pdf",
+        "fig3_renode_esbmc_latency_profile.pdf",
+    ):
+        fig_path = ral_dir / "figures" / fig_name
+        assert fig_path.is_file(), f"Missing Paper 1 figure: {fig_path}"
+        raw_pdf = fig_path.read_bytes()
+        assert raw_pdf.startswith(b"%PDF-"), f"Invalid PDF header in {fig_name}"
+        assert 5_000 < len(raw_pdf) < 200_000, f"Unexpected PDF size for {fig_name}: {len(raw_pdf)} B"
+        assert f"figures/{fig_name}" in tex, f"Figure not included in manuscript: {fig_name}"
+        for leak_bytes in (b"github.com", b"fahrifurkansagir", b"Qwen3", b"PIDNet", b"VertiBench"):
+            assert leak_bytes not in raw_pdf, f"Leak {leak_bytes!r} in PDF {fig_name}"

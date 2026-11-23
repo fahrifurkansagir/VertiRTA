@@ -43,6 +43,15 @@ def test_tcm_linker_startup_and_mpu_errata_contracts():
     for region_idx in range(8):
         assert f"R{region_idx}" in boot or f"{region_idx}u," in boot
 
+    # v3.5.1 silicon bring-up locks:
+    # 1) PLL1Q enabled (DIVQ1EN = 1<<17) with /12 (Rev V 960/12=80 MHz) for FDCAN1 kernel clock.
+    assert "(1u << 17u)" in boot and "DIVQ1EN" in boot
+    assert "pll_q = rev.is_rev_v ? 11u : 9u" in boot and "(pll_q << 16u)" in boot
+    # 2) rev_id == 0x0000u virtual Renode allowance strictly gated behind #ifdef VERTIRTA_RENODE_SIL.
+    assert "#ifdef VERTIRTA_RENODE_SIL" in boot
+    hitl_cmake = (HITL_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "VERTIRTA_RENODE_SIL" not in hitl_cmake
+
 
 def test_stm32h7_hitl_tree_is_pure_lf():
     files = [p for p in HITL_DIR.rglob("*") if p.is_file()]

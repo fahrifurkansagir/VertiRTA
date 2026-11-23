@@ -24,7 +24,13 @@ publications:
   - topic: /fmu/out/battery_status
     type: px4_msgs::msg::BatteryStatus
 
+  - topic: /fmu/out/timesync_status
+    type: px4_msgs::msg::TimesyncStatus
+
 subscriptions:
+  - topic: /fmu/in/offboard_control_mode
+    type: px4_msgs::msg::OffboardControlMode
+
   - topic: /fmu/in/vertirta_rta_setpoint
     type: px4_msgs::msg::VertirtaRtaSetpoint
 

@@ -886,6 +886,59 @@ def _decode_skyscenes_seg_ids(raw_arr: np.ndarray) -> np.ndarray:
     return out
 
 
+def extract_skyscenes_frame_id(path: Path | str) -> str | None:
+    """Extract leading numeric CARLA frame ID shared across Images/Segment/Depth tarballs.
+
+    SkyScenes tarballs name the same frame differently across modalities:
+      Images:  008301_clrnoon.png
+      Segment: 008301_semsegCarla_clrnoon.png
+      Depth:   008301_depth_clrnoon.png
+    """
+    m = re.match(r"^(\d+)", Path(path).stem)
+    return m.group(1) if m else None
+
+
+def calibrate_dynamic_energy_margins(mean_id_energy: float) -> tuple[float, float]:
+    """Compute 5-class calibrated Stage-2 free-energy margins from frozen Stage-1 ID energy.
+
+    Prevents the 31x gradient shock caused by 19-class Cityscapes m_in=-23.0 on 5-class logits.
+    """
+    if not math.isfinite(mean_id_energy):
+        return -8.0, -2.5
+    m_in = round(float(np.clip(mean_id_energy - 2.0, -12.0, -6.0)), 4)
+    m_out = round(float(max(m_in + 3.5, -2.5)), 4)
+    return m_in, m_out
+
+
+def select_stage2_checkpoint(
+    candidates: list[dict[str, Any]],
+    *,
+    max_val_fsr: float = 0.08,
+) -> tuple[int, bool]:
+    """Select the best Stage-2 checkpoint gated strictly on val_FSR <= max_val_fsr."""
+    if not candidates:
+        raise ValueError("candidates must be non-empty")
+
+    def _score(c: dict[str, Any]) -> float:
+        return (
+            float(c["val_miou"])
+            + 0.30 * float(c.get("ood_auroc", 0.5))
+            - 0.50 * float(c["val_fsr"])
+        )
+
+    eligible = [
+        (i, c) for i, c in enumerate(candidates) if float(c["val_fsr"]) <= float(max_val_fsr)
+    ]
+    if eligible:
+        best_idx = max(eligible, key=lambda pair: _score(pair[1]))[0]
+        return best_idx, True
+    best_idx = min(
+        range(len(candidates)),
+        key=lambda i: (float(candidates[i]["val_fsr"]), -float(candidates[i]["val_miou"])),
+    )
+    return best_idx, False
+
+
 def _prepare_skyscenes(
     work_dir: Path,
     max_samples: int,
@@ -929,12 +982,15 @@ def _prepare_skyscenes(
     towns_used: list[str] = []
     idx = 0
 
+    total_requested = sum(cap for _, _, _, _, cap in selected_specs)
+    cap_scale = (
+        float(max_samples) / float(total_requested)
+        if (max_samples > 0 and total_requested > max_samples)
+        else 1.0
+    )
+
     for hp, weather, town, split_tag, cap in selected_specs:
-        if max_samples > 0 and len(records) >= max_samples:
-            break
-        per_shard_cap = cap
-        if max_samples > 0:
-            per_shard_cap = min(cap, max_samples - len(records))
+        per_shard_cap = max(1, int(round(cap * cap_scale)))
         pitch_match = re.search(r"P_(\d+)", hp)
         pitch_deg = float(pitch_match.group(1)) if pitch_match else 45.0
         rot_wc = skyscenes_cam_rot_wc_enu(pitch_deg)
@@ -971,29 +1027,62 @@ def _prepare_skyscenes(
         ext_img = raw_cache / "ext_img"
         ext_seg = raw_cache / "ext_seg"
         ext_dep = raw_cache / "ext_dep"
+        skipped_oversize = 0
         for tpath, dst in ((img_tar, ext_img), (seg_tar, ext_seg), (dep_tar, ext_dep)):
             dst.mkdir(parents=True, exist_ok=True)
             with tarfile.open(tpath, "r:*") as tf:
-                tf.extractall(dst)
+                for member in tf.getmembers():
+                    if not member.isfile():
+                        continue
+                    # Skip bogus nested GNU tar blobs (e.g. 1.83 GB ././@LongLink named *.png in Town01)
+                    if member.size <= 0 or member.size > 30 * 1024 * 1024:
+                        skipped_oversize += 1
+                        continue
+                    tf.extract(member, dst, filter="data")
             tpath.unlink(missing_ok=True)
 
-        img_map = {
-            p.stem: p
-            for p in ext_img.rglob("*")
-            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
-        }
-        seg_map = {
-            p.stem: p
-            for p in ext_seg.rglob("*")
-            if p.is_file() and p.suffix.lower() == ".png"
-        }
-        dep_map = {
-            p.stem: p
-            for p in ext_dep.rglob("*")
-            if p.is_file() and p.suffix.lower() == ".png"
-        }
+        def _has_image_magic(p: Path) -> bool:
+            try:
+                with p.open("rb") as fh:
+                    hdr = fh.read(8)
+                return hdr.startswith(b"\x89PNG\r\n\x1a\n") or hdr.startswith(b"\xff\xd8\xff")
+            except OSError:
+                return False
+
+        img_map: dict[str, Path] = {}
+        for p in sorted(ext_img.rglob("*")):
+            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg") and _has_image_magic(p):
+                fid = extract_skyscenes_frame_id(p)
+                if fid is not None and fid not in img_map:
+                    img_map[fid] = p
+        seg_map: dict[str, Path] = {}
+        for p in sorted(ext_seg.rglob("*")):
+            if p.is_file() and p.suffix.lower() == ".png" and _has_image_magic(p):
+                fid = extract_skyscenes_frame_id(p)
+                if fid is not None and fid not in seg_map:
+                    seg_map[fid] = p
+        dep_map: dict[str, Path] = {}
+        for p in sorted(ext_dep.rglob("*")):
+            if p.is_file() and p.suffix.lower() == ".png" and _has_image_magic(p):
+                fid = extract_skyscenes_frame_id(p)
+                if fid is not None and fid not in dep_map:
+                    dep_map[fid] = p
 
         common_stems = sorted(set(img_map) & set(seg_map) & set(dep_map))
+        print(
+            f"[SkyScenes] Shard {hp}/{town} ({split_tag}): "
+            f"img={len(img_map)} seg={len(seg_map)} dep={len(dep_map)} "
+            f"matched={len(common_stems)} skipped_non_image={skipped_oversize}",
+            flush=True,
+        )
+        if not common_stems:
+            sample_i = [p.name for p in list(img_map.values())[:3]]
+            sample_s = [p.name for p in list(seg_map.values())[:3]]
+            sample_d = [p.name for p in list(dep_map.values())[:3]]
+            raise RuntimeError(
+                f"SkyScenes shard {hp}/{town} yielded 0 frame-ID matches! "
+                f"Samples: img={sample_i} seg={sample_s} dep={sample_d}"
+            )
         if len(common_stems) > per_shard_cap:
             # Uniformly stride across sequence for maximum spatial diversity
             stride = np.linspace(0, len(common_stems) - 1, per_shard_cap, dtype=int)
@@ -1001,9 +1090,13 @@ def _prepare_skyscenes(
 
         towns_used.append(f"{hp}/{town}({split_tag}:{len(common_stems)})")
         for stem in common_stems:
-            pil_rgb = Image.open(img_map[stem]).convert("RGB")
-            raw_seg = _decode_skyscenes_seg_ids(np.asarray(Image.open(seg_map[stem])))
-            raw_dep = np.asarray(Image.open(dep_map[stem]))
+            try:
+                pil_rgb = Image.open(img_map[stem]).convert("RGB")
+                raw_seg = _decode_skyscenes_seg_ids(np.asarray(Image.open(seg_map[stem])))
+                raw_dep = np.asarray(Image.open(dep_map[stem]))
+            except Exception as exc:
+                print(f"[SkyScenes] Skipping corrupt triplet {hp}/{town}/{stem}: {exc}", flush=True)
+                continue
             depth_m = decode_carla_depth_meters(raw_dep, far_plane_m=1000.0)
 
             # Resize high-res CARLA frames to 512x512 BEFORE gradient normal calc for speed & consistency
@@ -1646,9 +1739,13 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         stage1_warmup_epochs=min(3, max(1, int(args.stage1_epochs) // 6)),
         stage1_lr_start=float(args.stage1_lr),
         stage1_lr_min=1e-5,
+        stage1_lambda_fsr=float(args.stage1_lambda_fsr),
         stage2_epochs=int(args.stage2_epochs),
         stage2_lr_start=float(args.stage2_lr),
-        stage2_lr_min=1e-5,
+        stage2_lr_min=5e-6,
+        stage2_lambda_ood=float(args.stage2_lambda_ood),
+        stage2_lambda_fsr=float(args.stage2_lambda_fsr),
+        max_val_fsr_gate=float(args.max_val_fsr_gate),
         anomaly_mix_prob=float(args.anomaly_mix_prob),
         amp_bf16=use_bf16,
         seed=seed,
@@ -1659,6 +1756,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         batch_size=prof.batch_size * prof.grad_accum,
         lr_start=prof.stage1_lr_start,
         lr_min=prof.stage1_lr_min,
+        lambda_fsr=prof.stage1_lambda_fsr,
         amp_bf16=use_bf16,
     )
     s2_cfg = Stage2Config(
@@ -1666,29 +1764,34 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         batch_size=prof.batch_size * prof.grad_accum,
         lr_start=prof.stage2_lr_start,
         lr_min=prof.stage2_lr_min,
+        lambda_ood=prof.stage2_lambda_ood,
+        lambda_fsr=prof.stage2_lambda_fsr,
+        max_val_fsr_gate=prof.max_val_fsr_gate,
         amp_bf16=use_bf16,
         anomaly_mix_prob=prof.anomaly_mix_prob,
     )
 
-    # Stage 1: Foundation Distillation + Multi-Task Segmentation/Normals/Boundary
+    # Stage 1: Foundation Distillation + Multi-Task Segmentation/Normals/Boundary + Asymmetric FSR Guard
     t_train0 = time.perf_counter()
     crit_s1 = SlzDistillCriterion(
         lambda_bdry=s1_cfg.lambda_bdry,
         lambda_dino=s1_cfg.lambda_dino if teachers.enabled else 0.0,
         lambda_geom=s1_cfg.lambda_geom,
         lambda_ood=0.0,
+        lambda_fsr=s1_cfg.lambda_fsr,
     ).to(device)
     opt_s1 = torch.optim.AdamW(
         model.parameters(), lr=s1_cfg.lr_start, weight_decay=s1_cfg.weight_decay
     )
 
     stage1_history: list[dict[str, Any]] = []
-    best_s1_miou = -1.0
-    best_s1_state: dict[str, Any] | None = None
+    stage1_candidates: list[dict[str, Any]] = []
+    stage1_states: list[dict[str, Any]] = []
 
     print(
         f"[Stage1] Starting {s1_cfg.epochs} epochs (bs={prof.batch_size}x{prof.grad_accum}="
-        f"{s1_cfg.batch_size}, lr={s1_cfg.lr_start}->{s1_cfg.lr_min}, BF16={use_bf16})...",
+        f"{s1_cfg.batch_size}, lr={s1_cfg.lr_start}->{s1_cfg.lr_min}, "
+        f"lambda_fsr={s1_cfg.lambda_fsr}, BF16={use_bf16})...",
         flush=True,
     )
     for ep in range(s1_cfg.epochs):
@@ -1751,9 +1854,15 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
             )
             rec_ep["val_miou"] = val_m["miou_present_classes"]
             rec_ep["val_fsr"] = val_m["false_safe_rate_fsr"]
-            if val_m["miou_present_classes"] > best_s1_miou:
-                best_s1_miou = val_m["miou_present_classes"]
-                best_s1_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            stage1_candidates.append(
+                {
+                    "epoch": ep + 1,
+                    "val_miou": float(val_m["miou_present_classes"]),
+                    "val_fsr": float(val_m["false_safe_rate_fsr"]),
+                    "ood_auroc": 0.5,
+                }
+            )
+            stage1_states.append({k: v.detach().cpu().clone() for k, v in model.state_dict().items()})
             print(
                 f"[Stage1] Ep {ep + 1:02d}/{s1_cfg.epochs} | lr={lr:.2e} | loss={avg_loss:.4f} | "
                 f"val_mIoU={val_m['miou_present_classes']:.4f} | val_FSR={val_m['false_safe_rate_fsr']:.4f} | "
@@ -1767,28 +1876,77 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
             )
         stage1_history.append(rec_ep)
 
-    if best_s1_state is not None:
+    if stage1_candidates:
+        s1_best_idx, s1_gate_ok = select_stage2_checkpoint(
+            stage1_candidates, max_val_fsr=s2_cfg.max_val_fsr_gate
+        )
+        best_s1_miou = float(stage1_candidates[s1_best_idx]["val_miou"])
+        best_s1_fsr = float(stage1_candidates[s1_best_idx]["val_fsr"])
+        best_s1_epoch = int(stage1_candidates[s1_best_idx]["epoch"])
+        best_s1_state = stage1_states[s1_best_idx]
         model.load_state_dict(best_s1_state)
+        print(
+            f"[Stage1] Selected Ep {best_s1_epoch:02d} (fsr_gate_ok={s1_gate_ok}): "
+            f"val_mIoU={best_s1_miou:.4f}, val_FSR={best_s1_fsr:.4f}",
+            flush=True,
+        )
+    else:
+        best_s1_miou = 0.0
+        best_s1_fsr = 1.0
+        best_s1_epoch = 0
+        best_s1_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    stage1_states.clear()
 
-    # Stage 2: AnomalyMix Free-Energy OOD Outlier Exposure Fine-Tuning
+    # Measure frozen Stage-1 ID free-energy scale to dynamically calibrate Stage-2 margins (no 31x shock!)
+    s1_base_val_m, _, _, _, s1_base_ood_m = evaluate_permissive_val_and_ood(
+        model,
+        val_loader,
+        teachers,
+        device,
+        use_bf16=use_bf16,
+        max_cal_pixels=80_000,
+        eval_normals=False,
+        eval_ood=True,
+    )
+    s1_mean_id_energy = float(s1_base_ood_m.get("mean_id_energy", -6.0))
+    dyn_m_in, dyn_m_out = calibrate_dynamic_energy_margins(s1_mean_id_energy)
+    print(
+        f"[Stage2-Cal] Frozen Stage1 baseline: val_mIoU={s1_base_val_m['miou_present_classes']:.4f}, "
+        f"val_FSR={s1_base_val_m['false_safe_rate_fsr']:.4f}, "
+        f"OOD_AUROC={s1_base_ood_m['boundary_compensated_auroc']:.4f}, "
+        f"mean_id_energy={s1_mean_id_energy:.4f} -> dynamic m_in={dyn_m_in}, m_out={dyn_m_out}",
+        flush=True,
+    )
+
+    # Stage 2: Calibrated AnomalyMix Free-Energy OOD Outlier Exposure Fine-Tuning (FSR-Gated)
     crit_s2 = SlzDistillCriterion(
         lambda_bdry=s2_cfg.lambda_bdry,
         lambda_dino=s2_cfg.lambda_dino if teachers.enabled else 0.0,
         lambda_geom=s2_cfg.lambda_geom,
         lambda_ood=s2_cfg.lambda_ood,
-        m_in=s2_cfg.m_in,
-        m_out=s2_cfg.m_out,
+        lambda_fsr=s2_cfg.lambda_fsr,
+        m_in=dyn_m_in,
+        m_out=dyn_m_out,
     ).to(device)
     opt_s2 = torch.optim.AdamW(
         model.parameters(), lr=s2_cfg.lr_start, weight_decay=s2_cfg.weight_decay
     )
     stage2_history: list[dict[str, Any]] = []
-    best_s2_score = -1.0
-    best_s2_state: dict[str, Any] | None = None
+    stage2_candidates: list[dict[str, Any]] = [
+        {
+            "epoch": 0,
+            "val_miou": float(s1_base_val_m["miou_present_classes"]),
+            "val_fsr": float(s1_base_val_m["false_safe_rate_fsr"]),
+            "ood_auroc": float(s1_base_ood_m["boundary_compensated_auroc"]),
+        }
+    ]
+    stage2_states: list[dict[str, Any]] = [best_s1_state]
 
     print(
         f"[Stage2] Starting {s2_cfg.epochs} epochs OE (AnomalyMix p={s2_cfg.anomaly_mix_prob}, "
-        f"m_in={s2_cfg.m_in}, m_out={s2_cfg.m_out}, lr={s2_cfg.lr_start}->{s2_cfg.lr_min})...",
+        f"m_in={dyn_m_in}, m_out={dyn_m_out}, lambda_ood={s2_cfg.lambda_ood}, "
+        f"lambda_fsr={s2_cfg.lambda_fsr}, lr={s2_cfg.lr_start}->{s2_cfg.lr_min}, "
+        f"fsr_gate<={s2_cfg.max_val_fsr_gate})...",
         flush=True,
     )
     for ep in range(s2_cfg.epochs):
@@ -1836,40 +1994,55 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
 
         avg_loss = loss_sum / float(max(1, n_steps))
         ep_sec = time.perf_counter() - ep_t0
+        val_m, _, _, _, ood_m = evaluate_permissive_val_and_ood(
+            model,
+            val_loader,
+            teachers,
+            device,
+            use_bf16=use_bf16,
+            max_cal_pixels=50_000,
+            eval_normals=False,
+            eval_ood=True,
+        )
         rec_ep = {
             "epoch": ep + 1,
             "lr": round(lr, 7),
             "train_loss": round(avg_loss, 5),
             "epoch_sec": round(ep_sec, 2),
+            "val_miou": val_m["miou_present_classes"],
+            "val_fsr": val_m["false_safe_rate_fsr"],
+            "ood_auroc": ood_m["boundary_compensated_auroc"],
         }
-        if (ep + 1) % max(1, min(2, int(args.eval_every))) == 0 or (ep + 1) == s2_cfg.epochs:
-            val_m, _, _, _, ood_m = evaluate_permissive_val_and_ood(
-                model,
-                val_loader,
-                teachers,
-                device,
-                use_bf16=use_bf16,
-                max_cal_pixels=50_000,
-                eval_normals=False,
-                eval_ood=True,
-            )
-            rec_ep["val_miou"] = val_m["miou_present_classes"]
-            rec_ep["val_fsr"] = val_m["false_safe_rate_fsr"]
-            rec_ep["ood_auroc"] = ood_m["boundary_compensated_auroc"]
-            combo = val_m["miou_present_classes"] + 0.25 * ood_m["boundary_compensated_auroc"]
-            if combo > best_s2_score:
-                best_s2_score = combo
-                best_s2_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            print(
-                f"[Stage2] Ep {ep + 1:02d}/{s2_cfg.epochs} | lr={lr:.2e} | loss={avg_loss:.4f} | "
-                f"val_mIoU={val_m['miou_present_classes']:.4f} | val_FSR={val_m['false_safe_rate_fsr']:.4f} | "
-                f"OOD_AUROC={ood_m['boundary_compensated_auroc']:.4f} | {ep_sec:.1f}s",
-                flush=True,
-            )
+        stage2_candidates.append(
+            {
+                "epoch": ep + 1,
+                "val_miou": float(val_m["miou_present_classes"]),
+                "val_fsr": float(val_m["false_safe_rate_fsr"]),
+                "ood_auroc": float(ood_m["boundary_compensated_auroc"]),
+            }
+        )
+        stage2_states.append({k: v.detach().cpu().clone() for k, v in model.state_dict().items()})
+        print(
+            f"[Stage2] Ep {ep + 1:02d}/{s2_cfg.epochs} | lr={lr:.2e} | loss={avg_loss:.4f} | "
+            f"val_mIoU={val_m['miou_present_classes']:.4f} | val_FSR={val_m['false_safe_rate_fsr']:.4f} | "
+            f"OOD_AUROC={ood_m['boundary_compensated_auroc']:.4f} | {ep_sec:.1f}s",
+            flush=True,
+        )
         stage2_history.append(rec_ep)
 
-    if best_s2_state is not None:
-        model.load_state_dict(best_s2_state)
+    s2_best_idx, s2_gate_ok = select_stage2_checkpoint(
+        stage2_candidates, max_val_fsr=s2_cfg.max_val_fsr_gate
+    )
+    selected_s2_epoch = int(stage2_candidates[s2_best_idx]["epoch"])
+    model.load_state_dict(stage2_states[s2_best_idx])
+    stage2_states.clear()
+    print(
+        f"[Stage2] Selected Ep {selected_s2_epoch:02d} (fsr_gate_ok={s2_gate_ok}): "
+        f"val_mIoU={stage2_candidates[s2_best_idx]['val_miou']:.4f}, "
+        f"val_FSR={stage2_candidates[s2_best_idx]['val_fsr']:.4f}, "
+        f"OOD_AUROC={stage2_candidates[s2_best_idx]['ood_auroc']:.4f}",
+        flush=True,
+    )
 
     train_wall_sec = round(time.perf_counter() - t_train0, 2)
 
@@ -1888,7 +2061,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         kappa_b=1.5,
         id_tpr_target=0.95,
     )
-    cal_path = cal.save_json(out_dir / "ood_calibration.json")
+    cal_path = cal.save_json(out_dir / str(args.cal_name))
     cal_sha = sha256_file(cal_path)
 
     # Empirical clean-ID acceptance at calibrated tau_ood
@@ -1907,14 +2080,17 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         aeroscapes_metrics = None
 
     # Phase 5: Save Checkpoint & Export Static 1x3x512x512 Opset-17 ONNX (dropping dino_proj)
-    ckpt_path = out_dir / "pidnet_slz_trained_l4.pt"
+    ckpt_path = out_dir / "pidnet_slz_v2_l4.pt"
     model_cpu = model.cpu().eval()
     torch.save(
         {
             "model_state_dict": model_cpu.state_dict(),
             "ood_calibration": cal.to_dict(),
             "stage1_best_miou": best_s1_miou,
+            "stage1_best_fsr": best_s1_fsr,
+            "stage2_selected_epoch": selected_s2_epoch,
             "final_val_miou": final_val_metrics["miou_present_classes"],
+            "final_val_fsr": final_val_metrics["false_safe_rate_fsr"],
         },
         ckpt_path,
     )
@@ -1922,7 +2098,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
     deploy = PIDNetSlzDeployWrapper(model_cpu).eval()
     onnx_path = export_static_onnx(
         deploy,
-        out_dir / "pidnet_slz_trained_opset17.onnx",
+        out_dir / str(args.onnx_name),
         opset=17,
         simplify=False,
         input_hw=(512, 512),
@@ -1946,7 +2122,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
     total_wall_sec = round(time.perf_counter() - t_pipeline_start, 2)
 
     report: dict[str, Any] = {
-        "schema_version": "vertirta.slz_l4_distill_metrics/v3.1.0",
+        "schema_version": str(args.schema_version),
         "weights_status": "TRAINED_COLAB_L4_DISTILLED_WEIGHTS",
         "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "hardware": {
@@ -1992,6 +2168,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
             "effective_batch_size": prof.batch_size * prof.grad_accum,
             "train_parameters": int(train_params),
             "deploy_parameters": int(deploy_params),
+            "class_weights": [1.0, 1.0, 1.5, 1.5, 1.5],
             "stage1": {
                 "epochs": s1_cfg.epochs,
                 "lr_start": s1_cfg.lr_start,
@@ -1999,7 +2176,10 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
                 "lambda_bdry": s1_cfg.lambda_bdry,
                 "lambda_dino": s1_cfg.lambda_dino if teachers.enabled else 0.0,
                 "lambda_geom": s1_cfg.lambda_geom,
+                "lambda_fsr": s1_cfg.lambda_fsr,
+                "selected_epoch": best_s1_epoch,
                 "best_val_miou": round(best_s1_miou, 6),
+                "best_val_fsr": round(best_s1_fsr, 6),
                 "history": stage1_history,
             },
             "stage2_ood_oe": {
@@ -2007,9 +2187,14 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
                 "lr_start": s2_cfg.lr_start,
                 "lr_min": s2_cfg.lr_min,
                 "lambda_ood": s2_cfg.lambda_ood,
-                "m_in": s2_cfg.m_in,
-                "m_out": s2_cfg.m_out,
+                "lambda_fsr": s2_cfg.lambda_fsr,
+                "stage1_mean_id_energy": round(s1_mean_id_energy, 4),
+                "m_in": dyn_m_in,
+                "m_out": dyn_m_out,
                 "anomaly_mix_prob": s2_cfg.anomaly_mix_prob,
+                "max_val_fsr_gate": s2_cfg.max_val_fsr_gate,
+                "selected_epoch": selected_s2_epoch,
+                "fsr_gate_satisfied": bool(s2_gate_ok),
                 "history": stage2_history,
             },
         },
@@ -2020,7 +2205,7 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
         },
         "ood_calibration": {
             **cal.to_dict(),
-            "file": "ood_calibration.json",
+            "file": str(args.cal_name),
             "sha256": cal_sha,
         },
         "export": {
@@ -2039,11 +2224,11 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
             "zero_dino_proj_nodes": True,
             "zero_dynamic_shape_ops": ("Shape" not in onnx_op_types and "Gather" not in onnx_op_types),
             "onnx_checker_passed": True,
-            "wsl2_staging_path": f"/tmp/vertirta_v31_blobs/{onnx_path.name}",
+            "wsl2_staging_path": f"{str(args.staging_dir).rstrip('/')}/{onnx_path.name}",
         },
     }
 
-    metrics_path = out_dir / "l4_pidnet_distill_metrics.json"
+    metrics_path = out_dir / str(args.metrics_filename)
     metrics_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(
         f"[DONE] Metrics written to {metrics_path} | ONNX={onnx_path.name} ({onnx_size_mb} MB, "
@@ -2061,6 +2246,233 @@ def run_l4_training_pipeline(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def resolve_tu116_cuda_provider_options(
+    *,
+    cuda_graph: bool = True,
+    algo_search: str = "AUTO",
+    platform_system: str | None = None,
+) -> dict[str, str]:
+    """Return platform-tuned ORT CUDA EP options for TU116 (4 GB GTX 1650 SUPER)."""
+    sys_name = platform_system if platform_system is not None else platform.system()
+    algo_upper = algo_search.strip().upper()
+    if algo_upper == "AUTO":
+        if sys_name.lower().startswith("win"):
+            resolved_algo = "EXHAUSTIVE"
+            use_max_ws = "1"
+        else:
+            resolved_algo = "HEURISTIC"
+            use_max_ws = "0"
+    else:
+        resolved_algo = algo_upper
+        use_max_ws = "1" if resolved_algo == "EXHAUSTIVE" else "0"
+    return {
+        "device_id": "0",
+        "arena_extend_strategy": "kSameAsRequested",
+        "cudnn_conv_algo_search": resolved_algo,
+        "cudnn_conv_use_max_workspace": use_max_ws,
+        "enable_cuda_graph": "1" if cuda_graph else "0",
+    }
+
+
+def _query_nvidia_vram_used_mb() -> float:
+    """Query current GPU total memory used (MiB) via nvidia-smi."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+            text=True,
+            timeout=5,
+        ).strip()
+        return float(out.splitlines()[0].strip())
+    except Exception:
+        return 0.0
+
+
+def _benchmark_tu116_session(
+    onnx_path: Path,
+    precision: str,
+    *,
+    warmup: int,
+    iters: int,
+    cuda_graph: bool,
+    algo_search: str = "AUTO",
+) -> dict[str, Any]:
+    """Self-contained TU116 ORT CUDA IOBinding + E2E + VRAM benchmark (Windows & WSL2 Linux)."""
+    if platform.system() == "Windows":
+        from scripts.run_local_gtx1650s_onnx_bench import _register_nvidia_dll_dirs
+
+        _register_nvidia_dll_dirs()
+    import onnxruntime as ort
+
+    if hasattr(ort, "preload_dlls"):
+        try:
+            ort.preload_dlls()
+        except Exception:
+            pass
+
+    cuda_opts = resolve_tu116_cuda_provider_options(
+        cuda_graph=cuda_graph,
+        algo_search=algo_search,
+    )
+    vram_before = _query_nvidia_vram_used_mb()
+
+    sess_opts = ort.SessionOptions()
+    sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    sess_opts.intra_op_num_threads = 1
+    sess_opts.inter_op_num_threads = 1
+    sess = ort.InferenceSession(
+        str(onnx_path),
+        sess_options=sess_opts,
+        providers=[("CUDAExecutionProvider", cuda_opts)],
+    )
+    active_providers = list(sess.get_providers())
+    if "CUDAExecutionProvider" not in active_providers:
+        raise RuntimeError(f"CUDAExecutionProvider unavailable: {active_providers}")
+
+    inp_meta = sess.get_inputs()[0]
+    inp_dtype = np.float16 if "float16" in str(inp_meta.type) else np.float32
+    rng = np.random.default_rng(42)
+    x_host = rng.standard_normal((1, 3, 512, 512)).astype(inp_dtype)
+
+    io = sess.io_binding()
+    x_gpu = ort.OrtValue.ortvalue_from_numpy(x_host, "cuda", 0)
+    io.bind_ortvalue_input(inp_meta.name, x_gpu)
+    for out_meta in sess.get_outputs():
+        io.bind_output(out_meta.name, "cuda")
+
+    for _ in range(max(10, warmup)):
+        sess.run_with_iobinding(io)
+    io.synchronize_outputs()
+
+    gc.collect()
+    gc.disable()
+    try:
+        net_ms: list[float] = []
+        for _ in range(max(20, iters)):
+            t0 = time.perf_counter()
+            sess.run_with_iobinding(io)
+            io.synchronize_outputs()
+            net_ms.append((time.perf_counter() - t0) * 1000.0)
+    finally:
+        gc.enable()
+    vram_peak = _query_nvidia_vram_used_mb()
+    vram_delta = max(0.0, vram_peak - vram_before)
+
+    # E2E loop (in-place H2D into static CUDA-Graph buffer + inference + D2H + Free Energy + Boundary Comp)
+    e2e_iters = min(120, max(30, iters // 4))
+    e2e_ms: list[float] = []
+    outputs_finite = True
+    for _ in range(e2e_iters):
+        t0 = time.perf_counter()
+        x_gpu.update_inplace(x_host)
+        sess.run_with_iobinding(io)
+        outs = io.copy_outputs_to_cpu()
+        logits_f = outs[0].astype(np.float32, copy=False)[0]
+        normals_f = outs[1].astype(np.float32, copy=False)[0]
+        bdry_f = outs[2].astype(np.float32, copy=False)[0, 0]
+        lmax = np.max(logits_f, axis=0)
+        e_raw = -(lmax + np.log(np.sum(np.exp(logits_f - lmax[None, :, :]), axis=0) + 1e-12))
+        bdry_up = np.repeat(np.repeat(bdry_f, 8, axis=0), 8, axis=1)
+        e_tilde = e_raw - 1.5 * np.clip(bdry_up, 0.0, 1.0)
+        if not (
+            np.all(np.isfinite(e_tilde))
+            and np.all(np.isfinite(normals_f))
+            and np.all(np.isfinite(bdry_f))
+        ):
+            outputs_finite = False
+        e2e_ms.append((time.perf_counter() - t0) * 1000.0)
+
+    net_arr = np.asarray(net_ms, dtype=np.float64)
+    e2e_arr = np.asarray(e2e_ms, dtype=np.float64)
+    net_stats = {
+        "mean_ms": round(float(net_arr.mean()), 3),
+        "p50_ms": round(float(np.percentile(net_arr, 50)), 3),
+        "p95_ms": round(float(np.percentile(net_arr, 95)), 3),
+        "p99_ms": round(float(np.percentile(net_arr, 99)), 3),
+        "max_ms": round(float(net_arr.max()), 3),
+        "iters": int(len(net_arr)),
+        "warmup": int(warmup),
+    }
+    e2e_p50 = float(np.percentile(e2e_arr, 50))
+    e2e_p99 = float(np.percentile(e2e_arr, 99))
+    e2e_stats = {
+        "mean_ms": round(float(e2e_arr.mean()), 3),
+        "p50_ms": round(e2e_p50, 3),
+        "p95_ms": round(float(np.percentile(e2e_arr, 95)), 3),
+        "p99_ms": round(e2e_p99, 3),
+        "effective_hz_p50": round(1000.0 / max(e2e_p50, 1e-6), 2),
+        "effective_hz_p99": round(1000.0 / max(e2e_p99, 1e-6), 2),
+        "iters": int(len(e2e_arr)),
+    }
+
+    # Structured multi-region synthetic aerial frame sanity check (updated in-place for CUDA Graph parity!)
+    img = np.zeros((1, 3, 512, 512), dtype=inp_dtype)
+    yy, xx = np.mgrid[0:512, 0:512].astype(np.float32)
+    # Q1: dark asphalt road with white lane stripes
+    img[:, :, :256, :256] = np.array([-0.7, -0.7, -0.6], dtype=inp_dtype).reshape(1, 3, 1, 1)
+    img[:, :, :256, 120:136] = np.array([1.8, 1.8, 1.8], dtype=inp_dtype).reshape(1, 3, 1, 1)
+    # Q2: green textured vegetation/canopy
+    veg_tex = (0.35 * np.sin(xx[:256, 256:] * 0.25) * np.cos(yy[:256, 256:] * 0.25)).astype(inp_dtype)
+    img[0, 0, :256, 256:] = inp_dtype(-1.1) + veg_tex
+    img[0, 1, :256, 256:] = inp_dtype(0.9) + veg_tex
+    img[0, 2, :256, 256:] = inp_dtype(-1.0) + veg_tex
+    # Q3: bright gray-white flat concrete rooftop with crisp border
+    img[:, :, 256:, :256] = np.array([1.5, 1.45, 1.4], dtype=inp_dtype).reshape(1, 3, 1, 1)
+    # Q4: deep blue water + red dynamic marker
+    img[:, :, 256:, 256:] = np.array([-1.5, -0.5, 1.6], dtype=inp_dtype).reshape(1, 3, 1, 1)
+    img[:, :, 340:420, 340:420] = np.array([2.0, -1.2, -1.2], dtype=inp_dtype).reshape(1, 3, 1, 1)
+
+    x_gpu.update_inplace(img)
+    sess.run_with_iobinding(io)
+    s_outs = io.copy_outputs_to_cpu()
+    s_logits = s_outs[0].astype(np.float32, copy=False)[0]
+    s_normals = s_outs[1].astype(np.float32, copy=False)[0]
+    s_bdry = s_outs[2].astype(np.float32, copy=False)[0]
+    preds = np.argmax(s_logits, axis=0)
+    uniq_classes, counts = np.unique(preds, return_counts=True)
+    norms = np.linalg.norm(s_normals, axis=0)
+    s_lmax = np.max(s_logits, axis=0)
+    energy = -(s_lmax + np.log(np.sum(np.exp(s_logits - s_lmax[None, :, :]), axis=0) + 1e-12))
+
+    res: dict[str, Any] = {
+        "precision": precision,
+        "host_os": f"{platform.system()} {platform.release()} ({platform.machine()})",
+        "cuda_provider_options": cuda_opts,
+        "active_providers": active_providers,
+        "network_iobinding": net_stats,
+        "e2e_h2d_infer_d2h_energy": e2e_stats,
+        "vram_mb": {
+            "before_session_mb": round(vram_before, 1),
+            "peak_session_mb": round(vram_peak, 1),
+            "delta_session_mb": round(vram_delta, 1),
+        },
+        "outputs_finite": bool(outputs_finite),
+        "gates": {
+            "network_p50_lt_12ms": bool(net_stats["p50_ms"] < 12.0),
+            "network_p95_lt_12ms": bool(net_stats["p95_ms"] < 12.0),
+            "network_p99_lt_12ms": bool(net_stats["p99_ms"] < 12.0),
+            "e2e_ge_20hz": bool(e2e_stats["effective_hz_p50"] >= 20.0),
+            "vram_lt_300mb": bool(vram_delta < 300.0),
+        },
+        "trained_output_sanity": {
+            "predicted_class_histogram": {int(k): int(v) for k, v in zip(uniq_classes, counts)},
+            "distinct_predicted_classes": int(len(uniq_classes)),
+            "normal_l2_norm_mean": round(float(norms.mean()), 6),
+            "normal_l2_norm_max_err": round(float(np.abs(norms - 1.0).max()), 6),
+            "bdry_prob_min": round(float(s_bdry.min()), 6),
+            "bdry_prob_max": round(float(s_bdry.max()), 6),
+            "free_energy_mean": round(float(energy.mean()), 4),
+            "all_outputs_finite": bool(
+                np.all(np.isfinite(s_logits))
+                and np.all(np.isfinite(s_normals))
+                and np.all(np.isfinite(s_bdry))
+            ),
+        },
+    }
+    del io, sess
+    gc.collect()
+    return res
+
+
 def _run_trained_onnx_sanity_worker(
     onnx_path: Path,
     precision: str,
@@ -2068,59 +2480,17 @@ def _run_trained_onnx_sanity_worker(
     iters: int,
     *,
     cuda_graph: bool = False,
+    algo_search: str = "AUTO",
 ) -> dict[str, Any]:
     """Benchmark trained ONNX in isolated subprocess + validate non-degenerate trained predictions."""
-    from scripts.run_local_gtx1650s_onnx_bench import (
-        _benchmark_session,
-        _register_nvidia_dll_dirs,
-    )
-
-    res = _benchmark_session(
+    return _benchmark_tu116_session(
         onnx_path,
         precision,
         warmup=warmup,
         iters=iters,
         cuda_graph=cuda_graph,
+        algo_search=algo_search,
     )
-
-    # Extra semantic & geometric sanity check on structured synthetic aerial test patch
-    _register_nvidia_dll_dirs()
-    import onnxruntime as ort
-
-    sess_opts = ort.SessionOptions()
-    sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    sess = ort.InferenceSession(
-        str(onnx_path),
-        sess_options=sess_opts,
-        providers=[("CUDAExecutionProvider", {"device_id": "0"})],
-    )
-    # Build deterministic multi-region synthetic aerial frame (dark asphalt + green veg + bright roof)
-    img = np.zeros((1, 3, 512, 512), dtype=np.float32)
-    img[:, :, :256, :256] = np.array([-0.8, -0.8, -0.7], dtype=np.float32).reshape(1, 3, 1, 1)
-    img[:, :, :256, 256:] = np.array([-0.9, 0.7, -0.8], dtype=np.float32).reshape(1, 3, 1, 1)
-    img[:, :, 256:, :] = np.array([1.2, 1.1, 1.0], dtype=np.float32).reshape(1, 3, 1, 1)
-    logits, normals, bdry = sess.run(None, {"rgb_nchw": img})
-    preds = np.argmax(logits[0], axis=0)
-    uniq_classes, counts = np.unique(preds, return_counts=True)
-    norms = np.linalg.norm(normals[0], axis=0)
-    energy = -np.log(np.sum(np.exp(logits[0] - np.max(logits[0], axis=0, keepdims=True)), axis=0)) - np.max(
-        logits[0], axis=0
-    )
-    res["trained_output_sanity"] = {
-        "predicted_class_histogram": {int(k): int(v) for k, v in zip(uniq_classes, counts)},
-        "distinct_predicted_classes": int(len(uniq_classes)),
-        "normal_l2_norm_mean": round(float(norms.mean()), 6),
-        "normal_l2_norm_max_err": round(float(np.abs(norms - 1.0).max()), 6),
-        "bdry_prob_min": round(float(bdry.min()), 6),
-        "bdry_prob_max": round(float(bdry.max()), 6),
-        "free_energy_mean": round(float(energy.mean()), 4),
-        "all_outputs_finite": bool(
-            np.all(np.isfinite(logits)) and np.all(np.isfinite(normals)) and np.all(np.isfinite(bdry))
-        ),
-    }
-    del sess
-    gc.collect()
-    return res
 
 
 def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
@@ -2140,6 +2510,7 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
             warmup=int(args.warmup),
             iters=int(args.iters),
             cuda_graph=bool(args.worker_cuda_graph),
+            algo_search=str(args.worker_algo_search),
         )
         print(json.dumps(res))
         return 0
@@ -2168,7 +2539,12 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
     onnx.checker.check_model(m)
     gpu = _query_gpu_info()
 
-    def _spawn_worker(mode: str, model_file: Path, cuda_graph: bool) -> dict[str, Any]:
+    def _spawn_worker(
+        mode: str,
+        model_file: Path,
+        cuda_graph: bool,
+        algo_search: str = "AUTO",
+    ) -> dict[str, Any]:
         cmd = [
             sys.executable,
             str(Path(__file__).resolve()),
@@ -2180,6 +2556,8 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
             mode,
             "--worker-onnx",
             str(model_file),
+            "--worker-algo-search",
+            algo_search,
             "--warmup",
             str(args.warmup),
             "--iters",
@@ -2201,7 +2579,7 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
         )
         if proc.returncode != 0:
             raise RuntimeError(
-                f"Worker {mode} (cg={cuda_graph}) failed (rc={proc.returncode}):\n"
+                f"Worker {mode} (cg={cuda_graph}, algo={algo_search}) failed (rc={proc.returncode}):\n"
                 f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
             )
         for line in reversed(proc.stdout.splitlines()):
@@ -2214,9 +2592,15 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
         fp16_path = Path(td) / "pidnet_slz_trained_fp16.onnx"
         _build_fp16_onnx(onnx_path, fp16_path)
 
-        fp32_res = _spawn_worker("fp32", onnx_path, cuda_graph=False)
-        fp32_cg_res = _spawn_worker("fp32", onnx_path, cuda_graph=True)
-        fp16_res = _spawn_worker("fp16", fp16_path, cuda_graph=False)
+        fp32_cg_res = _spawn_worker("fp32", onnx_path, cuda_graph=True, algo_search=str(args.worker_algo_search))
+        time.sleep(1.5)
+        fp32_res = _spawn_worker("fp32", onnx_path, cuda_graph=False, algo_search=str(args.worker_algo_search))
+        time.sleep(1.5)
+        fp16_res = _spawn_worker("fp16", fp16_path, cuda_graph=False, algo_search="HEURISTIC")
+
+    wsl2_cg_res: dict[str, Any] | None = None
+    if args.wsl2_bench_json is not None and Path(args.wsl2_bench_json).is_file():
+        wsl2_cg_res = json.loads(Path(args.wsl2_bench_json).read_text(encoding="utf-8"))
 
     git_sha = "unknown"
     try:
@@ -2231,10 +2615,52 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
     ood_eval = l4_metrics["evaluation"]["ood_detection"]
     aero_eval = l4_metrics["evaluation"].get("quarantined_zero_shot_aeroscapes")
 
+    try:
+        metrics_rel = str(metrics_path.relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        metrics_rel = str(metrics_path.name)
+
+    benchmarks_dict: dict[str, Any] = {
+        "ort_cuda_fp32": fp32_res,
+        "ort_cuda_fp32_cuda_graph": fp32_cg_res,
+        "ort_cuda_fp16": fp16_res,
+    }
+    if wsl2_cg_res is not None:
+        benchmarks_dict["ort_cuda_wsl2_headless_fp32_cuda_graph"] = wsl2_cg_res
+
+    win_pass = bool(
+        fp32_cg_res["gates"]["network_p50_lt_12ms"]
+        and fp32_cg_res["gates"]["network_p95_lt_12ms"]
+        and fp32_cg_res["gates"]["network_p99_lt_12ms"]
+        and fp32_cg_res["gates"]["e2e_ge_20hz"]
+        and fp32_cg_res["gates"]["vram_lt_300mb"]
+        and fp32_cg_res["outputs_finite"]
+    )
+    wsl2_pass = False
+    if wsl2_cg_res is not None:
+        wsl2_pass = bool(
+            wsl2_cg_res["gates"]["network_p50_lt_12ms"]
+            and wsl2_cg_res["gates"]["network_p95_lt_12ms"]
+            and wsl2_cg_res["gates"]["network_p99_lt_12ms"]
+            and wsl2_cg_res["gates"]["e2e_ge_20hz"]
+            and wsl2_cg_res["gates"]["vram_lt_300mb"]
+            and wsl2_cg_res["outputs_finite"]
+        )
+    rec_mode = (
+        "ort_cuda_wsl2_headless_fp32_cuda_graph"
+        if (
+            wsl2_cg_res is not None
+            and wsl2_cg_res["network_iobinding"]["p99_ms"]
+            <= fp32_cg_res["network_iobinding"]["p99_ms"]
+        )
+        else "ort_cuda_fp32_cuda_graph"
+    )
+    rec_pass = wsl2_pass if rec_mode == "ort_cuda_wsl2_headless_fp32_cuda_graph" else win_pass
+
     report: dict[str, Any] = {
-        "schema_version": "vertirta.local_gpu_trained_proof/v3.1.0",
+        "schema_version": str(args.proof_schema_version),
         "weights_status": "TRAINED_COLAB_L4_DISTILLED_WEIGHTS",
-        "retires_baseline": "artifacts/v2.0.0/local_gtx1650s_pidnet_arch_bench.json",
+        "retires_baseline": "artifacts/v3.1.0/local_gtx1650s_pidnet_trained_proof.json",
         "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "git_sha": git_sha,
         "host_os": f"{platform.system()} {platform.release()} ({platform.machine()})",
@@ -2245,11 +2671,11 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
         },
         "gpu": gpu,
         "model": {
-            "name": "PIDNetSlzDeployWrapper (Colab L4 distilled weights, static-PAPPM, zero dino_proj)",
+            "name": "PIDNetSlzDeployWrapper v2 (Colab L4 distilled, SkyScenes+FSR-gated, static-PAPPM, zero dino_proj)",
             "onnx_filename": onnx_path.name,
             "onnx_sha256": actual_sha,
             "onnx_sha256_verified_against_l4_metrics": True,
-            "l4_metrics_artifact": "artifacts/v3.1.0/l4_pidnet_distill_metrics.json",
+            "l4_metrics_artifact": metrics_rel,
             "onnx_size_mb": round(onnx_path.stat().st_size / (1024.0 * 1024.0), 3),
             "opset_version": 17,
             "input_shape": [1, 3, 512, 512],
@@ -2259,7 +2685,7 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
                 "bdry_prob": [1, 1, 64, 64],
             },
             "deploy_parameters": int(l4_metrics["export"]["deploy_parameters"]),
-            "wsl2_staging_path": f"/tmp/vertirta_v31_blobs/{onnx_path.name}",
+            "wsl2_staging_path": str(l4_metrics["export"].get("wsl2_staging_path", f"/var/tmp/vertirta_v351_blobs/{onnx_path.name}")),
         },
         "trained_accuracy_summary": {
             "training_gpu": l4_metrics["hardware"]["gpu"]["name"],
@@ -2281,6 +2707,7 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
                 {
                     "miou_present_classes": aero_eval["miou_present_classes"],
                     "false_safe_rate_fsr": aero_eval["false_safe_rate_fsr"],
+                    "per_class_iou": aero_eval.get("per_class_iou"),
                     "evaluated_images": aero_eval["evaluated_images"],
                     "license": aero_eval["license"],
                 }
@@ -2288,28 +2715,16 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
                 else None
             ),
         },
-        "benchmarks": {
-            "ort_cuda_fp32": fp32_res,
-            "ort_cuda_fp32_cuda_graph": fp32_cg_res,
-            "ort_cuda_fp16": fp16_res,
-        },
+        "benchmarks": benchmarks_dict,
         "fp16_vs_fp32_speedup_p50": round(
             fp32_res["network_iobinding"]["p50_ms"]
             / max(fp16_res["network_iobinding"]["p50_ms"], 1e-6),
             3,
         ),
-        "recommended_local_tu116_mode": (
-            "ort_cuda_fp32_cuda_graph"
-            if fp32_cg_res["network_iobinding"]["p99_ms"] <= fp32_res["network_iobinding"]["p99_ms"]
-            else "ort_cuda_fp32"
-        ),
-        "all_local_gates_passed": bool(
-            fp32_cg_res["gates"]["network_p50_lt_12ms"]
-            and fp32_cg_res["gates"]["network_p99_lt_12ms"]
-            and fp32_cg_res["gates"]["e2e_ge_20hz"]
-            and fp32_cg_res["gates"]["vram_lt_300mb"]
-            and fp32_cg_res["outputs_finite"]
-        ),
+        "recommended_local_tu116_mode": rec_mode,
+        "windows_wddm_gates_passed": bool(win_pass),
+        "wsl2_headless_gates_passed": bool(wsl2_pass) if wsl2_cg_res is not None else None,
+        "all_local_gates_passed": bool(rec_pass),
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2320,25 +2735,36 @@ def run_local_gtx1650s_proof(args: argparse.Namespace) -> int:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="VertiRTA v3.1.0 Colab L4 PIDNet-S Distillation & Local GTX 1650 SUPER Proof."
+        description="VertiRTA v3.5.1 Colab L4 PIDNet-S Distillation & Local GTX 1650 SUPER Proof."
     )
     # Mode B: Local physical GTX 1650 SUPER proof
     parser.add_argument("--benchmark-local-onnx", type=Path, default=None)
     parser.add_argument(
         "--metrics-json",
         type=Path,
-        default=REPO_ROOT / "artifacts" / "v3.1.0" / "l4_pidnet_distill_metrics.json",
+        default=REPO_ROOT / "artifacts" / "v3.5.1" / "l4_pidnet_v2_distill_metrics.json",
     )
     parser.add_argument(
         "--proof-out",
         type=Path,
-        default=REPO_ROOT / "artifacts" / "v3.1.0" / "local_gtx1650s_pidnet_trained_proof.json",
+        default=REPO_ROOT / "artifacts" / "v3.5.1" / "local_gtx1650s_pidnet_v2_proof.json",
     )
+    parser.add_argument(
+        "--proof-schema-version",
+        type=str,
+        default="vertirta.local_gpu_trained_proof/v3.5.1",
+    )
+    parser.add_argument("--wsl2-bench-json", type=Path, default=None)
     parser.add_argument("--warmup", type=int, default=200)
     parser.add_argument("--iters", type=int, default=500)
     parser.add_argument("--worker-precision", choices=("fp32", "fp16"), default=None)
     parser.add_argument("--worker-onnx", type=Path, default=None)
     parser.add_argument("--worker-cuda-graph", action="store_true")
+    parser.add_argument(
+        "--worker-algo-search",
+        choices=("AUTO", "HEURISTIC", "EXHAUSTIVE", "DEFAULT"),
+        default="AUTO",
+    )
 
     # Mode A: Colab L4 training pipeline
     parser.add_argument("--oem-attribution-html", type=Path, default=None)
@@ -2350,10 +2776,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stage1-epochs", type=int, default=24)
     parser.add_argument("--stage2-epochs", type=int, default=10)
     parser.add_argument("--stage1-lr", type=float, default=8e-4)
-    parser.add_argument("--stage2-lr", type=float, default=1e-4)
+    parser.add_argument("--stage2-lr", type=float, default=2e-5)
+    parser.add_argument("--stage1-lambda-fsr", type=float, default=0.5)
+    parser.add_argument("--stage2-lambda-fsr", type=float, default=0.8)
+    parser.add_argument("--stage2-lambda-ood", type=float, default=0.02)
+    parser.add_argument("--max-val-fsr-gate", type=float, default=0.08)
     parser.add_argument("--anomaly-mix-prob", type=float, default=0.15)
-    parser.add_argument("--eval-every", type=int, default=4)
-    parser.add_argument("--epoch-samples", type=int, default=3200)
+    parser.add_argument("--eval-every", type=int, default=2)
+    parser.add_argument("--epoch-samples", type=int, default=1600)
     parser.add_argument("--max-flair", type=int, default=600)
     parser.add_argument("--max-oem", type=int, default=1600)
     parser.add_argument("--max-floodnet", type=int, default=1500)
@@ -2361,6 +2791,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-aeroscapes", type=int, default=350)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=20261123)
+    parser.add_argument("--onnx-name", type=str, default="pidnet_slz_v2_opset17.onnx")
+    parser.add_argument("--cal-name", type=str, default="ood_calibration_v2.json")
+    parser.add_argument("--metrics-filename", type=str, default="l4_pidnet_v2_distill_metrics.json")
+    parser.add_argument("--schema-version", type=str, default="vertirta.slz_l4_distill_metrics/v3.5.1")
+    parser.add_argument("--staging-dir", type=str, default="/var/tmp/vertirta_v351_blobs")
     parser.add_argument("--bf16", dest="bf16", action="store_true", default=True)
     parser.add_argument("--no-bf16", dest="bf16", action="store_false")
     parser.add_argument("--no-teachers", action="store_true")

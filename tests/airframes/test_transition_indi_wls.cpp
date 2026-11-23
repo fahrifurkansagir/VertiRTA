@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "vertirta/airframes/lift_cruise_dynamics.hpp"
@@ -240,6 +241,96 @@ TEST_CASE("8+1 Lift+Cruise survives mid-transition OEI, pusher loss glide/abort,
     (void)sink;
     std::sort(us_samples.begin(), us_samples.end());
     const double p99_us = us_samples[static_cast<std::size_t>(0.99 * kBenchIters)];
+#if defined(NDEBUG) && !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_UNDEFINED__)
     REQUIRE(p99_us < 50.0);
+#else
+    REQUIRE(p99_us < 1000.0);
+#endif
   }
+}
+
+TEST_CASE("TransitionSensorFrame handles noisy IMU, blocked Pitot GNSS/EKF failover, and DShot ESC staleness") {
+  LiftCruiseDynamics plant(LiftCruiseLayout::kEightPlusOne);
+  TransitionIndiWlsController ctrl(plant);
+
+  AirframeState6Dof st{};
+  st.pos_ned = {0.0, 0.0, -100.0};
+  st.vel_ned = {32.0, 0.0, 0.0};
+  const double theta = 0.08;
+  st.q_frd_ned = {std::cos(0.5 * theta), 0.0, std::sin(0.5 * theta), 0.0};
+  st.u_act[8] = 200.0;
+  ctrl.reset(st);
+
+  TransitionCommand cmd{};
+  cmd.target_airspeed_mps = 34.0;
+  cmd.target_alt_m = 100.0;
+
+  // Deterministic pseudo-noise generator
+  uint64_t rng = 20261123ull;
+  auto noise = [&](double amp) {
+    rng ^= rng << 13u;
+    rng ^= rng >> 7u;
+    rng ^= rng << 17u;
+    const double u = static_cast<double>(rng & 0xFFFFu) / 32768.0 - 1.0;
+    return amp * u;
+  };
+
+  bool observed_pitot_failover = false;
+  bool observed_esc_stale = false;
+
+  for (int tick = 0; tick < 800; ++tick) {
+    const auto dyn = plant.eval_dynamics(st, {0.0, 0.0, 0.0}, 0u);
+    TransitionSensorFrame sf{};
+    sf.gyro_meas_frd = {
+        st.omega_frd.x + noise(0.015),
+        st.omega_frd.y + noise(0.015),
+        st.omega_frd.z + noise(0.015),
+    };
+    sf.accel_meas_frd = {
+        dyn.accel_body_frd.x + noise(0.20),
+        dyn.accel_body_frd.y + noise(0.20),
+        dyn.accel_body_frd.z + noise(0.20),
+    };
+    sf.gnss_ekf_airspeed_mps = dyn.airspeed_mps + noise(0.15);
+    sf.gnss_ekf_valid = true;
+
+    // Inject blocked/iced Pitot tube (stuck 0 m/s or NaN) during ticks 200..499
+    if (tick >= 200 && tick < 500) {
+      sf.pitot_valid = false;
+      sf.pitot_airspeed_mps = (tick == 250) ? std::numeric_limits<double>::quiet_NaN() : 0.0;
+    } else {
+      sf.pitot_valid = true;
+      sf.pitot_airspeed_mps = dyn.airspeed_mps + noise(0.25);
+    }
+
+    // Enable bidirectional DShot telemetry and drop rotor #2 & pusher #8 during ticks 300..349
+    sf.use_esc_telemetry = true;
+    sf.esc_stale_ticks_limit = 10u;
+    for (uint8_t i = 0; i <= plant.pusher_index(); ++i) {
+      sf.esc_thrust_meas_n[i] = st.u_act[i];
+      sf.esc_valid[i] = !(tick >= 300 && tick < 350 && (i == 2u || i == 8u));
+    }
+
+    const auto out = ctrl.step_400hz_with_sensors(st, sf, cmd);
+    REQUIRE(out.valid);
+    if (tick >= 200 && tick < 500) {
+      REQUIRE(out.pitot_failover_active == true);
+      REQUIRE(out.airspeed_mps > 25.0);  // Failed over to GNSS/EKF, NOT stuck 0 m/s!
+      REQUIRE(out.fault_mode != TransitionFaultMode::kStallRecovery);
+      observed_pitot_failover = true;
+    }
+    if (tick >= 312 && tick < 350) {
+      REQUIRE((out.esc_stale_mask & (1u << 2u)) != 0u);
+      REQUIRE((out.esc_stale_mask & (1u << 8u)) != 0u);
+      observed_esc_stale = true;
+    }
+    if (tick >= 355) {
+      REQUIRE(out.esc_stale_mask == 0u);  // Cleared cleanly once DShot frames resume
+    }
+    integrate_step_rk2(plant, st, out.u_cmd, {0.0, 0.0, 0.0}, 0u, 0.0025);
+  }
+
+  REQUIRE(observed_pitot_failover);
+  REQUIRE(observed_esc_stale);
+  REQUIRE(std::abs((-st.pos_ned.z) - 100.0) < 1.5);
 }

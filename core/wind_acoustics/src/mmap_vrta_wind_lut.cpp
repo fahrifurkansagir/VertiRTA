@@ -82,6 +82,7 @@ MmapVrtaWindLut::MmapVrtaWindLut(MmapVrtaWindLut&& other) noexcept
       mapped_size_(other.mapped_size_),
       fd_(other.fd_),
       loaded_(other.loaded_),
+      mlocked_(other.mlocked_),
       header_(other.header_),
       nodes_(other.nodes_),
       modal_amp_(other.modal_amp_),
@@ -90,6 +91,7 @@ MmapVrtaWindLut::MmapVrtaWindLut(MmapVrtaWindLut&& other) noexcept
   other.mapped_size_ = 0;
   other.fd_ = -1;
   other.loaded_ = false;
+  other.mlocked_ = false;
   other.nodes_ = nullptr;
 }
 
@@ -100,6 +102,7 @@ MmapVrtaWindLut& MmapVrtaWindLut::operator=(MmapVrtaWindLut&& other) noexcept {
     mapped_size_ = other.mapped_size_;
     fd_ = other.fd_;
     loaded_ = other.loaded_;
+    mlocked_ = other.mlocked_;
     header_ = other.header_;
     nodes_ = other.nodes_;
     modal_amp_ = other.modal_amp_;
@@ -108,6 +111,7 @@ MmapVrtaWindLut& MmapVrtaWindLut::operator=(MmapVrtaWindLut&& other) noexcept {
     other.mapped_size_ = 0;
     other.fd_ = -1;
     other.loaded_ = false;
+    other.mlocked_ = false;
     other.nodes_ = nullptr;
   }
   return *this;
@@ -115,6 +119,9 @@ MmapVrtaWindLut& MmapVrtaWindLut::operator=(MmapVrtaWindLut&& other) noexcept {
 
 void MmapVrtaWindLut::unload() noexcept {
   if (mapped_ != nullptr && mapped_ != MAP_FAILED && mapped_size_ > 0u) {
+    if (mlocked_) {
+      (void)::munlock(mapped_, mapped_size_);
+    }
     ::munmap(mapped_, mapped_size_);
   }
   if (fd_ >= 0) {
@@ -124,6 +131,7 @@ void MmapVrtaWindLut::unload() noexcept {
   mapped_size_ = 0u;
   fd_ = -1;
   loaded_ = false;
+  mlocked_ = false;
   nodes_ = nullptr;
   modal_amp_.fill(0.0);
 }
@@ -213,6 +221,8 @@ bool MmapVrtaWindLut::load(std::string_view path, bool verify_sha256) noexcept {
 
   header_ = hdr;
   nodes_ = reinterpret_cast<const VrtaWndNode64*>(payload_ptr);
+  // Best-effort real-time page pinning (gracefully tolerates unprivileged EPERM/ENOMEM).
+  mlocked_ = (::mlock(ptr, file_size) == 0);
   loaded_ = true;
 
   // Initialize modal amplitudes to a clean nominal coastal breeze (SW 225 deg, 10 m/s)

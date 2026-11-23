@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # 3-stage non-root build: single-threaded Emscripten WASM (<150 KiB) -> Vite VertiGCS -> unprivileged Nginx (:5180)
 
-FROM emscripten/emsdk:3.1.74 AS wasm-builder
+FROM emscripten/emsdk:4.0.4 AS wasm-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends ninja-build git \
   && rm -rf /var/lib/apt/lists/*

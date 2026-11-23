@@ -53,6 +53,7 @@ class MmapVrtaWindLut {
   void unload() noexcept;
 
   [[nodiscard]] bool is_loaded() const noexcept { return loaded_; }
+  [[nodiscard]] bool is_mlocked() const noexcept { return mlocked_; }
   [[nodiscard]] const VrtaWndHeader& header() const noexcept { return header_; }
   [[nodiscard]] const std::array<double, kVrtaWndNumModes>& modal_amplitudes() const noexcept {
     return modal_amp_;
@@ -81,6 +82,7 @@ class MmapVrtaWindLut {
   std::size_t mapped_size_{0};
   int fd_{-1};
   bool loaded_{false};
+  bool mlocked_{false};
   VrtaWndHeader header_{};
   const VrtaWndNode64* nodes_{nullptr};
   std::array<double, kVrtaWndNumModes> modal_amp_{};

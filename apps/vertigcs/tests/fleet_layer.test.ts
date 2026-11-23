@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildFleetDeckLayers } from "../src/fleet/fleet_deck_layer";
+import { buildFleetTableRows } from "../src/fleet/fleet_panel";
 import { FleetCorridorController } from "../src/fleet/fleet_sim_replay";
 
 describe("VertiGCS 20-eVTOL U-Space Fleet & Part-IS Cyber-Attack Simulator", () => {
@@ -41,6 +44,22 @@ describe("VertiGCS 20-eVTOL U-Space Fleet & Part-IS Cyber-Attack Simulator", () 
 
     // Advance 10.5 s -> transitions SEC_USSP_QUARANTINE -> SEC_AUTONOMOUS_RTB
     for (let i = 0; i < 105; i++) fleet.step(0.1);
-    expect(fleet.snapshot().aircraft[1].cyberState).toBe("SEC_AUTONOMOUS_RTB");
+    const finalSnap = fleet.snapshot();
+    expect(finalSnap.aircraft[1].cyberState).toBe("SEC_AUTONOMOUS_RTB");
+
+    // Verify compact 20-eVTOL telemetry table rows + zero horizontal overflow CSS locks
+    const rows = buildFleetTableRows(finalSnap);
+    expect(rows.length).toBe(20);
+    expect(rows[0].mode).toBe("P0-CEL");
+    expect(rows[0].alert).toBe(true);
+    expect(rows[1].partIs).toBe("RTB");
+    expect(rows[3].partIs).toBe("SUSP");
+
+    const html = readFileSync(resolve(__dirname, "../index.html"), "utf-8");
+    expect(html).toContain('id="fleet-telemetry-table"');
+    expect(html).toContain('id="fleet-table-body"');
+    const css = readFileSync(resolve(__dirname, "../src/styles/vertigcs.css"), "utf-8");
+    expect(css).toContain("overflow-x: hidden");
+    expect(css).toContain("overflow-wrap: anywhere");
   });
 });

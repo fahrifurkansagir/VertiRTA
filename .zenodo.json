@@ -1,10 +1,10 @@
 {
-  "title": "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Verified Bilingual Contingency Co-Pilot, and License-Clean Active Visual SLZ Perception for Urban Coaxial eVTOLs",
+  "title": "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Formally Verified Coaxial eVTOL Control, Multi-Aircraft U-Space, and Verified Bilingual Autonomy Testbed",
   "upload_type": "software",
-  "version": "2.0.0",
+  "version": "3.5.1",
   "license": "Apache-2.0",
   "language": "eng",
-  "description": "Open-source, 100% Apache-2.0 research and software-verification testbed for the VertiRTA-X8-240 240 kg coaxial X8 urban eVTOL in Istanbul (Maltepe-Dragos-Kartal coastal corridor bounded by LTFJ/LTBX CTRs). Integrates a zero-heap bare-metal C++17 flight core (28,886 B Cortex-M7 Flash, 0 B static RAM, 2,960 B stack DAG), 100 Hz HJI-CBVF-QP safety filter with isolated CSFL/CEL survival envelope atlas (30,000 6-DOF simulations), asynchronous TR/EN neuro-symbolic contingency co-pilot (GBNF + Z3 QF_LRA + zero-heap STL monitor + Split Conformal gating), and foundation-distilled active visual Safe Landing Zone perception. Research testbed only; zero airworthiness certification claim.",
+  "description": "Open-source, 100% Apache-2.0 research and software-verification testbed for the VertiRTA-X8-240 240 kg coaxial X8 urban eVTOL and 8+1 Lift+Cruise platform along Istanbul's Maltepe-Dragos-Kartal coastal corridor bounded by official DHMI AIP LTFJ/LTBX CTRs. Integrates a freestanding zero-heap bare-metal C++17 flight core (28,886 B Cortex-M7 Flash, 0 B static RAM, 2,960 B stack DAG), STM32H753 ITCM/DTCM HITL firmware, live Renode dual-FCC OpenCyphal CAN-FD SIL (12.50 ms failover), live ESBMC v8.7.0 supplemental formal proofs (1,905/1,905 properties), 100 Hz GPU-solved 4D HJI-CBVF-QP safety filter with exact paired 30,000-sim CSFL/CEL atlas (95.98% CSFL / 100.00% CEL), <150 KiB single-threaded WebAssembly VertiGCS console, nanobind Python/Gymnasium SDK, air-gapped VRTAWND1/BVI aeroacoustics (0-GPL verified), 20-eVTOL U-Space + Part-IS (EU) 2023/203 cybersecurity + separate-context two-tier Fleet Z3, and isolated DAL E bilingual Qwen3-4B Z3-GRPO co-pilot and zero-ShareAlike PIDNet-S active visual SLZ perception. Research testbed only; zero airworthiness certification claim.",
   "creators": [
     {
       "name": "VertiRTA Contributors",
@@ -19,12 +19,16 @@
     "Control Barrier Value Function",
     "Fault-Tolerant Control",
     "INDI-WLS",
+    "Formal Verification",
+    "U-Space",
+    "Part-IS",
     "Signal Temporal Logic",
     "Safe Landing Zone",
     "C++20",
+    "WebAssembly",
     "ROS 2 Jazzy",
     "PX4"
   ],
-  "notes": "Research, simulation, and software-verification testbed only. Does NOT claim DO-178C, DO-254, EASA SC-VTOL, SORA 2.5, or SHGM SHT-IHA airworthiness certification or operational compliance.",
+  "notes": "Research, simulation, and software-verification testbed only. Does NOT claim DO-178C, DO-254, DO-330, EASA SC-VTOL, Part-IS, SORA 2.5, or SHGM SHT-IHA airworthiness certification or operational compliance.",
   "access_right": "open"
 }

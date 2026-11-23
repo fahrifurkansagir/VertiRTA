@@ -77,10 +77,15 @@ def test_renode_dual_fcc_overlays_quantum_and_three_fault_scenarios():
     assert "CANTester" in robot or "Create CAN Tester" in robot
     assert "NOT hardware WCET" in robot and "Functional & Protocol SIL" in robot
 
-    # ES0392 FDCAN errata 2.24.2-2.24.5 enforcement (both EFBI=0 and DAR=0 explicitly cleared).
+    # ES0392 FDCAN errata 2.24.2-2.24.5 enforcement (both EFBI=0 and DAR=0 explicitly cleared)
+    # and v3.5.1 fail-closed INIT wait timeout + Renode-only VERTIRTA_RENODE_SIL compile guard.
     assert "rev_y_fdcan_errata_flag" in fdcan
     assert "cccr &= ~(kCccrEfbi | kCccrDar)" in fdcan
     assert "TFQM=0" in fdcan
+    assert "if (!wait_init_bit(true))" in fdcan
+    assert "if (!wait_init_bit(false))" in fdcan
+    cyphal_cmake = (CYPHAL_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "VERTIRTA_RENODE_SIL=1" in cyphal_cmake
 
 
 def test_renode_cyphal_tree_is_pure_lf():
