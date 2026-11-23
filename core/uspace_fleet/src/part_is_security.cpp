@@ -134,6 +134,7 @@ class Sha256 {
   uint64_t total_bits_{0ULL};
 };
 
+#if !defined(VERTIRTA_HAS_LIBSODIUM) || !VERTIRTA_HAS_LIBSODIUM
 void hmac_sha256(
     const uint8_t key[32],
     const uint8_t* aad,
@@ -168,8 +169,7 @@ void hmac_sha256(
   }
   return diff == 0U;
 }
-
-#if defined(VERTIRTA_HAS_LIBSODIUM) && VERTIRTA_HAS_LIBSODIUM
+#else
 [[nodiscard]] bool verify_runtime_libsodium_version() noexcept {
   unsigned int maj = 0U, min = 0U, patch = 0U;
   if (std::sscanf(sodium_version_string(), "%u.%u.%u", &maj, &min, &patch) < 3) {
