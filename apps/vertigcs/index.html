@@ -70,6 +70,21 @@
             </div>
           </section>
 
+          <section class="panel" id="fleet-panel">
+            <h2>20-eVTOL U-Space Fleet &amp; Part-IS Cyber</h2>
+            <p id="fleet-hud-summary" style="margin: 0 0 8px; font-size: 12px; opacity: 0.9">
+              Standby (0/20 active) &bull; 15&deg;C Chilled Stands Ready (4&times;4)
+            </p>
+            <div class="btn-grid">
+              <button type="button" id="btn-fleet-toggle">Enable 20-eVTOL U-Space Fleet</button>
+              <button type="button" id="btn-fleet-cel" class="danger">Trigger CEL P0 Preemption</button>
+              <button type="button" id="btn-fleet-replay">Inject Part-IS V2V Replay</button>
+              <button type="button" id="btn-fleet-spoof" class="danger">Spoof USSP &rarr; LTFJ Quarantine</button>
+              <button type="button" id="btn-fleet-reset" class="secondary">Reset Nominal Fleet</button>
+            </div>
+            <pre id="fleet-cyber-log" style="margin-top: 8px">Fleet overlay paused — click Enable to launch 20-eVTOL Anatolian U-Space ops.</pre>
+          </section>
+
           <section class="panel" id="z3-panel">
             <h2>Z3-STL Audit &amp; Viewport Adapter</h2>
             <pre id="z3-audit-log">Adapter: MapLibre GL v6 + @deck.gl/maplibre v9.4 (MapView z&gt;=8, DPR&lt;=1.5)

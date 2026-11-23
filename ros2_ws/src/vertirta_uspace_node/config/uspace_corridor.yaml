@@ -1,0 +1,69 @@
+# VertiRTA v3.5.0 U-Space Corridor & Part-IS Configuration (Plan 5B Task 5)
+# Research & protocol conformance testbed only — NOT a certified airborne/U-Space product.
+vertirta_uspace_node:
+  ros__parameters:
+    datum:
+      name: Kartal_Coastal_Vertiport
+      lat_deg: 40.8860
+      lon_deg: 29.1880
+      alt_amsl_m: 12.0
+      egm2008_n0_m: 36.7
+    airspace:
+      eastern_geofence_lon_deg: 29.1895
+      cruise_ceiling_agl_m: 120.0
+      odd_ceiling_agl_m: 150.0
+      lane_se_agl_m: 70.0
+      lane_nw_agl_m: 105.0
+      hospital_helipad:
+        name: Kartal_Dr_Lutfi_Kirdar_Hospital_Helipad
+        lat_deg: 40.91639
+        lon_deg: 29.17417
+        radius_m: 150.0
+        ceiling_agl_m: 150.0
+    vertiports:
+      - code: VPT-MLT
+        lat_deg: 40.94016
+        lon_deg: 29.10790
+        op_fatos: 2
+        fato_emg: true
+        chilled_stands_15c: 4
+      - code: VPT-DRG
+        lat_deg: 40.91686
+        lon_deg: 29.13822
+        op_fatos: 1
+        fato_emg: true
+        chilled_stands_15c: 4
+      - code: VPT-CVZ
+        lat_deg: 40.90380
+        lon_deg: 29.15450
+        op_fatos: 1
+        fato_emg: true
+        chilled_stands_15c: 4
+      - code: VPT-KRT
+        lat_deg: 40.88600
+        lon_deg: 29.18800
+        op_fatos: 2
+        fato_emg: true
+        chilled_stands_15c: 4
+    astm_f3548_21:
+      priority_0_cel_astm: 100
+      priority_1_revenue_astm: 10
+      priority_2_reposition_astm: 5
+      max_notam_tile_km2: 100.0
+      s2_dar_level: 13
+    astm_f3411_22a_drip:
+      message_pack_bytes: 228
+      iana_sam_id: 2
+      rfc_9575_pages: 5
+    part_is_security:
+      min_fastdds_version_v2: "2.14.6"
+      min_fastdds_version_v3: "3.4.1"
+      min_libsodium_version: "1.0.21"
+      secure_header_bytes: 40
+      replay_window_bits: 128
+      max_tai_skew_ms: 250
+      rto_max_s: 10.0
+    ports:
+      cesium_http: 5180
+      foxglove_ws: 8891
+      micro_xrce_agent_udp: 8888

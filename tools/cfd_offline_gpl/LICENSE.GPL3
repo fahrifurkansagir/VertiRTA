@@ -1,0 +1,22 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
+
+SCOPE NOTICE FOR VERTIRTA AIR-GAPPED OFFLINE CFD TOOLCHAIN:
+This directory (`tools/cfd_offline_gpl/`) contains strictly offline OpenFOAM
+case-generation and POD-RBF compression scripts licensed under GPL-3.0-or-later
+to ensure full license compatibility when paired with OpenFOAM (GPL-3.0).
+
+No file in this directory is ever included, compiled, or linked into any
+Apache-2.0 VertiRTA runtime library (`core/flight_core/`, `core/rta_companion/`,
+`core/airframes/`, `core/wind_acoustics/`, `core/uspace_fleet/`, `core/fleet_z3/`).
+Per FSF GPLv3 Section 0 ("output from the Program is covered only if its
+contents constitute a work based on the Program"), pure numeric floating-point
+and quantized int16 `VRTAWND1` lookup tables emitted by offline CFD runs are
+non-executable physical field data decoupled across the license boundary and
+verified at CI runtime by `scripts/ci/check_zero_gpl_symbols.py`.
+
+Full license text: https://www.gnu.org/licenses/gpl-3.0.txt

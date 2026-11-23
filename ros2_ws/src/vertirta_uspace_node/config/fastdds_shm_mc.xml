@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  VertiRTA v3.5.0 Fast DDS Zero-Copy SHM Profile (Monte Carlo SIL Only — Non-Security).
+  Minimum Fast DDS version pin: >= 2.14.6 (v2) / >= 3.4.1 (v3) [CVE-2024-28231, CVE-2025-62799, CVE-2026-22590].
+  NOTE: Fast DDS Security explicitly forbids SHM transport; use fastdds_part_is_udp.xml for Part-IS secured ops.
+-->
+<dds xmlns="http://www.eprosima.com">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>vertirta_shm_mc_transport</transport_id>
+        <type>SHM</type>
+        <segment_size>4194304</segment_size>
+        <maxMessageSize>65536</maxMessageSize>
+      </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="vertirta_uspace_shm_mc_participant" is_default_profile="true">
+      <rtps>
+        <name>vertirta_uspace_shm_mc</name>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        <userTransports>
+          <transport_id>vertirta_shm_mc_transport</transport_id>
+        </userTransports>
+      </rtps>
+    </participant>
+
+    <data_writer profile_name="/vertirta/uspace/p0_preempt">
+      <qos>
+        <reliability>
+          <kind>BEST_EFFORT</kind>
+        </reliability>
+        <durability>
+          <kind>VOLATILE</kind>
+        </durability>
+      </qos>
+    </data_writer>
+
+    <data_reader profile_name="/vertirta/uspace/p0_preempt">
+      <qos>
+        <reliability>
+          <kind>BEST_EFFORT</kind>
+        </reliability>
+        <durability>
+          <kind>VOLATILE</kind>
+        </durability>
+      </qos>
+    </data_reader>
+  </profiles>
+</dds>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  VertiRTA v3.5.0 Fast DDS Part-IS (EU) 2023/203 UDP-Only Security Profile.
+  Mandatory CVE pin: Fast DDS >= 2.14.6 (v2) / >= 3.4.1 (v3) [CVE-2024-28231, CVE-2025-62799, CVE-2026-22590].
+  SHM transport is strictly disabled (useBuiltinTransports=false, UDPv4 only) per Fast DDS Security requirement.
+  Priority-0 emergency preemption (/vertirta/uspace/p0_preempt) strictly uses BEST_EFFORT 3x UDP burst (never RELIABLE).
+-->
+<dds xmlns="http://www.eprosima.com">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>vertirta_part_is_udpv4</transport_id>
+        <type>UDPv4</type>
+        <maxMessageSize>1472</maxMessageSize>
+        <sendBufferSize>1048576</sendBufferSize>
+        <receiveBufferSize>1048576</receiveBufferSize>
+      </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="vertirta_uspace_part_is_participant" is_default_profile="true">
+      <rtps>
+        <name>vertirta_uspace_part_is_udp</name>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        <userTransports>
+          <transport_id>vertirta_part_is_udpv4</transport_id>
+        </userTransports>
+        <propertiesPolicy>
+          <properties>
+            <property>
+              <name>dds.sec.auth.plugin</name>
+              <value>builtin.PKI-DH</value>
+            </property>
+            <property>
+              <name>dds.sec.auth.builtin.PKI-DH.identity_ca</name>
+              <value>file://certs/vertirta_ca.pem</value>
+            </property>
+            <property>
+              <name>dds.sec.auth.builtin.PKI-DH.identity_certificate</name>
+              <value>file://certs/vertirta_node_cert.pem</value>
+            </property>
+            <property>
+              <name>dds.sec.auth.builtin.PKI-DH.private_key</name>
+              <value>file://certs/vertirta_node_key.pem</value>
+            </property>
+            <property>
+              <name>dds.sec.access.plugin</name>
+              <value>builtin.Access-Permissions</value>
+            </property>
+            <property>
+              <name>dds.sec.access.builtin.Access-Permissions.permissions_ca</name>
+              <value>file://certs/vertirta_ca.pem</value>
+            </property>
+            <property>
+              <name>dds.sec.access.builtin.Access-Permissions.governance</name>
+              <value>file://certs/vertirta_governance.p7s</value>
+            </property>
+            <property>
+              <name>dds.sec.access.builtin.Access-Permissions.permissions</name>
+              <value>file://certs/vertirta_permissions.p7s</value>
+            </property>
+            <property>
+              <name>dds.sec.crypto.plugin</name>
+              <value>builtin.AES-GCM-GMAC</value>
+            </property>
+            <property>
+              <name>dds.sec.log.plugin</name>
+              <value>builtin.DDS_LogTopic</value>
+            </property>
+            <property>
+              <name>dds.sec.log.builtin.DDS_LogTopic.logging_level</name>
+              <value>INFORMATIONAL_LEVEL</value>
+            </property>
+          </properties>
+        </propertiesPolicy>
+      </rtps>
+    </participant>
+
+    <data_writer profile_name="/vertirta/uspace/p0_preempt">
+      <qos>
+        <reliability>
+          <kind>BEST_EFFORT</kind>
+        </reliability>
+        <durability>
+          <kind>VOLATILE</kind>
+        </durability>
+        <liveliness>
+          <kind>AUTOMATIC</kind>
+        </liveliness>
+      </qos>
+    </data_writer>
+
+    <data_reader profile_name="/vertirta/uspace/p0_preempt">
+      <qos>
+        <reliability>
+          <kind>BEST_EFFORT</kind>
+        </reliability>
+        <durability>
+          <kind>VOLATILE</kind>
+        </durability>
+      </qos>
+    </data_reader>
+  </profiles>
+</dds>

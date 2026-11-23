@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Mandatory Pre-Flight & SITL Health Check for PX4 v1.16 standard_vtol Lift+Cruise Overlay
+schema_version: 1
+px4_version: "v1.16"
+require_vtol_att_control_active: true
+require_bidirectional_dshot_esc_status: true
+forbid_offboard_direct_actuator_400hz: true
+require_uxrce_dds_synct_enabled: true
+checks:
+  - name: "vtol_att_control_running"
+    command: "vtol_att_control status"
+    expected_substring: "running"
+    rationale: "Guards against PX4 v1.16 standard_vtol transition stall if vtol_att_control is inactive."
+  - name: "wq_rate_ctrl_400hz_internal"
+    command: "work_queue status"
+    expected_substring: "wq:rate_ctrl"
+    rationale: "Confirms 400 Hz INDI-WLS executes PX4-internal rather than over unauthenticated uXRCE-DDS."
+  - name: "dshot_esc_status_live"
+    command: "listener esc_status -n 1"
+    expected_substring: "esc_rpm"
+    rationale: "Verifies bidirectional DShot RPM telemetry for actuator-synchronized INDI & <30 ms OEI detection."
+  - name: "vtol_vehicle_status_dds_export"
+    command: "listener vtol_vehicle_status -n 1"
+    expected_substring: "vehicle_vtol_state"
+    rationale: "Verifies PX4 v1.16 dds_topics export (#24582) for companion 100 Hz RTA mode awareness."

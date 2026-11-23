@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vertirta_uspace_node</name>
+  <version>3.5.0</version>
+  <description>ASTM F3548-21 U-Space OIV manager, F3411-22a/RFC 9575 228-byte DRIP Remote ID encoder, and Part-IS Fast DDS security bridge for VertiRTA-X8-240</description>
+  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>vertirta_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { CesiumBridgeAdapter } from "./adapters/cesium_bridge_adapter";
 import type { IGeoViewportAdapter } from "./adapters/geo_viewport_adapter";
 import { MapLibreDeckAdapter, clampDevicePixelRatio } from "./adapters/maplibre_deck_adapter";
+import { bindFleetPanel } from "./fleet/fleet_panel";
 import {
   LiveWsTransport,
   SandboxWorkerTransport,
@@ -98,6 +99,12 @@ async function bootstrapVertiGcs(): Promise<void> {
     transport.sendFault(cmd);
     setStatus(`Fault command dispatched: ${cmd.kind} (target=${cmd.targetIdx})`);
   });
+
+  bindFleetPanel((fleetSnap) => {
+    if (viewport instanceof MapLibreDeckAdapter) {
+      viewport.updateFleetSnapshot(fleetSnap);
+    }
+  }, setStatus);
 }
 
 if (typeof document !== "undefined") {

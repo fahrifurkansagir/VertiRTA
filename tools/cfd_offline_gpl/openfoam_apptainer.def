@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Offline Apptainer definition for VertiRTA coastal urban wake CFD snapshots.
+# Locks OpenFOAM GL#3236 mitigation: pins upstream Apptainer container image
+# directly rather than broken apt repositories. NEVER executed inside GitHub CI.
+
+Bootstrap: docker
+From: opencfd/openfoam-dev:apptainer
+
+%labels
+    Author VertiRTA Offline CFD Pipeline
+    License GPL-3.0-or-later
+    OpenFOAMTarget v2412-v2606
+    AirGapPolicy OfflineNumericVRTAWND1OutputOnly
+
+%environment
+    export FOAM_ABORT=1
+    export OMPI_ALLOW_RUN_AS_ROOT=1
+    export LC_ALL=C.UTF-8
+
+%post
+    echo "Pinned opencfd/openfoam-dev:apptainer image ready for offline Dragos-Maltepe-Kartal RANS/IDDES runs."
+
+%runscript
+    exec "$@"

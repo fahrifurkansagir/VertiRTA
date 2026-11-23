@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+# PX4 v1.16 Internal wq:rate_ctrl Overlay for VertiRTA-LC-240 (8+1 Lift+Cruise)
+# Enforces 01-DR08-13 Override #4 & Spec Invariant I5:
+#   400 Hz INDI-WLS executes strictly PX4-internal on wq:rate_ctrl — NEVER offboard over uXRCE-DDS.
+schema_version: 1
+px4_version: "v1.16"
+airframe_layout: "8+1_lift_cruise"
+base_px4_airframe: "standard_vtol"
+rate_loop_placement: "px4_internal_wq_rate_ctrl"
+offboard_direct_actuator_400hz_forbidden: true
+
+uorb_topics:
+  gps: "vehicle_gps_position"
+  esc_rpm: "esc_status"
+  vtol_status: "vtol_vehicle_status"
+  rta_setpoint_in: "trajectory_setpoint"
+
+params:
+  # Companion <-> FMU clock synchronization & EKF2 GNSS delay (PX4 v1.16 canonical names)
+  UXRCE_DDS_SYNCT: 1
+  EKF2_GPS_DELAY: 110.0
+
+  # Bidirectional DShot ESC RPM feedback for INDI actuator synchronization & <30 ms OEI isolation
+  DSHOT_BIDIR_EN: 1
+  DSHOT_TEL_CFG: 1
+
+  # Quintic Hermite transition envelope & stall/pusher safety parameters (DR-09 Sec 1.4-1.6)
+  VT_ARSP_BLEND: 14.0
+  VT_ARSP_TRANS: 28.0
+  FW_AIRSPD_MIN: 24.0
+  FW_AIRSPD_TRIM: 38.0
+  FW_AIRSPD_MAX: 46.3
+  VT_PSHER_SLEW: 0.33
+  VT_B_TRANS_DUR: 12.0
+  VT_F_TRANS_DUR: 14.0
+
+  # 8+1 Lift+Cruise actuator counts (8 lift + 1 pusher + 3 aero surfaces)
+  CA_ROTOR_COUNT: 9
+  CA_SV_CS_COUNT: 3

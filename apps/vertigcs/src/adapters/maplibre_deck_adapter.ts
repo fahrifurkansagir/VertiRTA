@@ -9,6 +9,8 @@ import { MapLibreOverlay } from "@deck.gl/maplibre";
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
+import { buildFleetDeckLayers } from "../fleet/fleet_deck_layer";
+import type { FleetSnapshot } from "../fleet/fleet_types";
 import { COPERNICUS_GLO30_ATTRIBUTION, KARTAL_DATUM } from "../geo/istanbul_datum";
 import type { TelemetrySnapshot } from "../types/telemetry";
 import type { GeoViewportOptions, IGeoViewportAdapter } from "./geo_viewport_adapter";
@@ -47,6 +49,8 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
   private map: maplibregl.Map | null = null;
   private overlay: MapLibreOverlay | null = null;
   private airspaceUrl: string | null = null;
+  private lastTelemetry: TelemetrySnapshot | null = null;
+  private fleetSnapshot: FleetSnapshot | null = null;
   private readonly trailCoords: [number, number, number][] = [];
   private readonly maxTrailPts = 240;
 
@@ -105,12 +109,20 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
   }
 
   updateTelemetry(snapshot: TelemetrySnapshot): void {
+    this.lastTelemetry = snapshot;
     this.trailCoords.push([snapshot.lonDeg, snapshot.latDeg, snapshot.altAmslM]);
     if (this.trailCoords.length > this.maxTrailPts) {
       this.trailCoords.shift();
     }
     this.overlay?.setProps({
       layers: this.buildLayers(snapshot),
+    });
+  }
+
+  updateFleetSnapshot(snapshot: FleetSnapshot | null): void {
+    this.fleetSnapshot = snapshot;
+    this.overlay?.setProps({
+      layers: this.buildLayers(this.lastTelemetry),
     });
   }
 
@@ -187,6 +199,10 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
           updateTriggers: { getPosition: [snapshot.seq], getFillColor: [snapshot.celLatched] },
         })
       );
+    }
+
+    if (this.fleetSnapshot) {
+      layers.push(...buildFleetDeckLayers(this.fleetSnapshot));
     }
 
     return layers;
