@@ -28,6 +28,10 @@ if(VERTIRTA_BUILD_COMPANION)
       core/stl
       core/copilot
       core/slz_bayes
+      core/airframes/lift_cruise
+      core/wind_acoustics
+      core/uspace_fleet
+      core/fleet_z3
       tools/cli
       sim/colab_egl)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_vertirta_opt_dir}/CMakeLists.txt")
@@ -42,6 +46,10 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/stl/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/copilot/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/airframes/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/wind_acoustics/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/uspace_fleet/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/fleet_z3/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
     FetchContent_Declare(
@@ -65,6 +73,18 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/copilot/CMakeLists.txt")
     add_subdirectory(tests/copilot)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/airframes/CMakeLists.txt")
+    add_subdirectory(tests/airframes)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/wind_acoustics/CMakeLists.txt")
+    add_subdirectory(tests/wind_acoustics)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/uspace_fleet/CMakeLists.txt")
+    add_subdirectory(tests/uspace_fleet)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/fleet_z3/CMakeLists.txt")
+    add_subdirectory(tests/fleet_z3)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt")
     add_subdirectory(core/slz_bayes/tests)

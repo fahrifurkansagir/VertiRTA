@@ -1,0 +1,371 @@
+name: VertiRTA M2 U-Space, Part-IS Security & Full-Envelope Physics CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "core/airframes/**"
+      - "core/wind_acoustics/**"
+      - "core/uspace_fleet/**"
+      - "core/fleet_z3/**"
+      - "tools/cfd_offline_gpl/**"
+      - "ros2_ws/src/vertirta_uspace_node/**"
+      - "apps/vertigcs/**"
+      - "tests/airframes/**"
+      - "tests/wind_acoustics/**"
+      - "tests/uspace_fleet/**"
+      - "tests/fleet_z3/**"
+      - "tests/integration/test_m2_uspace_node_contracts.py"
+      - "tests/ci/test_m2_workflow_contracts.py"
+      - "scripts/ci/check_zero_gpl_symbols.py"
+      - ".github/workflows/m2_uspace_and_physics.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LIBSODIUM_VERSION: "1.0.22"
+  LIBSODIUM_URL: "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz"
+  LIBSODIUM_FALLBACK_URL: "https://github.com/jedisct1/libsodium/releases/download/1.0.22-RELEASE/libsodium-1.0.22.tar.gz"
+  LIBSODIUM_SHA256: "adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349"
+
+jobs:
+  m2_cpp_matrix:
+    name: "M2 Cross-ISA C++20 Release Matrix (${{ matrix.arch }}, native libsodium 1.0.22 + libz3)"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install C++20 Toolchain, pkg-config & Native libz3-dev (NEVER vulnerable apt libsodium 1.0.18)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build make gcc-14 g++-14 pkg-config libz3-dev curl
+
+      - name: Cache Pinned Immutable libsodium 1.0.22 Build
+        id: cache_sodium
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/vertirta-libsodium-1.0.22
+          key: libsodium-${{ runner.os }}-${{ matrix.arch }}-1.0.22-adbdd8f16149
+
+      - name: Build Immutable libsodium-1.0.22.tar.gz with Verified SHA-256 (>= 1.0.21 CVE Lock)
+        if: steps.cache_sodium.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          mkdir -p "${LIBSODIUM_PREFIX}"
+          curl -fsSL "${LIBSODIUM_URL}" -o /tmp/libsodium-1.0.22.tar.gz \
+            || curl -fsSL "${LIBSODIUM_FALLBACK_URL}" -o /tmp/libsodium-1.0.22.tar.gz
+          echo "${LIBSODIUM_SHA256}  /tmp/libsodium-1.0.22.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/libsodium-1.0.22.tar.gz -C /tmp
+          cd /tmp/libsodium-1.0.22
+          ./configure --prefix="${LIBSODIUM_PREFIX}" --disable-static
+          make -j"$(nproc)"
+          make install
+          rm -rf /tmp/libsodium-1.0.22 /tmp/libsodium-1.0.22.tar.gz
+
+      - name: Register libsodium 1.0.22 & Build Full Release C++20 Suite (Zero Fallback)
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          pkg-config --modversion libsodium
+          cmake -S . -B build-m2-release -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m2-release -j
+          ctest --test-dir build-m2-release --output-on-failure -j4
+          ./build-m2-release/tests/uspace_fleet/test_cbf_orca_and_fleet_sim
+
+  m2_sanitizers_and_gpl_gate:
+    name: "M2 ASan/UBSan + TSan + Zero-GPL Runtime Gate + Cortex-M7 Bare-Metal Lock"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Host, Z3, ARM Bare-Metal & Python Toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build make gcc-14 g++-14 pkg-config libz3-dev curl \
+            gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi \
+            python3 python3-pip
+
+      - name: Cache Pinned Immutable libsodium 1.0.22 Build
+        id: cache_sodium_san
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/vertirta-libsodium-1.0.22
+          key: libsodium-${{ runner.os }}-x86_64-1.0.22-adbdd8f16149
+
+      - name: Build Immutable libsodium-1.0.22.tar.gz with Verified SHA-256
+        if: steps.cache_sodium_san.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          mkdir -p "${LIBSODIUM_PREFIX}"
+          curl -fsSL "${LIBSODIUM_URL}" -o /tmp/libsodium-1.0.22.tar.gz \
+            || curl -fsSL "${LIBSODIUM_FALLBACK_URL}" -o /tmp/libsodium-1.0.22.tar.gz
+          echo "${LIBSODIUM_SHA256}  /tmp/libsodium-1.0.22.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/libsodium-1.0.22.tar.gz -C /tmp
+          cd /tmp/libsodium-1.0.22
+          ./configure --prefix="${LIBSODIUM_PREFIX}" --disable-static
+          make -j"$(nproc)"
+          make install
+          rm -rf /tmp/libsodium-1.0.22 /tmp/libsodium-1.0.22.tar.gz
+
+      - name: Build & Run ASan + UBSan on All M2 C++20 Test Suites (Native libsodium + libz3)
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          cmake -S . -B build-m2-asan -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m2-asan --target \
+            test_lift_cruise_dynamics \
+            test_transition_indi_wls \
+            test_mmap_vrta_wind_lut \
+            test_aeroacoustics_hemisphere \
+            test_noise_aware_router_lexicographic \
+            verify_vrtawnd1_load \
+            test_vertiport_thermal_queue \
+            test_part_is_security \
+            test_cbf_orca_and_fleet_sim \
+            test_fleet_z3_scheduler -j
+          ctest --test-dir build-m2-asan \
+            -R "^(test_lift_cruise_dynamics|test_transition_indi_wls|test_mmap_vrta_wind_lut|test_aeroacoustics_hemisphere|test_noise_aware_router_lexicographic|test_vertiport_thermal_queue|test_part_is_security|test_cbf_orca_and_fleet_sim|test_fleet_z3_scheduler)$" \
+            --output-on-failure -j4
+
+      - name: Build & Run TSan on Multi-Threaded FleetSimEngine & FleetZ3Scheduler
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          cmake -S . -B build-m2-tsan -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m2-tsan --target \
+            test_vertiport_thermal_queue \
+            test_part_is_security \
+            test_cbf_orca_and_fleet_sim \
+            test_fleet_z3_scheduler -j
+          ctest --test-dir build-m2-tsan \
+            -R "^(test_vertiport_thermal_queue|test_part_is_security|test_cbf_orca_and_fleet_sim|test_fleet_z3_scheduler)$" \
+            --output-on-failure -j4
+
+      - name: Cross-Compile Cortex-M7 Flight Core (0 B RAM, Zero Heap, Frozen 28886 B GCC-14.2 Baseline)
+        run: |
+          set -euo pipefail
+          cmake --preset arm-cortex-m7
+          cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
+          python3 scripts/ci/check_no_heap_symbols.py \
+            --archive build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --nm-bin arm-none-eabi-nm \
+            --out build/m2_cm7_noheap.json
+          # Exact GCC-14.2.1 baseline = 28886 B Flash / 0 B RAM; enforce 0 B RAM & < 40 KiB Flash across GCC 13/14
+          python3 scripts/ci/check_bare_metal_size.py \
+            --target build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --size-bin arm-none-eabi-size \
+            --max-flash-bytes 40960 \
+            --max-ram-bytes 1 \
+            --out build/m2_cm7_size.json
+
+      - name: Enforce Zero-GPL Runtime Symbol Gate & Plan 5A Pytest + VRTAWND1 ABI Parity
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          python3 scripts/ci/check_zero_gpl_symbols.py \
+            --targets \
+              build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+              build-m2-asan/core/rta_companion/libvertirta_rta_companion.a \
+              build-m2-asan/core/airframes/lift_cruise/libvertirta_airframes_lc.a \
+              build-m2-asan/core/wind_acoustics/libvertirta_wind_acoustics.a \
+              build-m2-asan/core/uspace_fleet/libvertirta_uspace_fleet.a \
+              build-m2-asan/core/fleet_z3/libvertirta_fleet_z3.a \
+              build-m2-asan/tests/airframes/test_lift_cruise_dynamics \
+              build-m2-asan/tests/airframes/test_transition_indi_wls \
+              build-m2-asan/tests/wind_acoustics/test_mmap_vrta_wind_lut \
+              build-m2-asan/tests/wind_acoustics/test_aeroacoustics_hemisphere \
+              build-m2-asan/tests/wind_acoustics/test_noise_aware_router_lexicographic \
+              build-m2-asan/tests/wind_acoustics/verify_vrtawnd1_load \
+              build-m2-asan/tests/uspace_fleet/test_vertiport_thermal_queue \
+              build-m2-asan/tests/uspace_fleet/test_part_is_security \
+              build-m2-asan/tests/uspace_fleet/test_cbf_orca_and_fleet_sim \
+              build-m2-asan/tests/fleet_z3/test_fleet_z3_scheduler \
+            --source-roots core/ \
+            --out build/zero_gpl_audit.json
+
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          VERTIRTA_VERIFY_VRTAWND1_BIN="$PWD/build-m2-asan/tests/wind_acoustics/verify_vrtawnd1_load" \
+            PYTHONPATH="$PWD" \
+            uv run --no-project --python 3.11 --with pytest --with pyyaml --with numpy --with scipy \
+            pytest \
+              tests/airframes/test_px4_v116_overlay_contracts.py \
+              tests/wind_acoustics/test_cfd_offline_gpl_contracts.py \
+              tests/wind_acoustics/test_zero_gpl_gate.py -v
+
+      - name: Upload Zero-GPL & Cortex-M7 Audit Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2-zero-gpl-and-cm7-audit-${{ github.sha }}
+          path: |
+            build/zero_gpl_audit.json
+            build/m2_cm7_noheap.json
+            build/m2_cm7_size.json
+
+  m2_uspace_node_and_vertigcs:
+    name: "M2 Fleet Z3 Cross-Check, ROS 2 U-Space Node, Hygiene & VertiGCS Fleet/WASM Gate"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Build, Native Z3 & uv Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-14 g++-14 libz3-dev curl python3
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Build emit_fleet_smt2_cases (Native Z3) & Cross-Check Real Microsoft Python Z3
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          cmake -S tests/fleet_z3 -B build-m2-z3-emit -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m2-z3-emit --target emit_fleet_smt2_cases -j
+          VERTIRTA_EMIT_FLEET_SMT2_BIN="$PWD/build-m2-z3-emit/emit_fleet_smt2_cases" \
+            uv run --no-project --python 3.11 --with pytest --with z3-solver \
+            pytest tests/fleet_z3/test_fleet_z3_smt2_crosscheck.py -v
+
+      - name: Build & Test Standalone ROS 2 vertirta_uspace_node (ASan/UBSan) + Contract & Workflow Self-Checks
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          cmake -S ros2_ws/src/vertirta_uspace_node/test -B build-m2-uspace-node-test -G Ninja \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build-m2-uspace-node-test -j
+          ctest --test-dir build-m2-uspace-node-test --output-on-failure
+
+          cmake -S ros2_ws/src/vertirta_uspace_node -B build-m2-uspace-node-cli -G Ninja \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-m2-uspace-node-cli -j
+          ./build-m2-uspace-node-cli/vertirta_uspace_node_cli
+
+          uv run --no-project --python 3.11 --with pytest --with pyyaml \
+            pytest \
+              tests/integration/test_m2_uspace_node_contracts.py \
+              tests/ci/test_m2_workflow_contracts.py -v
+
+          python3 scripts/ci/check_arch_isolation.py --repo-root . --out build/m2_arch_isolation.json
+          python3 scripts/ci/check_public_hygiene.py --repo-root . --out build/m2_public_hygiene.json
+
+      - name: Setup Pinned Emscripten 4.0.4 & Verify Frozen <150 KiB libvertirta_flight_core.wasm
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "4.0.4"
+
+      - name: Build Single-Threaded WASM & Enforce <= 153600 B (0 B Added by M2 Fleet)
+        run: |
+          set -euo pipefail
+          bash wasm/build_wasm.sh
+          WASM_BYTES="$(stat -c%s apps/vertigcs/public/wasm/libvertirta_flight_core.wasm)"
+          echo "Verified libvertirta_flight_core.wasm = ${WASM_BYTES} bytes (limit <= 153600)"
+          test "${WASM_BYTES}" -le 153600
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/vertigcs/package-lock.json
+
+      - name: Run VertiGCS Vitest (10/10), Production Build & Pages Subpath Build
+        working-directory: apps/vertigcs
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+          npx vite build --base /VertiRTA/
+
+      - name: Verify VertiGCS Dist Bundle Hygiene (Zero COI/SAB, Worker Size, Frozen WASM)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          dist_root = Path("apps/vertigcs/dist")
+          assert (dist_root / "index.html").is_file()
+          wasm_bin = dist_root / "wasm/libvertirta_flight_core.wasm"
+          assert wasm_bin.is_file(), f"Missing WASM in dist: {wasm_bin}"
+          assert wasm_bin.stat().st_size <= 153600, f"WASM exceeds 150 KiB: {wasm_bin.stat().st_size}"
+
+          sab_tok = "SharedArray" + "Buffer"
+          banned_all = ("coi" + "-serviceworker", "new " + sab_tok, ":4173", ":4174", ":8765", ":9222", ":9223")
+          worker_seen = False
+          for p in dist_root.rglob("*"):
+              if p.is_file() and p.suffix in (".html", ".js", ".mjs", ".css"):
+                  txt = p.read_text(encoding="utf-8", errors="ignore")
+                  for tok in banned_all:
+                      assert tok not in txt, f"Forbidden token {tok!r} in {p}"
+                  is_worker_or_wasm = ("flight_sim.worker" in p.name) or ("wasm" in p.parts and p.suffix == ".mjs")
+                  if is_worker_or_wasm:
+                      assert sab_tok not in txt, f"Forbidden {sab_tok!r} in worker/wasm file {p}"
+                      if "flight_sim.worker" in p.name:
+                          worker_seen = True
+                          assert p.stat().st_size <= 16384, f"Worker bloated: {p.stat().st_size} B"
+          assert worker_seen, "Missing flight_sim.worker bundle in dist"
+          print(f"PASS: apps/vertigcs/dist verified clean (wasm={wasm_bin.stat().st_size} B)")
+          PY
