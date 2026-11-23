@@ -23,6 +23,9 @@ namespace {
 
 constexpr std::int64_t kScale = 10000LL;
 constexpr std::int64_t kInf = std::numeric_limits<std::int64_t>::max() / 4LL;
+// Deterministic rlimit (250000) bounds solver work; 100 ms wall timeout absorbs
+// arm64/sanitizer cloud VM steal (mirrors core/copilot/z3_corridor_verifier.cpp).
+constexpr std::uint32_t kTier2Z3SolverTimeoutMs = 100U;
 
 [[nodiscard]] std::int64_t scale_1e4(double v) noexcept {
   if (!std::isfinite(v)) {
@@ -91,26 +94,31 @@ struct QfLraLocalSolver::Impl {
     z3::params p_core(ctx_lra);
     p_core.set("unsat_core", true);
     p_core.set("rlimit", 250000U);
-    p_core.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
+    p_core.set("timeout", static_cast<unsigned>(kTier2Z3SolverTimeoutMs));
     solver_lra.set(p_core);
 
     z3::params p_fast(ctx_lra);
     p_fast.set("unsat_core", false);
     p_fast.set("rlimit", 250000U);
-    p_fast.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
+    p_fast.set("timeout", static_cast<unsigned>(kTier2Z3SolverTimeoutMs));
     solver_lra_fast.set(p_fast);
 
-    // Pre-warm Z3 allocator & QF_LRA engine at construction so real-time tick #1 has zero init spike.
-    z3::expr w = ctx_lra.real_const("_lra_warm");
-    solver_lra_fast.push();
-    solver_lra_fast.add(w >= z3_qreal(ctx_lra, 0LL));
-    (void)solver_lra_fast.check();
-    solver_lra_fast.pop();
-
-    solver_lra.push();
-    solver_lra.add(w >= z3_qreal(ctx_lra, 0LL));
-    (void)solver_lra.check();
-    solver_lra.pop();
+    // Pre-warm Z3 allocator, solve-eqs & QF_LRA Simplex tableau with a realistic
+    // multi-variable equality+difference system so real-time call #1 has zero init spike.
+    z3::expr w0 = ctx_lra.real_const("_lra_warm0");
+    z3::expr w1 = ctx_lra.real_const("_lra_warm1");
+    z3::expr w2 = ctx_lra.real_const("_lra_warm2");
+    auto warm_solver = [&](z3::solver& slv) {
+      slv.push();
+      slv.add(w0 == z3_qreal(ctx_lra, 0LL));
+      slv.add((w1 - w0) == z3_qreal(ctx_lra, 2400000LL));
+      slv.add((w2 - w1) >= z3_qreal(ctx_lra, 600000LL));
+      slv.add((w2 - w0) <= z3_qreal(ctx_lra, 9000000LL));
+      (void)slv.check();
+      slv.pop();
+    };
+    warm_solver(solver_lra_fast);
+    warm_solver(solver_lra);
   }
 #else
   std::uint64_t fallback_tag{0x4C52415F4C4F4332ULL};  // "LRA_LOC2"

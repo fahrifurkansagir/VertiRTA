@@ -23,7 +23,9 @@ namespace {
 
 constexpr std::int64_t kScale = 10000LL;
 constexpr std::int64_t kInf = std::numeric_limits<std::int64_t>::max() / 4LL;
-constexpr std::uint32_t kTier1Z3TimeoutMs = 15U;
+// Deterministic rlimit (250000) bounds solver work; 100 ms wall timeout absorbs
+// arm64/sanitizer cloud VM steal (mirrors core/copilot/z3_corridor_verifier.cpp).
+constexpr std::uint32_t kTier1Z3TimeoutMs = 100U;
 
 [[nodiscard]] std::int64_t scale_1e4(double v) noexcept {
   if (!std::isfinite(v)) {
@@ -98,9 +100,15 @@ struct QfRdlStnSolver::Impl {
     fast_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
     solver_rdl.set(fast_params);
 
-    // Pre-warm Z3 allocator & QF_IDL difference-logic engine at construction so tick #1 is warm.
+    // Pre-warm Z3 allocator & QF_IDL difference-logic graph engine with a realistic
+    // multi-edge difference chain so tick #1 has zero cold initialization spike.
     solver_rdl.push();
-    solver_rdl.add(cached_nodes[0U] >= ctx_rdl.int_val(static_cast<std::int64_t>(0)));
+    solver_rdl.add((cached_nodes[0U] - cached_nodes[1U]) <=
+                   ctx_rdl.int_val(static_cast<std::int64_t>(0)));
+    solver_rdl.add((cached_nodes[1U] - cached_nodes[2U]) <=
+                   ctx_rdl.int_val(static_cast<std::int64_t>(-1800000)));
+    solver_rdl.add((cached_nodes[2U] - cached_nodes[0U]) <=
+                   ctx_rdl.int_val(static_cast<std::int64_t>(9000000)));
     (void)solver_rdl.check();
     solver_rdl.pop();
   }

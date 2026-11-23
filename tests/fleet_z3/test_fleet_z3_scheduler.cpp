@@ -12,6 +12,28 @@
 
 using namespace vertirta::fleet_z3;
 
+namespace {
+
+// Enforce strict Release wall-clock bounds (< 10 ms Tier-1 STN, < 25 ms Tier-2 QF_LRA);
+// relax ONLY under ASan/TSan instrumentation (2-3x runtime overhead).
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+constexpr double kRdlLimitMs = 25.0;
+constexpr double kLraLimitMs = 50.0;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+constexpr double kRdlLimitMs = 25.0;
+constexpr double kLraLimitMs = 50.0;
+#else
+constexpr double kRdlLimitMs = 10.0;
+constexpr double kLraLimitMs = 25.0;
+#endif
+#else
+constexpr double kRdlLimitMs = 10.0;
+constexpr double kLraLimitMs = 25.0;
+#endif
+
+}  // namespace
+
 TEST_CASE("Tier-1 QF_RDL STN solves 20-eVTOL schedule in < 3 ms and Tier-2 QF_LRA enforces Art. 10(8)-(10) in < 25 ms") {
   FleetZ3Scheduler sched{};
   REQUIRE(sched.uses_separate_z3_contexts());  // Prevents smt.arith.solver=3 clash
@@ -23,18 +45,22 @@ TEST_CASE("Tier-1 QF_RDL STN solves 20-eVTOL schedule in < 3 ms and Tier-2 QF_LR
   REQUIRE(r_nom.sat);
   REQUIRE(r_nom.tier_used == SolverTier::TIER1_QF_RDL_STN);
   REQUIRE(r_nom.smt2_logic == "QF_RDL");
-  REQUIRE(r_nom.wall_ms < 10.0);  // Target < 3 ms Release
+  REQUIRE(r_nom.wall_ms < kRdlLimitMs);  // Strict < 10 ms Release (< 3 ms nominal)
   REQUIRE(r_nom.smt2_audit.find("(set-logic QF_RDL)") != std::string::npos);
   REQUIRE(r_nom.schedule.size() == 20U);
 
   // Repeat solve confirms zero residual push()/pop() leakage across calls
   const auto r_nom_repeat = sched.schedule(req20);
   REQUIRE(r_nom_repeat.sat);
-  REQUIRE(r_nom_repeat.wall_ms < 10.0);
+  REQUIRE(r_nom_repeat.wall_ms < kRdlLimitMs);
 
   // 2) Art. 10(9): New nominal request conflicting with approved U-plan CANNOT preempt it
   auto req_art10_9 = make_nominal_slot_clash_request();
   const auto r_deny = sched.schedule(req_art10_9);
+  INFO("r_deny timed_out=" << r_deny.timed_out << " wall_ms=" << r_deny.wall_ms
+                           << " core="
+                           << (r_deny.unsat_core_labels.empty() ? std::string("<none>")
+                                                                : r_deny.unsat_core_labels.front()));
   REQUIRE(r_deny.sat);
   REQUIRE(r_deny.repaired);
   REQUIRE(r_deny.existing_plan_preserved);
@@ -52,7 +78,7 @@ TEST_CASE("Tier-1 QF_RDL STN solves 20-eVTOL schedule in < 3 ms and Tier-2 QF_LR
   REQUIRE(r_emg.mayday_granted_priority);
   REQUIRE(r_emg.dependent_fato_mutex_enforced);
   REQUIRE(r_emg.ltfj_wake_buffer_s >= 120.0);
-  REQUIRE(r_emg.wall_ms < 25.0);
+  REQUIRE(r_emg.wall_ms < kLraLimitMs);
   REQUIRE(r_emg.smt2_audit.find("(set-logic QF_LRA)") != std::string::npos);
 }
 
@@ -75,7 +101,7 @@ TEST_CASE("Tier-1 QF_RDL detects battery negative cycle and Tier-2 QF_LRA bounds
   REQUIRE(r12.tier_used == SolverTier::TIER2_QF_LRA_LOCAL);
   REQUIRE(r12.local_neighborhood_size <= kMaxLocalNeighborhood);
   REQUIRE(r12.mayday_granted_priority);
-  REQUIRE(r12.wall_ms < 25.0);
+  REQUIRE(r12.wall_ms < kLraLimitMs);
 }
 
 TEST_CASE("DLR EUREKA 2026 ATS vs U-Space gate fails closed when LTFJ controlled clearance is missing") {
@@ -111,7 +137,7 @@ TEST_CASE("Special Ops EMS/SAR (Art. 10(8)) preempts nominal flights and indepen
   REQUIRE(r_ems.sat);
   REQUIRE(r_ems.repaired);
   REQUIRE(r_ems.tier_used == SolverTier::TIER2_QF_LRA_LOCAL);
-  REQUIRE(r_ems.wall_ms < 25.0);
+  REQUIRE(r_ems.wall_ms < kLraLimitMs);
 }
 
 TEST_CASE("Independent FleetZ3Scheduler instances run concurrently with zero TSan races") {
