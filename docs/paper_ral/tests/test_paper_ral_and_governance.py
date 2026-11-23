@@ -105,10 +105,10 @@ def test_paper_ral_is_double_anonymous_honest_and_computes_mcnemar_and_iqm() -> 
     assert report["iqm_status"] == "PENDING_PER_RUN_EXPORT"
     assert report["holm_bonferroni_pairs"][0]["significant_holm"] is True
 
-    # Generated artifacts on disk match live computation
+    # Generated artifacts on disk match live paired v3.1.0 computation
     gen_json = json.loads((ral_dir / "generated/ral_stats_summary.json").read_text(encoding="utf-8"))
     gen_tex = (ral_dir / "generated/ral_tables.tex").read_text(encoding="utf-8")
-    assert gen_json["method"] == "frechet_hoeffding_conservative_bound"
-    assert gen_json["iqm_status"] == "PENDING_PER_RUN_EXPORT"
-    assert "96.82" in gen_tex and "44.85" in gen_tex and "100.00" in gen_tex and "28{,}886" in gen_tex
+    assert gen_json["method"] == "paired_per_seed_exact"
+    assert gen_json["iqm_status"] == "COMPUTED_FROM_PER_RUN_VECTORS"
+    assert "95.98" in gen_tex and "44.85" in gen_tex and "100.00" in gen_tex and "28{,}886" in gen_tex
     assert "TBD" not in gen_tex and "TODO" not in gen_tex

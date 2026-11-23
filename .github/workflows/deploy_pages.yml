@@ -1,0 +1,131 @@
+name: Deploy Live VertiGCS WASM Demo to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/vertigcs/**"
+      - "wasm/**"
+      - "core/flight_core/**"
+      - "tools/cli/vertirta_replay_cli.cpp"
+      - ".github/workflows/deploy_pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build <150 KiB WASM, Sample .vrta & VertiGCS Pages Bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install native C++20/CMake/Ninja build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ python3
+
+      - name: Setup pinned Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "4.0.4"
+
+      - name: Build single-threaded flat-C WASM (<= 153600 B)
+        run: |
+          bash wasm/build_wasm.sh
+          WASM_BYTES="$(stat -c%s apps/vertigcs/public/wasm/libvertirta_flight_core.wasm)"
+          echo "Built WASM size: ${WASM_BYTES} bytes (limit <= 153600)"
+          test "${WASM_BYTES}" -le 153600
+
+      - name: Build vertirta_replay_cli and generate deterministic 10 s corridor_faults.vrta (<= 300 KiB)
+        run: |
+          cmake -S . -B /tmp/vertirta_pages_cli -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=OFF \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON
+          cmake --build /tmp/vertirta_pages_cli --target vertirta_replay_cli -j
+          /tmp/vertirta_pages_cli/tools/cli/vertirta_replay_cli \
+            --generate-fixture apps/vertigcs/public/data/corridor_faults.vrta \
+            --ticks 1000
+          VRTA_BYTES="$(stat -c%s apps/vertigcs/public/data/corridor_faults.vrta)"
+          echo "Generated corridor_faults.vrta size: ${VRTA_BYTES} bytes (limit <= 307200)"
+          test "${VRTA_BYTES}" -le 307200
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/vertigcs/package-lock.json
+
+      - name: Install, test, and build VertiGCS for /VertiRTA/ GitHub Pages subpath
+        working-directory: apps/vertigcs
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npx tsc --noEmit
+          npx vite build --base /VertiRTA/
+
+      - name: Verify Pages dist bundle integrity, size caps, and zero COI/SAB allocation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          dist = Path("apps/vertigcs/dist")
+          wasm_bin = dist / "wasm/libvertirta_flight_core.wasm"
+          wasm_mjs = dist / "wasm/libvertirta_flight_core.mjs"
+          vrta_sample = dist / "data/corridor_faults.vrta"
+          airspace_geo = dist / "data/istanbul_corridor_airspace.geojson"
+          index_html = dist / "index.html"
+
+          for p in (index_html, wasm_bin, wasm_mjs, vrta_sample, airspace_geo):
+              assert p.is_file(), f"Missing required Pages output: {p}"
+
+          assert wasm_bin.stat().st_size <= 153600, f"WASM exceeds 150 KiB: {wasm_bin.stat().st_size}"
+          assert vrta_sample.stat().st_size <= 307200, f".vrta exceeds 300 KiB: {vrta_sample.stat().st_size}"
+          assert vrta_sample.read_bytes()[:8] == b"VRTA0001", "Invalid VRTA0001 magic"
+          assert "/VertiRTA/assets/" in index_html.read_text(encoding="utf-8"), "Missing /VertiRTA/ base path in index.html"
+
+          sab_tok = "SharedArray" + "Buffer"
+          banned_all = ("coi" + "-serviceworker", "new " + sab_tok, ":4173", ":4174", ":8765", ":9222", ":9223")
+          for p in dist.rglob("*"):
+              if p.is_file() and p.suffix in (".html", ".js", ".mjs", ".css"):
+                  txt = p.read_text(encoding="utf-8", errors="ignore")
+                  for tok in banned_all:
+                      assert tok not in txt, f"Forbidden token {tok!r} in {p}"
+                  is_worker_or_wasm = ("flight_sim.worker" in p.name) or ("wasm" in p.parts and p.suffix == ".mjs")
+                  if is_worker_or_wasm:
+                      assert sab_tok not in txt, f"Forbidden {sab_tok!r} in worker/wasm file {p}"
+          print(
+              f"PASS: Pages dist verified (wasm={wasm_bin.stat().st_size} B, "
+              f"sample_vrta={vrta_sample.stat().st_size} B)"
+          )
+          PY
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/vertigcs/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages site
+        id: deployment
+        uses: actions/deploy-pages@v4

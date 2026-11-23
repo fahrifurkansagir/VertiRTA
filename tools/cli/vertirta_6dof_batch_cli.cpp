@@ -572,6 +572,7 @@ int main(int argc, char** argv) {
   std::string cbf_mode = "hj_cbvf";
   std::string alloc_mode = "indi_wls";
   std::string vrta_dir;
+  bool no_vrta = false;
   int max_runs = 0;
   int n_threads = static_cast<int>(std::max(1u, std::min(12u, std::thread::hardware_concurrency())));
 
@@ -594,6 +595,8 @@ int main(int argc, char** argv) {
       alloc_mode = next_val();
     } else if (arg == "--vrta-dir") {
       vrta_dir = next_val();
+    } else if (arg == "--no-vrta") {
+      no_vrta = true;
     } else if (arg == "--max-runs") {
       max_runs = std::stoi(next_val());
     } else if (arg == "--threads") {
@@ -604,7 +607,7 @@ int main(int argc, char** argv) {
   if (manifest_path.empty() || out_path.empty()) {
     std::cerr << "Usage: vertirta_6dof_batch_cli --manifest <in.json> --out <results.json> "
               << "[--lut <lut>] [--cel-lut <cel>] [--cbf-mode hj_cbvf|hocbf] "
-              << "[--alloc-mode indi_wls|stock_ca] [--vrta-dir <dir>] [--max-runs N]\n";
+              << "[--alloc-mode indi_wls|stock_ca] [--vrta-dir <dir>] [--no-vrta] [--max-runs N]\n";
     return 2;
   }
 
@@ -625,7 +628,9 @@ int main(int argc, char** argv) {
   (void)lut.load(lut_path);
   (void)cel.load(cel_path);
 
-  if (vrta_dir.empty()) {
+  if (no_vrta) {
+    vrta_dir.clear();
+  } else if (vrta_dir.empty()) {
     const std::filesystem::path op(out_path);
     vrta_dir = (op.has_parent_path() ? (op.parent_path() / "vrta_traces") : std::filesystem::path("vrta_traces")).string();
   }

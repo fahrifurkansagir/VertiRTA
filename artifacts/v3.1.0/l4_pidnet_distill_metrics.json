@@ -1,0 +1,621 @@
+{
+  "schema_version": "vertirta.slz_l4_distill_metrics/v3.1.0",
+  "weights_status": "TRAINED_COLAB_L4_DISTILLED_WEIGHTS",
+  "timestamp_utc": "2026-11-23T10:35:32Z",
+  "hardware": {
+    "device": "cuda",
+    "gpu": {
+      "name": "NVIDIA L4",
+      "driver_version": "580.82.07",
+      "memory_total_mib": 23034,
+      "memory_free_before_mib": 22561,
+      "compute_cap": "8.9"
+    },
+    "amp_bf16": true,
+    "peak_cuda_allocated_mib": 4786.7,
+    "peak_cuda_reserved_mib": 5878.0,
+    "python_version": "3.13.16",
+    "torch_version": "2.14.1+cu130"
+  },
+  "timing_sec": {
+    "data_prep_sec": 1206.37,
+    "train_wall_sec": 1909.26,
+    "total_wall_sec": 3382.14
+  },
+  "license_audit": {
+    "zero_sharealike_verified": true,
+    "approved_train_entries": [
+      "FLAIR-1",
+      "OpenEarthMap",
+      "FloodNet-Supervised-v1.0",
+      "SkyScenes"
+    ],
+    "quarantined_eval_entries": [
+      "AeroScapes"
+    ],
+    "oem_attribution_audit": {
+      "origin": "https://open-earth-map.org/attribution.html",
+      "sha256": "54d65e87141862f1ab7ccddf18c5d810d4f4fff8761977d1c57f31d02ac564f6",
+      "total_region_rows": 102,
+      "license_breakdown": {
+        "<blank>": 12,
+        "CC BY 4.0": 37,
+        "CC BY-NC-SA 4.0": 36,
+        "CC BY-SA 4.0": 6,
+        "DL-DE-BY-2.0": 6,
+        "Public domain": 5
+      }
+    },
+    "oem_permissive_region_count": 38,
+    "gazebo_istanbul_8k_status": "EXCLUDED_FROM_L4_RUN_SEPARATE_GAZEBO_EGL_CAPTURE_STAGE (0 synthetic Gazebo frames ingested; all 4 active training sources verified inside locked zero-ShareAlike allowlist)"
+  },
+  "teachers": {
+    "enabled": true,
+    "dinov2_repo": "facebook/dinov2-large",
+    "dinov2_license": "Apache-2.0",
+    "dav2_repo": "depth-anything/Depth-Anything-V2-Small-hf",
+    "dav2_license": "Apache-2.0",
+    "dinov2_hidden_size": 1024,
+    "dinov2_num_register_tokens": 0,
+    "dav2_model_type": "depth_anything"
+  },
+  "datasets": {
+    "sources": [
+      {
+        "source": "FLAIR-1",
+        "license": "OPEN LICENCE 2.0 (etalab-2.0)",
+        "uses_osm_odbl": false,
+        "archive_url": "https://storage.gra.cloud.ovh.net/v1/AUTH_366279ce616242ebb14161b7991a8461/defi-ia/flair_data_1/flair_1_toy_dataset.zip",
+        "archive_mb": 215.69,
+        "archive_sha256": "dd6075d6d10e862ab48dd0f13236c40b1a491df0ee5403f403632f1c9539d858",
+        "train_samples": 218,
+        "val_samples": 32,
+        "unique_zones": 130
+      },
+      {
+        "source": "OpenEarthMap-41",
+        "license": "CC BY 4.0 + DL-DE-BY-2.0 ONLY (strictly filtered via live attribution.html)",
+        "uses_osm_odbl": false,
+        "archive_url": "https://zenodo.org/api/records/7223446/files/OpenEarthMap.zip/content",
+        "ingestion_method": "selective_http_range_remotezip_zero_non_permissive_bytes_downloaded",
+        "total_labeled_pairs_scanned": 2687,
+        "accepted_pairs": 600,
+        "rejected_non_permissive_pairs": 1296,
+        "accepted_region_count": 36,
+        "accepted_regions": [
+          "aachen",
+          "accra",
+          "al qurnah",
+          "baybay",
+          "bielefeld",
+          "bogota",
+          "buenos aires",
+          "chiangmai",
+          "chisinau",
+          "christchurch",
+          "cox's bazar",
+          "dar es salaam",
+          "dhaka",
+          "dowa",
+          "kagera",
+          "kampala",
+          "kinshasa",
+          "koeln",
+          "lohur",
+          "mahe",
+          "maputo",
+          "melbourne",
+          "monrovia",
+          "muenster",
+          "ngaoundere",
+          "niamey",
+          "pointenoire",
+          "rosario",
+          "san tome",
+          "santiago",
+          "soriano",
+          "svaneti",
+          "tonga",
+          "ulaanbaatar",
+          "western",
+          "zanzibar"
+        ],
+        "rejected_region_count": 39,
+        "raw_mask_min": 0,
+        "raw_mask_max": 8,
+        "oem_zero_indexed": false,
+        "train_samples": 472,
+        "val_samples": 128
+      },
+      {
+        "source": "FloodNet-Supervised-v1.0",
+        "license": "CDLA-Permissive-1.0",
+        "uses_osm_odbl": false,
+        "hf_repo": "torchgeo/floodnet",
+        "ingestion_method": "selective_http_range_remotezip_labeled_only",
+        "raw_mask_min": 0,
+        "raw_mask_max": 9,
+        "train_samples": 338,
+        "val_samples": 60
+      },
+      {
+        "source": "SkyScenes",
+        "license": "MIT",
+        "uses_osm_odbl": false,
+        "hf_repo": "hoffman-lab/SkyScenes",
+        "shards": [
+          "H_35_P_45/Town01(train:0)",
+          "H_35_P_60/Town02(train:0)",
+          "H_60_P_90/Town03(train:0)",
+          "H_35_P_45/Town05(val:0)"
+        ],
+        "depth_normal_facade_filter_nz_threshold": 0.85,
+        "building_roof_kept_pixels": 0,
+        "building_facade_remapped_to_class2_pixels": 0,
+        "facade_remap_fraction_of_building": 0.0,
+        "train_samples": 0,
+        "val_samples": 0
+      }
+    ],
+    "total_train_samples": 1028,
+    "total_val_samples": 220,
+    "train_samples_by_source": {
+      "FLAIR-1": 218,
+      "OpenEarthMap-41": 472,
+      "FloodNet-Supervised-v1.0": 338
+    },
+    "val_samples_by_source": {
+      "FLAIR-1": 32,
+      "OpenEarthMap-41": 128,
+      "FloodNet-Supervised-v1.0": 60
+    },
+    "epoch_sampling_draws": 1028,
+    "target_sampling_weights": {
+      "FLAIR-1": 0.15,
+      "OpenEarthMap-41": 0.25,
+      "FloodNet-Supervised-v1.0": 0.2,
+      "SkyScenes": 0.4
+    }
+  },
+  "training": {
+    "seed": 20261123,
+    "batch_size_micro": 16,
+    "grad_accum_steps": 2,
+    "effective_batch_size": 32,
+    "train_parameters": 8595689,
+    "deploy_parameters": 8003817,
+    "stage1": {
+      "epochs": 24,
+      "lr_start": 0.0008,
+      "lr_min": 1e-05,
+      "lambda_bdry": 0.4,
+      "lambda_dino": 0.5,
+      "lambda_geom": 0.3,
+      "best_val_miou": 0.419017,
+      "history": [
+        {
+          "epoch": 1,
+          "lr": 0.0002667,
+          "train_loss": 2.5175,
+          "epoch_sec": 77.14
+        },
+        {
+          "epoch": 2,
+          "lr": 0.0005333,
+          "train_loss": 1.92022,
+          "epoch_sec": 54.22
+        },
+        {
+          "epoch": 3,
+          "lr": 0.0008,
+          "train_loss": 1.78615,
+          "epoch_sec": 54.1
+        },
+        {
+          "epoch": 4,
+          "lr": 0.0008,
+          "train_loss": 1.66328,
+          "epoch_sec": 54.15,
+          "val_miou": 0.296599,
+          "val_fsr": 0.068969
+        },
+        {
+          "epoch": 5,
+          "lr": 0.0007956,
+          "train_loss": 1.60357,
+          "epoch_sec": 54.16
+        },
+        {
+          "epoch": 6,
+          "lr": 0.0007825,
+          "train_loss": 1.59463,
+          "epoch_sec": 54.08
+        },
+        {
+          "epoch": 7,
+          "lr": 0.0007609,
+          "train_loss": 1.49242,
+          "epoch_sec": 54.26
+        },
+        {
+          "epoch": 8,
+          "lr": 0.0007314,
+          "train_loss": 1.47166,
+          "epoch_sec": 54.15,
+          "val_miou": 0.301711,
+          "val_fsr": 0.130249
+        },
+        {
+          "epoch": 9,
+          "lr": 0.0006946,
+          "train_loss": 1.5121,
+          "epoch_sec": 54.25
+        },
+        {
+          "epoch": 10,
+          "lr": 0.0006513,
+          "train_loss": 1.44906,
+          "epoch_sec": 54.2
+        },
+        {
+          "epoch": 11,
+          "lr": 0.0006025,
+          "train_loss": 1.42835,
+          "epoch_sec": 54.21
+        },
+        {
+          "epoch": 12,
+          "lr": 0.0005493,
+          "train_loss": 1.38343,
+          "epoch_sec": 54.22,
+          "val_miou": 0.376757,
+          "val_fsr": 0.072781
+        },
+        {
+          "epoch": 13,
+          "lr": 0.0004929,
+          "train_loss": 1.36505,
+          "epoch_sec": 54.28
+        },
+        {
+          "epoch": 14,
+          "lr": 0.0004345,
+          "train_loss": 1.39302,
+          "epoch_sec": 54.15
+        },
+        {
+          "epoch": 15,
+          "lr": 0.0003755,
+          "train_loss": 1.32811,
+          "epoch_sec": 54.19
+        },
+        {
+          "epoch": 16,
+          "lr": 0.0003171,
+          "train_loss": 1.29298,
+          "epoch_sec": 54.09,
+          "val_miou": 0.379403,
+          "val_fsr": 0.07902
+        },
+        {
+          "epoch": 17,
+          "lr": 0.0002607,
+          "train_loss": 1.25652,
+          "epoch_sec": 54.22
+        },
+        {
+          "epoch": 18,
+          "lr": 0.0002075,
+          "train_loss": 1.2545,
+          "epoch_sec": 54.18
+        },
+        {
+          "epoch": 19,
+          "lr": 0.0001587,
+          "train_loss": 1.26343,
+          "epoch_sec": 54.25
+        },
+        {
+          "epoch": 20,
+          "lr": 0.0001154,
+          "train_loss": 1.23087,
+          "epoch_sec": 54.1,
+          "val_miou": 0.419017,
+          "val_fsr": 0.053047
+        },
+        {
+          "epoch": 21,
+          "lr": 7.86e-05,
+          "train_loss": 1.24008,
+          "epoch_sec": 54.08
+        },
+        {
+          "epoch": 22,
+          "lr": 4.91e-05,
+          "train_loss": 1.25052,
+          "epoch_sec": 54.15
+        },
+        {
+          "epoch": 23,
+          "lr": 2.75e-05,
+          "train_loss": 1.21534,
+          "epoch_sec": 54.08
+        },
+        {
+          "epoch": 24,
+          "lr": 1.44e-05,
+          "train_loss": 1.22332,
+          "epoch_sec": 54.14,
+          "val_miou": 0.416614,
+          "val_fsr": 0.057754
+        }
+      ]
+    },
+    "stage2_ood_oe": {
+      "epochs": 10,
+      "lr_start": 0.0001,
+      "lr_min": 1e-05,
+      "lambda_ood": 0.1,
+      "m_in": -23.0,
+      "m_out": -5.0,
+      "anomaly_mix_prob": 0.15,
+      "history": [
+        {
+          "epoch": 1,
+          "lr": 0.0001,
+          "train_loss": 37.81627,
+          "epoch_sec": 55.47
+        },
+        {
+          "epoch": 2,
+          "lr": 9.19e-05,
+          "train_loss": 36.20031,
+          "epoch_sec": 55.52,
+          "val_miou": 0.371651,
+          "val_fsr": 0.243759,
+          "ood_auroc": 0.609473
+        },
+        {
+          "epoch": 3,
+          "lr": 8.36e-05,
+          "train_loss": 35.1657,
+          "epoch_sec": 55.57
+        },
+        {
+          "epoch": 4,
+          "lr": 7.53e-05,
+          "train_loss": 34.32602,
+          "epoch_sec": 55.35,
+          "val_miou": 0.338552,
+          "val_fsr": 0.28143,
+          "ood_auroc": 0.649365
+        },
+        {
+          "epoch": 5,
+          "lr": 6.68e-05,
+          "train_loss": 33.69846,
+          "epoch_sec": 55.5
+        },
+        {
+          "epoch": 6,
+          "lr": 5.82e-05,
+          "train_loss": 33.05531,
+          "epoch_sec": 55.34,
+          "val_miou": 0.352114,
+          "val_fsr": 0.214896,
+          "ood_auroc": 0.681215
+        },
+        {
+          "epoch": 7,
+          "lr": 4.95e-05,
+          "train_loss": 32.63011,
+          "epoch_sec": 55.43
+        },
+        {
+          "epoch": 8,
+          "lr": 4.05e-05,
+          "train_loss": 32.28761,
+          "epoch_sec": 55.46,
+          "val_miou": 0.376389,
+          "val_fsr": 0.211059,
+          "ood_auroc": 0.698436
+        },
+        {
+          "epoch": 9,
+          "lr": 3.11e-05,
+          "train_loss": 31.98094,
+          "epoch_sec": 55.6
+        },
+        {
+          "epoch": 10,
+          "lr": 2.13e-05,
+          "train_loss": 31.74153,
+          "epoch_sec": 55.34,
+          "val_miou": 0.345577,
+          "val_fsr": 0.24305,
+          "ood_auroc": 0.700907
+        }
+      ]
+    }
+  },
+  "evaluation": {
+    "permissive_validation": {
+      "per_class_iou": {
+        "Safe_Flat_Ground": 0.354739,
+        "Safe_Flat_Roof": 0.355948,
+        "Hazard_Obstacle_Structure": 0.328323,
+        "Hazard_Dynamic_Human_Vehicle": 0.090942,
+        "Hazard_Water_Vegetation": 0.751995
+      },
+      "miou_present_classes": 0.376389,
+      "num_present_classes": 5,
+      "pixel_accuracy": 0.735506,
+      "false_safe_rate_fsr": 0.211059,
+      "safe_precision": 0.643291,
+      "total_eval_pixels": 57368879,
+      "true_hazard_pixels": 40566894,
+      "false_safe_pixels": 8561992,
+      "confusion_matrix_5x5": [
+        [
+          5877051,
+          3219721,
+          22822,
+          19959,
+          1149868
+        ],
+        [
+          1524191,
+          4819752,
+          14155,
+          31858,
+          122608
+        ],
+        [
+          11312,
+          13496,
+          256412,
+          1125,
+          29828
+        ],
+        [
+          3144,
+          5133,
+          7068,
+          11212,
+          1894
+        ],
+        [
+          4739205,
+          3789702,
+          424757,
+          41894,
+          31230712
+        ]
+      ],
+      "surface_normal_mean_cosine_sim": 0.996319,
+      "surface_normal_mean_angle_deg": 4.918
+    },
+    "ood_detection": {
+      "eval_protocol": "heldout_permissive_val_anomalymix_p0.5_stride4",
+      "id_pixels_evaluated": 3536563,
+      "ood_pixels_evaluated": 49140,
+      "raw_energy_auroc": 0.687335,
+      "raw_energy_fpr95": 0.804905,
+      "boundary_compensated_auroc": 0.698436,
+      "boundary_compensated_fpr95": 0.847756,
+      "mean_id_energy": -5.654,
+      "mean_ood_energy": -4.3465,
+      "empirical_clean_id_tpr_at_tau_ood": 0.949998
+    },
+    "quarantined_zero_shot_aeroscapes": {
+      "per_class_iou": {
+        "Safe_Flat_Ground": 0.463076,
+        "Safe_Flat_Roof": null,
+        "Hazard_Obstacle_Structure": 3.6e-05,
+        "Hazard_Dynamic_Human_Vehicle": 0.133762,
+        "Hazard_Water_Vegetation": 0.761214
+      },
+      "miou_present_classes": 0.339522,
+      "num_present_classes": 4,
+      "pixel_accuracy": 0.713962,
+      "false_safe_rate_fsr": 0.184374,
+      "safe_precision": 0.582808,
+      "total_eval_pixels": 66313961,
+      "true_hazard_pixels": 48155889,
+      "false_safe_pixels": 8878700,
+      "confusion_matrix_5x5": [
+        [
+          10383118,
+          2020206,
+          41,
+          51443,
+          5703264
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2510123,
+          2139274,
+          243,
+          39016,
+          2151389
+        ],
+        [
+          241586,
+          413772,
+          0,
+          133743,
+          95483
+        ],
+        [
+          1512291,
+          2061654,
+          3926,
+          24813,
+          36828576
+        ]
+      ],
+      "dataset": "AeroScapes",
+      "hf_repo": "dronefreak/Aeroscapes",
+      "license": "CC BY-SA 4.0 (QUARANTINED_ZERO_SHOT_EVAL_ONLY)",
+      "used_in_training": false,
+      "used_in_calibration": false,
+      "evaluated_images": 350
+    }
+  },
+  "ood_calibration": {
+    "T_ood": 1.0,
+    "T_prob": 1.968617887773662,
+    "kappa_b": 1.5,
+    "tau_ood": -3.295872688293457,
+    "id_tpr_target": 0.95,
+    "n_id_samples": 250672,
+    "nll_before": 0.7858752012252808,
+    "nll_after": 0.6149764060974121,
+    "file": "ood_calibration.json",
+    "sha256": "9b08397f6818fe4d0610c367049a8758be802914e043f529aaa499d038cae5f3"
+  },
+  "export": {
+    "onnx_filename": "pidnet_slz_trained_opset17.onnx",
+    "onnx_size_mb": 30.584,
+    "onnx_sha256": "714a8404d2a4130abb26ece0daffe29b90ddf1f048ad0d3d025c9ebe67861efc",
+    "opset_version": 17,
+    "input_shape": [
+      1,
+      3,
+      512,
+      512
+    ],
+    "output_shapes": {
+      "seg_logits": [
+        1,
+        5,
+        512,
+        512
+      ],
+      "surf_normals": [
+        1,
+        3,
+        512,
+        512
+      ],
+      "bdry_prob": [
+        1,
+        1,
+        64,
+        64
+      ]
+    },
+    "deploy_parameters": 8003817,
+    "zero_adaptive_avg_pool2d": true,
+    "zero_dino_proj_nodes": true,
+    "zero_dynamic_shape_ops": true,
+    "onnx_checker_passed": true,
+    "wsl2_staging_path": "/tmp/vertirta_v31_blobs/pidnet_slz_trained_opset17.onnx"
+  }
+}

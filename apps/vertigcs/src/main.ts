@@ -7,6 +7,7 @@ import {
   LiveWsTransport,
   SandboxWorkerTransport,
   parseLaunchMode,
+  resolvePublicAssetUrl,
   type FlightTransport,
 } from "./transport/flight_transport";
 import type { TelemetrySnapshot } from "./types/telemetry";
@@ -42,7 +43,7 @@ async function bootstrapVertiGcs(): Promise<void> {
 
   await viewport.mount({
     container,
-    airspaceGeoJsonUrl: "./data/istanbul_corridor_airspace.geojson",
+    airspaceGeoJsonUrl: resolvePublicAssetUrl("data/istanbul_corridor_airspace.geojson"),
   });
 
   const hud = new TelemetryHud();
@@ -50,6 +51,7 @@ async function bootstrapVertiGcs(): Promise<void> {
 
   let pendingSnap: TelemetrySnapshot | null = null;
   let rafScheduled = false;
+  let transportActive = false;
 
   const scheduleRender = (snap: TelemetrySnapshot) => {
     pendingSnap = snap;
@@ -77,16 +79,25 @@ async function bootstrapVertiGcs(): Promise<void> {
     cfg.mode === "live" ? new LiveWsTransport(cfg.wsUrl) : new SandboxWorkerTransport();
 
   transport.start(scheduleRender, setStatus);
+  transportActive = true;
+
+  const scrubber = new VrtaReplayScrubber((snap) => {
+    if (transportActive) {
+      transport.stop();
+      transportActive = false;
+    }
+    scheduleRender(snap);
+  }, setStatus);
 
   bindFaultPanel((cmd) => {
+    scrubber.stop();
+    if (!transportActive) {
+      transport.start(scheduleRender, setStatus);
+      transportActive = true;
+    }
     transport.sendFault(cmd);
     setStatus(`Fault command dispatched: ${cmd.kind} (target=${cmd.targetIdx})`);
   });
-
-  new VrtaReplayScrubber((snap) => {
-    transport.stop();
-    scheduleRender(snap);
-  }, setStatus);
 }
 
 if (typeof document !== "undefined") {

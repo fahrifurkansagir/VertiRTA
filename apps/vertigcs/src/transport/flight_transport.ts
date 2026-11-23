@@ -1,6 +1,7 @@
 import { flatEnuToWgs84, KARTAL_DATUM } from "../geo/istanbul_datum";
 import { validateLivePort } from "../adapters/maplibre_deck_adapter";
 import { parseVrtaFrame } from "../vrta/vrta_parser";
+export { resolvePublicAssetUrl, resolveWasmModuleUrl } from "./asset_urls";
 import type {
   FaultCommand,
   LaunchConfig,

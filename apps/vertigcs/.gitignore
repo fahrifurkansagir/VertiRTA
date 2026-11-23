@@ -3,3 +3,5 @@ dist/
 .vite/
 coverage/
 *.local
+public/wasm/
+public/data/corridor_faults.vrta

@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Colab G4 (RTX PRO 6000 Blackwell 96 GB, BF16 AMP) 2-stage distillation trainer for PIDNet-S SLZ.
+"""Colab L4 (24 GB) / G4 (96 GB) BF16 AMP 2-stage distillation trainer for PIDNet-S SLZ.
 
 Strict locks enforced at startup:
   1) Calls `verify_training_manifest` unconditionally before loading any data or teachers.
   2) Teachers are strictly Apache-2.0: `DINOv2-ViT-L/14` (518x518 -> 37x37x1024) and
      `Depth-Anything-V2-Small` (ViT-S; ViT-B/L/G CC-BY-NC strictly banned).
-  3) Stage 1 (80 epochs, bs=32, AdamW lr 3e-4 -> 1e-6, 5-ep warmup + cosine):
-       60% real permissive (FLAIR-1 25% / OpenEarthMap-41 20% / FloodNet 15%)
-     + 40% synthetic (SkyScenes 20% / Gazebo_Istanbul_8K 20%).
-  4) Stage 2 (20 epochs, bs=32, AdamW lr 1e-5 -> 1e-6, poly 0.9):
-       55% real (+10% AnomalyMix OE) + 45% synthetic (Gazebo-8K OOD 25% + SkyScenes 20%),
-       adding label=254 Free-Energy margin loss (m_in=-23.0, m_out=-5.0).
+  3) Stage 1 (G4 80 ep / L4 configurable ep, effective bs=32, AdamW warmup + cosine):
+       60% real permissive (FLAIR-1 / OpenEarthMap-41 / FloodNet-Supervised-v1.0)
+     + 40% synthetic permissive (SkyScenes / Gazebo_Istanbul_8K).
+  4) Stage 2 (G4 20 ep / L4 configurable ep, effective bs=32, AdamW poly 0.9):
+       adds AnomalyMix Outlier Exposure (label=254) + Free-Energy margin loss
+       (m_in=-23.0, m_out=-5.0, T_ood=1.0).
   5) Post-training: freezes weights, calibrates `ood_calibration.json` (T_ood=1.0, kappa_b=1.5),
      and exports static 1x3x512x512 ONNX Opset 17+ dropping `dino_proj`.
 """
@@ -92,6 +92,102 @@ class Stage2Config:
             "Gazebo_Istanbul_8K": 0.25,
         }
     )
+
+
+@dataclass(frozen=True)
+class L4TrainProfile:
+    """Colab L4 (24 GB Ada Lovelace, BF16 AMP) training profile."""
+
+    device: str = "cuda"
+    batch_size: int = 16
+    grad_accum: int = 2
+    stage1_epochs: int = 30
+    stage1_warmup_epochs: int = 3
+    stage1_lr_start: float = 8e-4
+    stage1_lr_min: float = 1e-5
+    stage2_epochs: int = 10
+    stage2_lr_start: float = 1e-4
+    stage2_lr_min: float = 1e-5
+    anomaly_mix_prob: float = 0.15
+    amp_bf16: bool = True
+    seed: int = 20261123
+
+
+def build_l4_training_manifest(
+    oem_regions: tuple[str, ...],
+    active_sources: Iterable[str],
+    *,
+    include_aeroscapes_eval: bool = True,
+) -> list[DatasetEntry]:
+    """Build a strict zero-ShareAlike manifest covering only active L4 sources + teachers."""
+    source_set = {s.strip() for s in active_sources}
+    entries: list[DatasetEntry] = []
+
+    if "FLAIR-1" in source_set:
+        entries.append(
+            DatasetEntry(name="FLAIR-1", split="train", license="etalab-2.0", uses_osm_odbl=False)
+        )
+    if "OpenEarthMap" in source_set or "OpenEarthMap-41" in source_set:
+        entries.append(
+            DatasetEntry(
+                name="OpenEarthMap",
+                split="train",
+                license="CC BY 4.0 + DL-DE-BY-2.0",
+                uses_osm_odbl=False,
+                regions=oem_regions,
+            )
+        )
+    if "FloodNet-Supervised-v1.0" in source_set:
+        entries.append(
+            DatasetEntry(
+                name="FloodNet-Supervised-v1.0",
+                split="train",
+                license="CDLA-Permissive-1.0",
+                uses_osm_odbl=False,
+            )
+        )
+    if "SkyScenes" in source_set:
+        entries.append(
+            DatasetEntry(name="SkyScenes", split="train", license="MIT", uses_osm_odbl=False)
+        )
+    if "Gazebo_Istanbul_8K" in source_set:
+        entries.append(
+            DatasetEntry(
+                name="Gazebo_Istanbul_8K",
+                split="train",
+                license="Apache-2.0",
+                uses_osm_odbl=False,
+            )
+        )
+
+    entries.extend(
+        [
+            DatasetEntry(
+                name="DINOv2-ViT-L/14",
+                split="teacher",
+                license="Apache-2.0",
+                uses_osm_odbl=False,
+            ),
+            DatasetEntry(
+                name="Depth-Anything-V2-Small",
+                split="teacher",
+                license="Apache-2.0",
+                uses_osm_odbl=False,
+            ),
+            DatasetEntry(name="PIDNet-S", split="student", license="MIT", uses_osm_odbl=False),
+        ]
+    )
+    if include_aeroscapes_eval:
+        entries.append(
+            DatasetEntry(
+                name="AeroScapes",
+                split="zero_shot_eval",
+                license="CC BY-SA 4.0",
+                uses_osm_odbl=False,
+                notes="Quarantined zero-shot evaluation only; never trained or calibrated.",
+            )
+        )
+    return entries
 
 
 def build_locked_training_manifest(
@@ -180,13 +276,41 @@ def apply_anomaly_mix(
         # Cross-image random color/contrast-shifted patch simulates unknown rooftop clutter/tarp
         src_idx = (b + 1) % bsz
         patch = images[src_idx, :, y0 : y0 + ph, x0 : x0 + pw]
-        color_shift = torch.empty((3, 1, 1), device=images.device, dtype=images.dtype).uniform_(
-            -0.5, 0.5, generator=generator
+        gen_device = generator.device if generator is not None else images.device
+        color_shift = (
+            torch.empty((3, 1, 1), device=gen_device, dtype=torch.float32)
+            .uniform_(-0.5, 0.5, generator=generator)
+            .to(device=images.device, dtype=images.dtype)
         )
         out_img[b, :, y0 : y0 + ph, x0 : x0 + pw] = (patch.flip(-1) + color_shift).clamp(-3.0, 3.0)
         out_lbl[b, y0 : y0 + ph, x0 : x0 + pw] = int(ood_index)
 
     return out_img, out_lbl
+
+
+def compute_boundary_target(
+    labels: torch.Tensor,
+    *,
+    out_hw: tuple[int, int] = (64, 64),
+    ignore_index: int = 255,
+    ood_index: int = 254,
+) -> torch.Tensor:
+    """Derive binary semantic boundary map (B, 1, H_out, W_out) from 4-neighbor class transitions."""
+    lbl = labels.long()
+    if lbl.ndim == 2:
+        lbl = lbl.unsqueeze(0)
+    valid = (lbl != ignore_index) & (lbl != ood_index)
+
+    edge = torch.zeros_like(valid)
+    edge[:, :, 1:] |= (lbl[:, :, 1:] != lbl[:, :, :-1]) & valid[:, :, 1:] & valid[:, :, :-1]
+    edge[:, :, :-1] |= (lbl[:, :, :-1] != lbl[:, :, 1:]) & valid[:, :, :-1] & valid[:, :, 1:]
+    edge[:, 1:, :] |= (lbl[:, 1:, :] != lbl[:, :-1, :]) & valid[:, 1:, :] & valid[:, :-1, :]
+    edge[:, :-1, :] |= (lbl[:, :-1, :] != lbl[:, 1:, :]) & valid[:, :-1, :] & valid[:, 1:, :]
+
+    edge_f = edge.float().unsqueeze(1)
+    if edge_f.shape[2:] != out_hw:
+        edge_f = F.adaptive_max_pool2d(edge_f, output_size=out_hw)
+    return edge_f.clamp(0.0, 1.0)
 
 
 def compute_stage1_lr(epoch: int, cfg: Stage1Config) -> float:
@@ -226,11 +350,16 @@ def train_one_step(
     target_normals: torch.Tensor | None = None,
     target_bdry: torch.Tensor | None = None,
     teacher_dino: torch.Tensor | None = None,
+    valid_geom_mask: torch.Tensor | None = None,
     use_bf16_amp: bool = False,
+    grad_accum_steps: int = 1,
+    zero_grad: bool = True,
+    step_optimizer: bool = True,
 ) -> float:
-    """Execute one forward + backward + optimizer step under optional BF16 AMP."""
+    """Execute one forward + backward (+ optional optimizer step) under optional BF16 AMP."""
     model.train()
-    optimizer.zero_grad(set_to_none=True)
+    if zero_grad:
+        optimizer.zero_grad(set_to_none=True)
     device_type = "cuda" if images.is_cuda else "cpu"
     with torch.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=use_bf16_amp):
         out = model(images)
@@ -243,10 +372,13 @@ def train_one_step(
             target_normals=target_normals,
             target_bdry=target_bdry,
             teacher_dino=teacher_dino,
+            valid_geom_mask=valid_geom_mask,
         )
-    loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-    optimizer.step()
+    scaled_loss = loss / float(max(1, grad_accum_steps))
+    scaled_loss.backward()
+    if step_optimizer:
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        optimizer.step()
     return float(loss.detach().item())
 
 
@@ -258,6 +390,8 @@ def finalize_and_export(
     out_dir: Path | str,
     *,
     opset: int = 17,
+    simplify: bool = False,
+    onnx_name: str = "pidnet_slz_512.onnx",
 ) -> tuple[OodCalibration, Path]:
     """Run post-hoc OOD calibration and export static 1x3x512x512 ONNX dropping dino_proj."""
     out_root = Path(out_dir)
@@ -265,41 +399,85 @@ def finalize_and_export(
     cal = calibrate_temperature_and_tau(val_logits, val_labels, val_bdry_prob)
     cal.save_json(out_root / "ood_calibration.json")
     deploy = PIDNetSlzDeployWrapper(model).eval()
-    onnx_path = export_static_onnx(deploy, out_root / "pidnet_slz_512.onnx", opset=opset)
+    onnx_path = export_static_onnx(deploy, out_root / onnx_name, opset=opset, simplify=simplify)
     return cal, onnx_path
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Construct CLI parser supporting both Colab L4 (24 GB) and G4 (96 GB) BF16 AMP profiles."""
     parser = argparse.ArgumentParser(
-        description="VertiRTA 2-Stage Colab G4 PIDNet-S Distillation Entrypoint (License-Gated)."
+        description="VertiRTA 2-Stage Colab L4/G4 PIDNet-S Distillation Entrypoint (License-Gated)."
     )
     parser.add_argument(
         "--oem-attribution-html",
         type=Path,
         required=True,
-        help="Path to official OpenEarthMap attribution.html (100 entries -> 41 permissive).",
+        help="Path to official OpenEarthMap attribution.html (CC BY 4.0 + DL-DE-BY-2.0 whitelist).",
     )
+    parser.add_argument(
+        "--expect-oem-total",
+        type=int,
+        default=100,
+        help="Expected row count in attribution.html (pass 0 to allow live site row updates).",
+    )
+    parser.add_argument("--profile", choices=("l4", "g4"), default="l4")
+    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--grad-accum", type=int, default=2)
+    parser.add_argument("--stage1-epochs", type=int, default=30)
+    parser.add_argument("--stage2-epochs", type=int, default=10)
+    parser.add_argument("--bf16", dest="bf16", action="store_true", default=True)
+    parser.add_argument("--no-bf16", dest="bf16", action="store_false")
     parser.add_argument("--out-dir", type=Path, default=Path("results/slz_distill"))
     parser.add_argument("--verify-only", action="store_true")
-    args = parser.parse_args()
+    return parser
 
-    oem_regions = tuple(sorted(parse_oem_permissive_whitelist(args.oem_attribution_html, expect_total=100)))
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    expect_total: int | None = None if args.expect_oem_total <= 0 else int(args.expect_oem_total)
+    oem_regions = tuple(
+        sorted(parse_oem_permissive_whitelist(args.oem_attribution_html, expect_total=expect_total))
+    )
     manifest = build_locked_training_manifest(oem_regions)
-    report = validate_training_startup_license(manifest, args.oem_attribution_html, expect_oem_total=100)
+    report = validate_training_startup_license(
+        manifest, args.oem_attribution_html, expect_oem_total=expect_total
+    )
     print(
         f"[VertiRTA-Distill] License gate PASSED: {len(report.approved_train_entries)} train sources, "
-        f"{len(report.oem_whitelisted_regions)}/100 OEM regions verified zero-ShareAlike."
+        f"{len(report.oem_whitelisted_regions)} OEM permissive regions verified zero-ShareAlike."
     )
     if args.verify_only:
-        return
+        return 0
 
-    s1 = Stage1Config()
-    s2 = Stage2Config()
-    print(
-        f"[VertiRTA-Distill] Ready for Stage 1 ({s1.epochs} ep, bs={s1.batch_size}, BF16={s1.amp_bf16}) "
-        f"-> Stage 2 ({s2.epochs} ep, OE m_in={s2.m_in}, m_out={s2.m_out}). Output: {args.out_dir}"
-    )
+    if args.profile == "g4":
+        s1 = Stage1Config()
+        s2 = Stage2Config()
+        print(
+            f"[VertiRTA-Distill] G4 Profile ready: Stage 1 ({s1.epochs} ep, bs={s1.batch_size}, "
+            f"BF16={s1.amp_bf16}) -> Stage 2 ({s2.epochs} ep, OE m_in={s2.m_in}, m_out={s2.m_out}). "
+            f"Output: {args.out_dir}"
+        )
+    else:
+        prof = L4TrainProfile(
+            device=args.device,
+            batch_size=args.batch_size,
+            grad_accum=args.grad_accum,
+            stage1_epochs=args.stage1_epochs,
+            stage2_epochs=args.stage2_epochs,
+            amp_bf16=args.bf16,
+        )
+        eff_bs = prof.batch_size * prof.grad_accum
+        print(
+            f"[VertiRTA-Distill] L4 Profile ready ({prof.device}, BF16={prof.amp_bf16}, "
+            f"bs={prof.batch_size}x{prof.grad_accum}={eff_bs}): Stage 1 ({prof.stage1_epochs} ep) "
+            f"-> Stage 2 ({prof.stage2_epochs} ep, AnomalyMix p={prof.anomaly_mix_prob}). "
+            f"Output: {args.out_dir}"
+        )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

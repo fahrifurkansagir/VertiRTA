@@ -2,6 +2,7 @@
 // Strictly ZERO pthreads, ZERO SharedArrayBuffer; transfers 256 B VRTA0001 ArrayBuffers via postMessage(buf, [buf]).
 
 import { crc32c, VRTA_FRAME_SIZE } from "../vrta/vrta_parser";
+import { resolveWasmModuleUrl } from "../transport/asset_urls";
 import type { FaultCommand } from "../types/telemetry";
 
 interface WasmExports {
@@ -122,13 +123,11 @@ function stepFallbackIntoBuffer(ticks400Hz: number, buf: ArrayBuffer): void {
 
 async function initWasmIfPresent(): Promise<void> {
   try {
-    const baseUrl = import.meta.env.BASE_URL || "./";
-    const wasmRel = baseUrl.startsWith("/")
-      ? `${baseUrl.replace(/\/+$/, "")}/wasm/libvertirta_flight_core.mjs`
-      : import.meta.env.DEV
-        ? "/wasm/libvertirta_flight_core.mjs"
-        : "../wasm/libvertirta_flight_core.mjs";
-    const modUrl = new URL(wasmRel, self.location.href).href;
+    const modUrl = resolveWasmModuleUrl(
+      import.meta.env.BASE_URL || "./",
+      Boolean(import.meta.env.DEV),
+      self.location.href
+    );
     const loaded = await import(/* @vite-ignore */ modUrl);
     const factory = loaded.default;
     if (typeof factory === "function") {

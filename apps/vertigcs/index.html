@@ -54,6 +54,11 @@
 
           <section class="panel" id="replay-panel">
             <h2>.vrta Black-Box Replay (VRTA0001)</h2>
+            <div class="btn-grid" style="margin-bottom: 8px">
+              <button type="button" id="btn-load-sample-vrta">
+                Load Sample Fault Flight (Kartal &rarr; Same-Arm 2M CEL)
+              </button>
+            </div>
             <label class="dropzone" for="vrta-file-input" id="vrta-dropzone">
               Drop <code>.vrta</code> log or click to inspect (128 B hdr + 256 B CRC32C frames)
               <input id="vrta-file-input" type="file" accept=".vrta" hidden />

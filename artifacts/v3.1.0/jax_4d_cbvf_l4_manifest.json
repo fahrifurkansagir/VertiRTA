@@ -1,0 +1,179 @@
+{
+  "schema_version": "vertirta.jax_4d_cbvf_l4_manifest/v1.0.0",
+  "solver_mode": "jax_hj_reachability_weno5_tvdrk3_fp32",
+  "is_quick_cpu_fixture": false,
+  "fine_grid_shape": [
+    81,
+    57,
+    81,
+    57
+  ],
+  "fine_grid_nodes_per_regime": 21316689,
+  "export_grid_shape": [
+    41,
+    29,
+    41,
+    29
+  ],
+  "horizon_s": 6.0,
+  "hardware": {
+    "gpu_name": "Tesla T4",
+    "provisioning_note": "Auto-fell back from Colab L4 (transient 503 under 3x concurrent GPU sessions) to approved cost-capped Tesla T4 (16 GB).",
+    "driver_version": "580.82.07",
+    "vram_total_mib": 15360,
+    "jax_peak_vram_mib": 3935.0,
+    "python_version": "3.13",
+    "jax_version": "0.11.1",
+    "hj_reachability_version": "0.7.0"
+  },
+  "timing_s": {
+    "total_wall_s": 590.37,
+    "cel_2d_wall_s": 0.5,
+    "regimes_solve_sum_s": 589.35
+  },
+  "artifacts": {
+    "cbvf_4d_lut": {
+      "filename": "cbvf_4d_x8_240.vrta_lut",
+      "size_bytes": 11313864,
+      "file_sha256": "73964f13e3153a595be7ddb25de3826cdfb5547b0de10c539ed241ee8f8e8c6f",
+      "payload_sha256": "2bb6629138351bcb2d09872ee6615430ea6a0aaccd62a1047e2ae9cea3cb7c7e",
+      "flags": 6,
+      "eps_grid_m": [
+        0.880199,
+        0.802911,
+        0.74675,
+        0.686761
+      ],
+      "v_cap_f_mps": [
+        22.0,
+        19.1742,
+        12.9229,
+        12.9229
+      ]
+    },
+    "cel_2d_lut": {
+      "filename": "cel_2d_x8_240.vrta_cel2d",
+      "size_bytes": 11230,
+      "file_sha256": "1f308c0bf047c67cb7ea2a4f2f3744ee7bae2cf00992ff80a899ab6cd6115d05",
+      "payload_sha256": "6b88ea3c581cf80a4e9fbf01647712bf28956b94a6211f14844af403903deac4",
+      "eps_grid_m": [
+        0.138218,
+        0.085574,
+        0.001511
+      ],
+      "max_curve_err_m": 0.15946,
+      "tier_errors_m": {
+        "Nominal-Same-Arm": 0.15946,
+        "Moderate-Sag": 0.11584,
+        "Severe-Sag": 0.05169
+      }
+    }
+  },
+  "errata_locks": {
+    "erratum1_nom_max_ur_mps2": 14.0622,
+    "erratum1_max_cfl_ratio": 1.0,
+    "erratum2_smax_zero_m": 0.0,
+    "erratum3_v_cap_2m_cross_mps": 12.9229,
+    "conservative_hierarchy_projection": {
+      "r0_ge_r1": {
+        "projected_nodes": 0,
+        "projected_frac": 0.0,
+        "max_v_projected_m": null
+      },
+      "r1_ge_r3": {
+        "projected_nodes": 0,
+        "projected_frac": 0.0,
+        "max_v_projected_m": null
+      },
+      "r3_ge_r2": {
+        "projected_nodes": 419,
+        "projected_frac": 0.00029638,
+        "max_v_projected_m": -6.8065
+      }
+    },
+    "soundness_passed": true
+  },
+  "regimes": [
+    {
+      "regime_index": 0,
+      "regime_name": "Nominal",
+      "tw_ratio": 2.5,
+      "tilt_max_deg": 35.0,
+      "solve_wall_s": 175.68,
+      "audit_21m_wall_s": 0.13,
+      "eps_grid_m": 0.880199,
+      "proxy_eps_grid_m": 1.452344,
+      "jax_peak_vram_mib": 3935.0,
+      "safe_volume_frac_jax": 0.97089,
+      "safe_volume_frac_proxy": 0.946265,
+      "pde_vs_proxy_abs_diff_m": {
+        "mean": 1.65294,
+        "p95": 11.9895,
+        "p99": 22.73522,
+        "max": 36.0419,
+        "signed_mean_jax_minus_proxy": 1.61533
+      }
+    },
+    {
+      "regime_index": 1,
+      "regime_name": "1M",
+      "tw_ratio": 2.1,
+      "tilt_max_deg": 28.0,
+      "solve_wall_s": 148.46,
+      "audit_21m_wall_s": 0.13,
+      "eps_grid_m": 0.802911,
+      "proxy_eps_grid_m": 1.93139,
+      "jax_peak_vram_mib": 3935.0,
+      "safe_volume_frac_jax": 0.966816,
+      "safe_volume_frac_proxy": 0.927271,
+      "pde_vs_proxy_abs_diff_m": {
+        "mean": 1.72612,
+        "p95": 11.76038,
+        "p99": 22.15301,
+        "max": 40.26917,
+        "signed_mean_jax_minus_proxy": 1.64225
+      }
+    },
+    {
+      "regime_index": 2,
+      "regime_name": "2M-Cross",
+      "tw_ratio": 1.8,
+      "tilt_max_deg": 22.0,
+      "solve_wall_s": 130.93,
+      "audit_21m_wall_s": 0.13,
+      "eps_grid_m": 0.74675,
+      "proxy_eps_grid_m": 1.970089,
+      "jax_peak_vram_mib": 3935.0,
+      "safe_volume_frac_jax": 0.958575,
+      "safe_volume_frac_proxy": 0.911199,
+      "pde_vs_proxy_abs_diff_m": {
+        "mean": 1.75272,
+        "p95": 12.27416,
+        "p99": 21.52616,
+        "max": 40.36142,
+        "signed_mean_jax_minus_proxy": 1.57682
+      }
+    },
+    {
+      "regime_index": 3,
+      "regime_name": "Low-Vbat",
+      "tw_ratio": 1.85,
+      "tilt_max_deg": 22.0,
+      "solve_wall_s": 134.28,
+      "audit_21m_wall_s": 0.13,
+      "eps_grid_m": 0.686761,
+      "proxy_eps_grid_m": 1.970436,
+      "jax_peak_vram_mib": 3935.0,
+      "safe_volume_frac_jax": 0.960019,
+      "safe_volume_frac_proxy": 0.913255,
+      "pde_vs_proxy_abs_diff_m": {
+        "mean": 1.78505,
+        "p95": 12.54296,
+        "p99": 22.08358,
+        "max": 41.18069,
+        "signed_mean_jax_minus_proxy": 1.62717
+      }
+    }
+  ],
+  "manifest_sha256": "946db73b3c04171e502b93ba7e5df31622b6d0ee9ea97fdbd1f9cf3f51666078"
+}
