@@ -70,7 +70,12 @@ struct DiffEdge {
 
 #ifdef VERTIRTA_HAS_Z3
 [[nodiscard]] z3::expr z3_qreal(z3::context& c, std::int64_t q) {
-  const std::string rat = std::to_string(q) + "/10000";
+  const std::int64_t abs_q = (q < 0LL) ? -q : q;
+  const std::int64_t g = std::gcd(abs_q, kScale);
+  const std::int64_t num = q / g;
+  const std::int64_t den = kScale / g;
+  const std::string rat =
+      (den == 1LL) ? std::to_string(num) : (std::to_string(num) + "/" + std::to_string(den));
   return c.real_val(rat.c_str());
 }
 #endif
@@ -80,6 +85,11 @@ struct DiffEdge {
 struct QfRdlStnSolver::Impl {
 #ifdef VERTIRTA_HAS_Z3
   z3::context ctx_rdl;
+  // Persistent generic incremental SMT solver on dedicated Tier-1 context (avoids Z3 4.8.12
+  // non-incremental QF_RDL tactic wrapper overhead and cross-context smt.arith.solver clashes).
+  z3::solver solver_rdl;
+
+  Impl() : ctx_rdl(), solver_rdl(ctx_rdl) {}
 #else
   std::uint64_t fallback_tag{0x52444C5F53544E31ULL};  // "RDL_STN1"
 #endif
@@ -131,7 +141,7 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
   }
 
   std::vector<DiffEdge> edges;
-  edges.reserve(6U * n + 32U);
+  edges.reserve(6U * n + 16U);
 
   double max_wake_enforced = 0.0;
   bool any_dep_fato_mutex = false;
@@ -164,8 +174,9 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
     }
   }
 
-  // Fixed-order precedence edges for aircraft sharing a FATO or < 60 m dependent FATO group.
-  // Ordered strictly by (nominal_arr_s, aircraft_id) -> 0 Booleans in pure QF_RDL STN.
+  // Fixed-order minimal precedence edges for aircraft sharing a FATO or < 60 m dependent group.
+  // Connecting each aircraft to its immediate next mutex successor is exact by transitivity
+  // (every sep_s >= 0) and eliminates O(N^2) redundant edges -> 0 Booleans in pure QF_RDL STN.
   std::vector<std::size_t> order(n);
   std::iota(order.begin(), order.end(), 0U);
   std::sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
@@ -178,10 +189,10 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
   });
 
   for (std::size_t oi = 0U; oi < n; ++oi) {
+    const std::size_t i = order[oi];
+    const auto& ai = req.aircraft[i];
     for (std::size_t oj = oi + 1U; oj < n; ++oj) {
-      const std::size_t i = order[oi];
       const std::size_t j = order[oj];
-      const auto& ai = req.aircraft[i];
       const auto& aj = req.aircraft[j];
       if (!shares_fato_mutex(ai, aj, req.dependent_fato_spacing_m)) {
         continue;
@@ -197,6 +208,7 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
       const std::string prefix = dep_group ? "c_dependent_fato_sep_" : "c_fato_sep_";
       edges.push_back(DiffEdge{arr_j, arr_i, -scale_1e4(sep_s),
                                prefix + safe_ids[i] + "_" + safe_ids[j]});
+      break;  // Immediate mutex successor enforces full transitive chain for this FATO/group
     }
   }
 
@@ -254,34 +266,50 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
 #ifdef VERTIRTA_HAS_Z3
   {
     z3::context& ctx = impl_->ctx_rdl;
-    z3::solver solver(ctx, "QF_RDL");
-    z3::params params(ctx);
-    params.set("unsat_core", true);
-    params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
-    solver.set(params);
+    z3::solver& solver = impl_->solver_rdl;
+
+    // Fast path: 0-Boolean unit difference inequalities on persistent incremental solver
+    // (no implication clauses, no assumption selectors, no unsat_core tracking on SAT path).
+    solver.reset();
+    z3::params fast_params(ctx);
+    fast_params.set("unsat_core", false);
+    fast_params.set("rlimit", 250000U);
+    fast_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
+    solver.set(fast_params);
 
     std::vector<z3::expr> zvars;
     zvars.reserve(num_nodes);
     for (std::size_t k = 0U; k < num_nodes; ++k) {
       zvars.push_back(ctx.real_const(var_names[k].c_str()));
     }
-    solver.add(zvars[0U] == z3_qreal(ctx, 0LL));
-
-    z3::expr_vector assumptions(ctx);
     for (const auto& e : edges) {
-      z3::expr b = ctx.bool_const(e.label.c_str());
-      solver.add(z3::implies(b, (zvars[e.v] - zvars[e.u]) <= z3_qreal(ctx, e.w_q)));
-      assumptions.push_back(b);
+      solver.add((zvars[e.v] - zvars[e.u]) <= z3_qreal(ctx, e.w_q));
     }
 
-    const z3::check_result zres = solver.check(assumptions);
+    const z3::check_result zres = solver.check();
     if (zres == z3::sat) {
       res.sat = true;
     } else if (zres == z3::unsat) {
+      // UNSAT slow path: extract tracked minimal unsat_core only when conflict occurs.
       res.sat = false;
-      z3::expr_vector core = solver.unsat_core();
-      for (unsigned ci = 0U; ci < core.size(); ++ci) {
-        res.unsat_core_labels.push_back(core[ci].decl().name().str());
+      solver.reset();
+      z3::params core_params(ctx);
+      core_params.set("unsat_core", true);
+      core_params.set("rlimit", 250000U);
+      core_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
+      solver.set(core_params);
+
+      z3::expr_vector assumptions(ctx);
+      for (const auto& e : edges) {
+        z3::expr b = ctx.bool_const(e.label.c_str());
+        solver.add(z3::implies(b, (zvars[e.v] - zvars[e.u]) <= z3_qreal(ctx, e.w_q)));
+        assumptions.push_back(b);
+      }
+      if (solver.check(assumptions) == z3::unsat) {
+        z3::expr_vector core = solver.unsat_core();
+        for (unsigned ci = 0U; ci < core.size(); ++ci) {
+          res.unsat_core_labels.push_back(core[ci].decl().name().str());
+        }
       }
       if (res.unsat_core_labels.empty()) {
         res.unsat_core_labels = bf_core;

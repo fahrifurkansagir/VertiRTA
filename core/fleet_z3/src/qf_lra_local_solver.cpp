@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -67,7 +68,12 @@ struct LraEdge {
 
 #ifdef VERTIRTA_HAS_Z3
 [[nodiscard]] z3::expr z3_qreal(z3::context& c, std::int64_t q) {
-  const std::string rat = std::to_string(q) + "/10000";
+  const std::int64_t abs_q = (q < 0LL) ? -q : q;
+  const std::int64_t g = std::gcd(abs_q, kScale);
+  const std::int64_t num = q / g;
+  const std::int64_t den = kScale / g;
+  const std::string rat =
+      (den == 1LL) ? std::to_string(num) : (std::to_string(num) + "/" + std::to_string(den));
   return c.real_val(rat.c_str());
 }
 #endif
@@ -77,6 +83,10 @@ struct LraEdge {
 struct QfLraLocalSolver::Impl {
 #ifdef VERTIRTA_HAS_Z3
   z3::context ctx_lra;
+  // Persistent incremental solver on strictly separate Tier-2 context.
+  z3::solver solver_lra;
+
+  Impl() : ctx_lra(), solver_lra(ctx_lra) {}
 #else
   std::uint64_t fallback_tag{0x4C52415F4C4F4332ULL};  // "LRA_LOC2"
 #endif
@@ -156,9 +166,11 @@ FleetScheduleResult QfLraLocalSolver::check_unrepaired(
 
 #ifdef VERTIRTA_HAS_Z3
   z3::context& ctx = impl_->ctx_lra;
-  z3::solver solver(ctx, "QF_LRA");
+  z3::solver& solver = impl_->solver_lra;
+  solver.reset();
   z3::params zparams(ctx);
   zparams.set("unsat_core", true);
+  zparams.set("rlimit", 250000U);
   zparams.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
   solver.set(zparams);
 
@@ -424,9 +436,11 @@ FleetScheduleResult QfLraLocalSolver::solve_repaired(
 
 #ifdef VERTIRTA_HAS_Z3
   z3::context& ctx = impl_->ctx_lra;
-  z3::solver solver(ctx, "QF_LRA");
+  z3::solver& solver = impl_->solver_lra;
+  solver.reset();
   z3::params zparams(ctx);
   zparams.set("unsat_core", true);
+  zparams.set("rlimit", 250000U);
   zparams.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
   solver.set(zparams);
 
