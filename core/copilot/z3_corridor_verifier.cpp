@@ -467,7 +467,7 @@ Z3VerifyResult verify_mission_qflra(const RtaStateSnapshotV1& st,
   z3::params p(ctx);
   p.set("unsat_core", true);
   p.set("rlimit", 250000U);
-  p.set("timeout", 100U);
+  p.set("timeout", 500U);
   s.set(p);
 
   z3::expr ze1 = ctx.real_const("e1");

@@ -194,9 +194,12 @@ jobs:
             test_part_is_security \
             test_cbf_orca_and_fleet_sim \
             test_fleet_z3_scheduler -j
-          ctest --test-dir build-m2-tsan \
-            -R "^(test_vertiport_thermal_queue|test_part_is_security|test_cbf_orca_and_fleet_sim|test_fleet_z3_scheduler)$" \
-            --output-on-failure -j4
+          # Suppress only uninstrumented system libz3.so false-positive mutex warnings (never VertiRTA code)
+          printf 'mutex:libz3.so\ncalled_from_lib:libz3.so\n' > /tmp/tsan_libz3.supp
+          TSAN_OPTIONS="suppressions=/tmp/tsan_libz3.supp" \
+            ctest --test-dir build-m2-tsan \
+              -R "^(test_vertiport_thermal_queue|test_part_is_security|test_cbf_orca_and_fleet_sim|test_fleet_z3_scheduler)$" \
+              --output-on-failure -j4
 
       - name: Cross-Compile Cortex-M7 Flight Core (0 B RAM, Zero Heap, Frozen 28886 B GCC-14.2 Baseline)
         run: |
