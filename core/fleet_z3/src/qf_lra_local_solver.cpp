@@ -83,10 +83,35 @@ struct LraEdge {
 struct QfLraLocalSolver::Impl {
 #ifdef VERTIRTA_HAS_Z3
   z3::context ctx_lra;
-  // Persistent incremental solver on strictly separate Tier-2 context.
+  // Persistent pre-warmed Tier-2 solvers on strictly separate context (never shared with Tier-1).
   z3::solver solver_lra;
+  z3::solver solver_lra_fast;
 
-  Impl() : ctx_lra(), solver_lra(ctx_lra) {}
+  Impl() : ctx_lra(), solver_lra(ctx_lra, "QF_LRA"), solver_lra_fast(ctx_lra, "QF_LRA") {
+    z3::params p_core(ctx_lra);
+    p_core.set("unsat_core", true);
+    p_core.set("rlimit", 250000U);
+    p_core.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
+    solver_lra.set(p_core);
+
+    z3::params p_fast(ctx_lra);
+    p_fast.set("unsat_core", false);
+    p_fast.set("rlimit", 250000U);
+    p_fast.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
+    solver_lra_fast.set(p_fast);
+
+    // Pre-warm Z3 allocator & QF_LRA engine at construction so real-time tick #1 has zero init spike.
+    z3::expr w = ctx_lra.real_const("_lra_warm");
+    solver_lra_fast.push();
+    solver_lra_fast.add(w >= z3_qreal(ctx_lra, 0LL));
+    (void)solver_lra_fast.check();
+    solver_lra_fast.pop();
+
+    solver_lra.push();
+    solver_lra.add(w >= z3_qreal(ctx_lra, 0LL));
+    (void)solver_lra.check();
+    solver_lra.pop();
+  }
 #else
   std::uint64_t fallback_tag{0x4C52415F4C4F4332ULL};  // "LRA_LOC2"
 #endif
@@ -167,12 +192,7 @@ FleetScheduleResult QfLraLocalSolver::check_unrepaired(
 #ifdef VERTIRTA_HAS_Z3
   z3::context& ctx = impl_->ctx_lra;
   z3::solver& solver = impl_->solver_lra;
-  solver.reset();
-  z3::params zparams(ctx);
-  zparams.set("unsat_core", true);
-  zparams.set("rlimit", 250000U);
-  zparams.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
-  solver.set(zparams);
+  solver.push();
 
   std::vector<z3::expr> zdep;
   std::vector<z3::expr> zarr;
@@ -341,6 +361,7 @@ FleetScheduleResult QfLraLocalSolver::check_unrepaired(
     res.sat = violated_core.empty();
     res.unsat_core_labels = violated_core;
   }
+  solver.pop();
 #else
   res.sat = violated_core.empty();
   res.unsat_core_labels = violated_core;
@@ -436,16 +457,10 @@ FleetScheduleResult QfLraLocalSolver::solve_repaired(
 
 #ifdef VERTIRTA_HAS_Z3
   z3::context& ctx = impl_->ctx_lra;
-  z3::solver& solver = impl_->solver_lra;
-  solver.reset();
-  z3::params zparams(ctx);
-  zparams.set("unsat_core", true);
-  zparams.set("rlimit", 250000U);
-  zparams.set("timeout", static_cast<unsigned>(kTier2TimeoutMs));
-  solver.set(zparams);
+  z3::solver& solver_fast = impl_->solver_lra_fast;
+  z3::solver& solver_core = impl_->solver_lra;
 
   z3::expr zzero = ctx.real_const("t_zero");
-  solver.add(zzero == z3_qreal(ctx, 0LL));
   std::vector<z3::expr> zdep;
   std::vector<z3::expr> zarr;
   zdep.reserve(m);
@@ -454,11 +469,10 @@ FleetScheduleResult QfLraLocalSolver::solve_repaired(
     zdep.push_back(ctx.real_const(dep_vars[k].c_str()));
     zarr.push_back(ctx.real_const(arr_vars[k].c_str()));
   }
-  z3::expr_vector assumptions(ctx);
+  std::vector<std::pair<std::string, z3::expr>> z3_tracked;
+  z3_tracked.reserve(6U * m + 16U);
   auto add_z3_tracked = [&](const std::string& label, const z3::expr& expr) {
-    z3::expr b = ctx.bool_const(label.c_str());
-    solver.add(z3::implies(b, expr));
-    assumptions.push_back(b);
+    z3_tracked.emplace_back(label, expr);
   };
 #endif
 
@@ -618,15 +632,35 @@ FleetScheduleResult QfLraLocalSolver::solve_repaired(
   fb_core.erase(std::unique(fb_core.begin(), fb_core.end()), fb_core.end());
 
 #ifdef VERTIRTA_HAS_Z3
-  const z3::check_result zres = solver.check(assumptions);
+  // Fast path: 0-Boolean push()/pop() QF_LRA check (no implication/assumption overhead on SAT path).
+  solver_fast.push();
+  solver_fast.add(zzero == z3_qreal(ctx, 0LL));
+  for (const auto& item : z3_tracked) {
+    solver_fast.add(item.second);
+  }
+  const z3::check_result zres = solver_fast.check();
+  solver_fast.pop();
+
   if (zres == z3::sat) {
     res.sat = true;
   } else if (zres == z3::unsat) {
+    // UNSAT slow path: extract tracked minimal unsat_core only when conflict occurs.
     res.sat = false;
-    z3::expr_vector core = solver.unsat_core();
-    for (unsigned ci = 0U; ci < core.size(); ++ci) {
-      res.unsat_core_labels.push_back(core[ci].decl().name().str());
+    solver_core.push();
+    solver_core.add(zzero == z3_qreal(ctx, 0LL));
+    z3::expr_vector assumptions(ctx);
+    for (const auto& item : z3_tracked) {
+      z3::expr b = ctx.bool_const(item.first.c_str());
+      solver_core.add(z3::implies(b, item.second));
+      assumptions.push_back(b);
     }
+    if (solver_core.check(assumptions) == z3::unsat) {
+      z3::expr_vector core = solver_core.unsat_core();
+      for (unsigned ci = 0U; ci < core.size(); ++ci) {
+        res.unsat_core_labels.push_back(core[ci].decl().name().str());
+      }
+    }
+    solver_core.pop();
     if (res.unsat_core_labels.empty()) {
       res.unsat_core_labels = fb_core;
     }

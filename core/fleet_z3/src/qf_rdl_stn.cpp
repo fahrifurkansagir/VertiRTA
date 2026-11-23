@@ -68,28 +68,42 @@ struct DiffEdge {
   std::string label{};
 };
 
-#ifdef VERTIRTA_HAS_Z3
-[[nodiscard]] z3::expr z3_qreal(z3::context& c, std::int64_t q) {
-  const std::int64_t abs_q = (q < 0LL) ? -q : q;
-  const std::int64_t g = std::gcd(abs_q, kScale);
-  const std::int64_t num = q / g;
-  const std::int64_t den = kScale / g;
-  const std::string rat =
-      (den == 1LL) ? std::to_string(num) : (std::to_string(num) + "/" + std::to_string(den));
-  return c.real_val(rat.c_str());
-}
-#endif
-
 }  // namespace
 
 struct QfRdlStnSolver::Impl {
 #ifdef VERTIRTA_HAS_Z3
-  z3::context ctx_rdl;
-  // Persistent generic incremental SMT solver on dedicated Tier-1 context (avoids Z3 4.8.12
-  // non-incremental QF_RDL tactic wrapper overhead and cross-context smt.arith.solver clashes).
-  z3::solver solver_rdl;
+  struct RdlConfigHolder {
+    z3::config cfg;
+    RdlConfigHolder() { cfg.set("auto_config", false); }
+  };
 
-  Impl() : ctx_rdl(), solver_rdl(ctx_rdl) {}
+  // Strictly isolated Tier-1 context (never shared with Tier-2 QfLraLocalSolver).
+  // Uses exact 1e-4 s integer-tick QF_IDL isomorphism (totally unimodular difference matrix:
+  // x_v - x_u <= w_q/10000 over R iff X_v - X_u <= w_q over Z), achieving ~1 ms on Z3 4.8.12.
+  RdlConfigHolder cfg_holder;
+  z3::context ctx_rdl;
+  z3::solver solver_rdl;
+  std::vector<z3::expr> cached_nodes;
+
+  Impl() : cfg_holder(), ctx_rdl(cfg_holder.cfg), solver_rdl(ctx_rdl, "QF_IDL") {
+    constexpr std::size_t kMaxNodes = 1U + 2U * kMaxFleetAircraft;
+    cached_nodes.reserve(kMaxNodes);
+    for (std::size_t k = 0U; k < kMaxNodes; ++k) {
+      const std::string nm = "n" + std::to_string(k);
+      cached_nodes.push_back(ctx_rdl.int_const(nm.c_str()));
+    }
+    z3::params fast_params(ctx_rdl);
+    fast_params.set("unsat_core", false);
+    fast_params.set("rlimit", 250000U);
+    fast_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
+    solver_rdl.set(fast_params);
+
+    // Pre-warm Z3 allocator & QF_IDL difference-logic engine at construction so tick #1 is warm.
+    solver_rdl.push();
+    solver_rdl.add(cached_nodes[0U] >= ctx_rdl.int_val(static_cast<std::int64_t>(0)));
+    (void)solver_rdl.check();
+    solver_rdl.pop();
+  }
 #else
   std::uint64_t fallback_tag{0x52444C5F53544E31ULL};  // "RDL_STN1"
 #endif
@@ -267,46 +281,38 @@ FleetScheduleResult QfRdlStnSolver::solve(const FleetScheduleRequest& req) const
   {
     z3::context& ctx = impl_->ctx_rdl;
     z3::solver& solver = impl_->solver_rdl;
+    const auto& znodes = impl_->cached_nodes;
 
-    // Fast path: 0-Boolean unit difference inequalities on persistent incremental solver
-    // (no implication clauses, no assumption selectors, no unsat_core tracking on SAT path).
-    solver.reset();
-    z3::params fast_params(ctx);
-    fast_params.set("unsat_core", false);
-    fast_params.set("rlimit", 250000U);
-    fast_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
-    solver.set(fast_params);
-
-    std::vector<z3::expr> zvars;
-    zvars.reserve(num_nodes);
-    for (std::size_t k = 0U; k < num_nodes; ++k) {
-      zvars.push_back(ctx.real_const(var_names[k].c_str()));
-    }
+    // Fast path: 0-Boolean unit integer-difference inequalities with incremental push()/pop()
+    // (~1 ms on Ubuntu 24.04 libz3 4.8.12; exact 1e-4 s isomorphism to QF_RDL).
+    solver.push();
     for (const auto& e : edges) {
-      solver.add((zvars[e.v] - zvars[e.u]) <= z3_qreal(ctx, e.w_q));
+      solver.add((znodes[e.v] - znodes[e.u]) <= ctx.int_val(static_cast<std::int64_t>(e.w_q)));
     }
-
     const z3::check_result zres = solver.check();
+    solver.pop();
+
     if (zres == z3::sat) {
       res.sat = true;
     } else if (zres == z3::unsat) {
       // UNSAT slow path: extract tracked minimal unsat_core only when conflict occurs.
       res.sat = false;
-      solver.reset();
+      z3::solver core_solver(ctx, "QF_IDL");
       z3::params core_params(ctx);
       core_params.set("unsat_core", true);
       core_params.set("rlimit", 250000U);
       core_params.set("timeout", static_cast<unsigned>(kTier1Z3TimeoutMs));
-      solver.set(core_params);
+      core_solver.set(core_params);
 
       z3::expr_vector assumptions(ctx);
       for (const auto& e : edges) {
         z3::expr b = ctx.bool_const(e.label.c_str());
-        solver.add(z3::implies(b, (zvars[e.v] - zvars[e.u]) <= z3_qreal(ctx, e.w_q)));
+        core_solver.add(z3::implies(
+            b, (znodes[e.v] - znodes[e.u]) <= ctx.int_val(static_cast<std::int64_t>(e.w_q))));
         assumptions.push_back(b);
       }
-      if (solver.check(assumptions) == z3::unsat) {
-        z3::expr_vector core = solver.unsat_core();
+      if (core_solver.check(assumptions) == z3::unsat) {
+        z3::expr_vector core = core_solver.unsat_core();
         for (unsigned ci = 0U; ci < core.size(); ++ci) {
           res.unsat_core_labels.push_back(core[ci].decl().name().str());
         }

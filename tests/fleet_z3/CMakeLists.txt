@@ -48,6 +48,7 @@ target_compile_options(test_fleet_z3_scheduler PRIVATE
   $<$<BOOL:${VERTIRTA_ENABLE_STRICT_FP}>:${VERTIRTA_STRICT_FP_FLAGS}>
 )
 add_test(NAME test_fleet_z3_scheduler COMMAND test_fleet_z3_scheduler)
+set_tests_properties(test_fleet_z3_scheduler PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(emit_fleet_smt2_cases emit_fleet_smt2_cases.cpp)
 target_link_libraries(emit_fleet_smt2_cases PRIVATE vertirta::fleet_z3)

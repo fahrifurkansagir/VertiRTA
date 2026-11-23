@@ -17,6 +17,7 @@ foreach(_vertirta_copilot_test
   )
   add_test(NAME ${_vertirta_copilot_test} COMMAND ${_vertirta_copilot_test})
 endforeach()
+set_tests_properties(test_z3_verifier_and_repair PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(emit_smt2_cases emit_smt2_cases.cpp)
 target_link_libraries(emit_smt2_cases PRIVATE vertirta::copilot)

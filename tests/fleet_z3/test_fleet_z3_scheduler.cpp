@@ -27,6 +27,11 @@ TEST_CASE("Tier-1 QF_RDL STN solves 20-eVTOL schedule in < 3 ms and Tier-2 QF_LR
   REQUIRE(r_nom.smt2_audit.find("(set-logic QF_RDL)") != std::string::npos);
   REQUIRE(r_nom.schedule.size() == 20U);
 
+  // Repeat solve confirms zero residual push()/pop() leakage across calls
+  const auto r_nom_repeat = sched.schedule(req20);
+  REQUIRE(r_nom_repeat.sat);
+  REQUIRE(r_nom_repeat.wall_ms < 10.0);
+
   // 2) Art. 10(9): New nominal request conflicting with approved U-plan CANNOT preempt it
   auto req_art10_9 = make_nominal_slot_clash_request();
   const auto r_deny = sched.schedule(req_art10_9);
@@ -75,12 +80,20 @@ TEST_CASE("Tier-1 QF_RDL detects battery negative cycle and Tier-2 QF_LRA bounds
 
 TEST_CASE("DLR EUREKA 2026 ATS vs U-Space gate fails closed when LTFJ controlled clearance is missing") {
   FleetZ3Scheduler sched{};
+  // Exercise check_tier2_local_unrepaired() before an UNSAT schedule() on the SAME instance
+  // to verify zero level-0 solver state leakage across shared Tier-2 solver_lra.
+  const auto pre_unrep = sched.check_tier2_local_unrepaired(make_nominal_slot_clash_request());
+  REQUIRE_FALSE(pre_unrep.sat);
+  REQUIRE_FALSE(pre_unrep.unsat_core_labels.empty());
+
   const auto req_no_ats = make_missing_ats_clearance_request();
   const auto res = sched.schedule(req_no_ats);
   REQUIRE_FALSE(res.sat);
   REQUIRE(res.tier_used == SolverTier::FALLBACK_SAFE_HOLD);
   REQUIRE(std::find(res.unsat_core_labels.begin(), res.unsat_core_labels.end(),
                     "c_ats_clearance_UA_LTFJ_01") != res.unsat_core_labels.end());
+  REQUIRE(std::find(res.unsat_core_labels.begin(), res.unsat_core_labels.end(),
+                    "c_art10_9_preserve_UA_APP_01") == res.unsat_core_labels.end());
 }
 
 TEST_CASE("Special Ops EMS/SAR (Art. 10(8)) preempts nominal flights and independent FATOs >= 60 m do not false-mutex") {
