@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 Post-Flight Regulatory Forensics Configuration
+# Design Drivers: Reg. (EU) 376/2014, CIR (EU) 2026/1821, CDR (EU) 2020/2034 (ERCS),
+# EUROCAE ED-155A (March 2025), and SHGM SHY-OLAY (72h ADREP reporting).
+
+schema_version: vertirta.forensics_config/v1.0.0
+compliance_claim: NONE_RESEARCH_TESTBED_ONLY
+
+airspace_and_jurisdiction:
+  fir_uir_id_16: LTBB
+  ats_unit_id_372: LTFJ_TWR
+  state_area_id_454: TR
+  location_name_id_440: Kartal_Sahil_Istanbul
+  reporting_entity_id_453: VERTIRTA_RESEARCH_TESTBED
+  datum_lat_deg: 40.8860
+  datum_lon_deg: 29.1880
+  max_corridor_lon_deg: 29.1895
+
+ed155a_sidecar:
+  vrta_header_bytes_frozen: 128
+  vrta_frame_bytes_frozen: 256
+  sidecar_extension: .vrta_events.jsonl
+  join_key: [seq, t_sim_us]
+  append_only_fsync: true
+  hash_chain_algorithm: SHA-256
+  signature_algorithm: Ed25519
+  min_libsodium_version: "1.0.21"
+  banned_libsodium_cve_max: "1.0.20"
+
+cir_2026_1821_triggers:
+  - FATO_INCURSION
+  - USPACE_AIRBORNE_ENCOUNTER
+  - CRITICAL_ENERGY_OR_ENVELOPE_PROT
+  - PART_IS_INFOSEC_ANOMALY
+  - UAS_CMU_TECHNICAL_FAULT
+
+shgm_shy_olay:
+  mandatory_reporting_deadline_hours: 72
+  parallel_narrative_languages: [en, tr]
+  article16_pii_redaction_required: true
+
+ercs:
+  regulation_ref: "CDR (EU) 2020/2034"
+  default_occupant_capacity_x8_240: 1
+  lift_cruise_occupant_capacity_band: [4, 6]
+  draft_occurrence_class_id_431: INCIDENT_DRAFT_ONLY
+  auto_classify_accident_or_serious_incident: false
+  reporting_status: DRAFT_INTERNAL_PRE_SUBMISSION
+  rotor_control_sw_cictt_code: SCF-NP
+  barrier8_forced_zero_on_high_energy: true
+  high_energy_key_risk_areas:
+    - LOC_I_HIGH_ENERGY
+    - MAC_HIGH_ENERGY
+    - CFIT_HIGH_ENERGY
+    - FIRE_THERMAL_HIGH_ENERGY
+  omit_na_injury_attribute_ids: [114, 187, 262, 460, 462, 463, 469, 472]
+  evtol_rotorcraft_phase_codes_id_121:
+    takeoff: 10300
+    initial_climb: 10302
+    rejected_takeoff: 10303
+    en_route: 10400
+    cruise: 10402
+    holding: 10407
+    hovering: 990879
+    hover_ige: 10508
+    hover_oge: 10509
+    approach: 10600
+    final_approach: 10602
+    transition_to_hover: 990881
+    go_around: 990889
+    landing: 30700
+    vertical_landing: 10707
+    emergency_landing: 30704
+  ata_jasc_chapters_id_659:
+    autopilot_rta: 22
+    vhf_asr_uspace_datalink: 23
+    hv_battery_bms: 24
+    thermal_fire: 26
+    flight_rotor_control: 27
+    vrta_recorder_stl: 31
+    gnss_ins_fms: 34
+    coaxial_rotors: 62
+    electric_propulsion: 71
+
+narrative_grounding:
+  gbnf_grammar_path: config/eccairs2_nodigit.gbnf
+  max_allowed_numeric_hallucination_rate: 0.0
+  allowlisted_slots:
+    - EVENT_SEQ
+    - T_SIM_S
+    - MIN_LTFJ_MARGIN_M
+    - MIN_LTBX_MARGIN_M
+    - SOC_PCT
+    - V_TERM_V
+    - AGL_M
+    - PEAK_CHI2
+    - ROTOR_MASK_HEX
+    - SNR_STRATUM
+    - CONFORMAL_SET_SIZE
+    - ERCS_SCORE
+    - CICTT_CODE
+    - OCCURRENCE_PHASE
+    - FLIGHT_REGIME

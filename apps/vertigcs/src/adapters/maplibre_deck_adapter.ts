@@ -14,6 +14,8 @@ import { buildFleetDeckLayers } from "../fleet/fleet_deck_layer";
 import type { FleetSnapshot } from "../fleet/fleet_types";
 import { buildIstanbulTacticalStyle } from "../geo/istanbul_coastline_style";
 import { COPERNICUS_GLO30_ATTRIBUTION, KARTAL_DATUM } from "../geo/istanbul_datum";
+import { buildM3DeckLayers } from "../m3/m3_deck_layer";
+import type { M3Snapshot } from "../m3/m3_types";
 import type { TelemetrySnapshot } from "../types/telemetry";
 import type { GeoViewportOptions, IGeoViewportAdapter } from "./geo_viewport_adapter";
 
@@ -65,6 +67,7 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
   private airspaceUrl: string | null = null;
   private lastTelemetry: TelemetrySnapshot | null = null;
   private fleetSnapshot: FleetSnapshot | null = null;
+  private m3Snapshot: M3Snapshot | null = null;
   private readonly trailCoords: [number, number, number][] = [];
   private readonly maxTrailPts = 240;
 
@@ -127,6 +130,13 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
 
   updateFleetSnapshot(snapshot: FleetSnapshot | null): void {
     this.fleetSnapshot = snapshot;
+    this.overlay?.setProps({
+      layers: this.buildLayers(this.lastTelemetry),
+    });
+  }
+
+  updateM3Snapshot(snapshot: M3Snapshot | null): void {
+    this.m3Snapshot = snapshot;
     this.overlay?.setProps({
       layers: this.buildLayers(this.lastTelemetry),
     });
@@ -209,6 +219,10 @@ export class MapLibreDeckAdapter implements IGeoViewportAdapter {
 
     if (this.fleetSnapshot) {
       layers.push(...buildFleetDeckLayers(this.fleetSnapshot));
+    }
+
+    if (this.m3Snapshot) {
+      layers.push(...buildM3DeckLayers(this.m3Snapshot));
     }
 
     return layers;

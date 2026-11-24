@@ -221,7 +221,8 @@ button.secondary {
 }
 
 #z3-audit-log,
-#fleet-cyber-log {
+#fleet-cyber-log,
+#m3-e5x-xml-preview {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -233,11 +234,29 @@ button.secondary {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-#fleet-hud-summary {
+#fleet-hud-summary,
+#m3-hud-summary {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
   max-width: 100%;
+}
+
+.m3-kv dd {
+  font-size: 11px;
+  word-break: break-word;
+}
+
+#m3-e5x-xml-preview {
+  margin-top: 6px;
+  max-height: 170px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
+  background: #08101a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
 }
 
 .fleet-details {

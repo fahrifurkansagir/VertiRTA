@@ -1,0 +1,201 @@
+{
+  "schema_version": "vertirta.corl_manifest/v1.0.0",
+  "paper_target": "Conference on Robot Learning (CoRL 2027), 8-page double-anonymous",
+  "compliance_claim": "NONE_RESEARCH_TESTBED_ONLY",
+  "provenance": {
+    "vertibench_v1_tag": "PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_TR_V1",
+    "vertibench_v2_tag": "PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_V2",
+    "human_native_audit_completed": false,
+    "license_firewall_policy": "STRICT_ZERO_GPL_NC_SA_ENFORCED",
+    "quarantined_zero_shot_eval_only_slz": [
+      "AeroScapes (CC BY-SA 4.0)",
+      "ICG Drone (eval-only)",
+      "UAVScenes (eval-only)"
+    ]
+  },
+  "verified_baselines": {
+    "v310_qwen25_7b_zs": {
+      "source": "artifacts/v3.1.0/l4_qwen3_4b_z3_grpo_eval.json",
+      "grammar_validity_pct": 20.18,
+      "ast_stl_accuracy_pct": 0.0,
+      "unsafe_rejection_pct": 37.86,
+      "latency_p50_ms": 428.62
+    },
+    "v310_qwen3_4b_zs": {
+      "source": "artifacts/v3.1.0/l4_qwen3_4b_z3_grpo_eval.json",
+      "grammar_validity_pct": 77.5,
+      "ast_stl_accuracy_pct": 11.25,
+      "unsafe_rejection_pct": 45.0,
+      "latency_p50_ms": 206.26
+    },
+    "v310_qwen3_4b_sft_grpo": {
+      "source": "artifacts/v3.1.0/l4_qwen3_4b_z3_grpo_eval.json",
+      "grammar_validity_pct": 86.07,
+      "ast_stl_accuracy_pct": 72.14,
+      "unsafe_rejection_pct": 44.29,
+      "conformal_coverage_pct": 96.25,
+      "mean_prediction_set_size": 5.438,
+      "singleton_exec_pct": 0.0,
+      "latency_p50_ms": 260.42
+    },
+    "v351_qwen3_4b_v2_unconstrained": {
+      "source": "artifacts/v3.5.1/l4_qwen3_4b_v2_calibrated_eval.json",
+      "grammar_validity_pct": 92.86,
+      "ast_stl_accuracy_pct": 84.82,
+      "unsafe_rejection_pct": 75.0,
+      "z3_satisfaction_pct": 92.86,
+      "latency_p50_ms": 258.3
+    },
+    "v351_qwen3_4b_v2_gbnf_z3_calibrated": {
+      "source": "artifacts/v3.5.1/l4_qwen3_4b_v2_calibrated_eval.json",
+      "n_cal": 200,
+      "n_test": 560,
+      "alpha": 0.05,
+      "tau_opt": 0.5066,
+      "grammar_validity_pct": 100.0,
+      "ast_stl_accuracy_pct": 91.96,
+      "unsafe_rejection_pct": 75.0,
+      "z3_satisfaction_pct": 100.0,
+      "conformal_coverage_pct": 95.36,
+      "ece_uncalibrated": 0.332235,
+      "ece_calibrated": 0.150064,
+      "mean_prediction_set_size_uncal": 3.496,
+      "mean_prediction_set_size": 3.125,
+      "singleton_exec_pct_uncal": 13.04,
+      "singleton_exec_pct": 22.86,
+      "latency_p50_ms": 291.35
+    },
+    "v310_pidnet_v1": {
+      "source": "artifacts/v3.1.0/l4_pidnet_distill_metrics.json",
+      "edge_source": "artifacts/v3.1.0/local_gtx1650s_pidnet_trained_proof.json",
+      "val_miou": 0.376389,
+      "val_fsr": 0.211059,
+      "ood_boundary_auroc": 0.698436,
+      "aeroscapes_miou": 0.339522,
+      "aeroscapes_fsr": 0.184374,
+      "gtx1650s_fp32_cg_p50_ms": 8.6691,
+      "gtx1650s_fp32_cg_p99_ms": 14.2048,
+      "gtx1650s_fp32_cg_vram_mb": 126.0,
+      "gtx1650s_fp16_p50_ms": 29.7471
+    },
+    "v351_pidnet_v2": {
+      "source": "artifacts/v3.5.1/l4_pidnet_v2_distill_metrics.json",
+      "edge_source": "artifacts/v3.5.1/local_gtx1650s_pidnet_v2_proof.json",
+      "val_miou": 0.484763,
+      "val_fsr": 0.040273,
+      "ood_boundary_auroc": 0.648709,
+      "aeroscapes_miou": 0.238733,
+      "aeroscapes_fsr": 0.019488,
+      "gtx1650s_fp32_cg_p50_ms": 8.887,
+      "gtx1650s_fp32_cg_p99_ms": 11.695,
+      "gtx1650s_fp32_cg_vram_mb": 155.0,
+      "gtx1650s_fp16_p50_ms": 34.727,
+      "gtx1650s_fp16_p99_ms": 109.677,
+      "all_local_gates_passed": true
+    }
+  },
+  "phase3_g4_slots": {
+    "qwen3_v3_ast_stl_mean_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_ast_stl_sd_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_b3_reject_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_mondrian_coverage_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_mondrian_ece": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_mondrian_mean_set_size": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "qwen3_v3_mondrian_singleton_exec_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
+    },
+    "whisper_s0_clean_wer_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
+    },
+    "whisper_s1_cruise_wer_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
+    },
+    "whisper_s2_hover_wer_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
+    },
+    "whisper_s3_garbled_wer_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
+    },
+    "pidnet_v21_val_miou": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+    },
+    "pidnet_v21_val_fsr": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+    },
+    "pidnet_v21_aeroscapes_miou": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+    },
+    "pidnet_v21_aeroscapes_fsr": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+    },
+    "xfeat_kartal_recall_at_5m_pct": {
+      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
+      "value": null,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+    }
+  },
+  "external_eval_only_slots": {
+    "icg_drone_miou": {
+      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
+      "value": null,
+      "quarantined_zero_shot_eval_only": true
+    },
+    "icg_drone_fsr": {
+      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
+      "value": null,
+      "quarantined_zero_shot_eval_only": true
+    },
+    "uavscenes_miou": {
+      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
+      "value": null,
+      "quarantined_zero_shot_eval_only": true
+    },
+    "uavscenes_fsr": {
+      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
+      "value": null,
+      "quarantined_zero_shot_eval_only": true
+    }
+  }
+}

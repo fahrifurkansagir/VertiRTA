@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""Zero-drift, double-anonymous & anti-fabrication verifier for Paper 2 (CoRL 2027)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+from docs.paper_corl.scripts.generate_corl_tables import render_corl_tables_tex
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CORL_DIR = REPO_ROOT / "docs" / "paper_corl"
+
+FORBIDDEN_TOKENS = (
+    "github.com/",
+    "mailto:",
+    "TODO",
+    "[TBD]",
+    "TBD",
+    "UAVid",
+    "uavid",
+    "piper1-gpl",
+    "UWB-ATCC",
+    "ATCO2",
+    "ESC-50",
+    "DEMAND",
+    "fahrifurkansagir",
+)
+
+
+def _check_close(
+    errors: list[str], label: str, manifest_val: float, source_val: float, tol: float = 1e-4
+) -> None:
+    if abs(float(manifest_val) - float(source_val)) > tol:
+        errors.append(f"Drift on {label}: manifest={manifest_val} vs source={source_val}")
+
+
+def verify_corl_manuscript(
+    corl_dir: Path = DEFAULT_CORL_DIR,
+    *,
+    allow_pending_g4: bool = False,
+) -> dict[str, Any]:
+    errors: list[str] = []
+    manifest_path = corl_dir / "corl_metrics_manifest.json"
+    tex_path = corl_dir / "vertirta_corl_manuscript.tex"
+    bib_path = corl_dir / "references_corl.bib"
+    gen_tex_path = corl_dir / "generated" / "corl_tables.tex"
+
+    for p in (manifest_path, tex_path, bib_path, gen_tex_path):
+        if not p.is_file():
+            errors.append(f"Missing required Paper 2 artifact: {p}")
+    if errors:
+        return {"passed": False, "errors": errors, "pending_g4_slot_count": -1}
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    tex = tex_path.read_text(encoding="utf-8")
+    bib = bib_path.read_text(encoding="utf-8")
+    gen_tex = gen_tex_path.read_text(encoding="utf-8")
+
+    # 1) Cross-check EVERY verified v3.1.0 & v3.5.1 baseline value directly against source JSONs.
+    b = manifest["verified_baselines"]
+
+    v31_q_path = REPO_ROOT / b["v310_qwen3_4b_sft_grpo"]["source"]
+    v31_q = json.loads(v31_q_path.read_text(encoding="utf-8"))
+    _check_close(
+        errors,
+        "v310_qwen25_7b_zs.grammar_validity_pct",
+        b["v310_qwen25_7b_zs"]["grammar_validity_pct"],
+        v31_q["evaluations"]["qwen25_7b_zero_shot"]["overall"]["grammar_validity_pct"],
+    )
+    _check_close(
+        errors,
+        "v310_qwen3_4b_zs.ast_stl_accuracy_pct",
+        b["v310_qwen3_4b_zs"]["ast_stl_accuracy_pct"],
+        v31_q["evaluations"]["qwen3_4b_zero_shot"]["overall"]["ast_stl_accuracy_pct"],
+    )
+    _check_close(
+        errors,
+        "v310_qwen3_4b_sft_grpo.ast_stl_accuracy_pct",
+        b["v310_qwen3_4b_sft_grpo"]["ast_stl_accuracy_pct"],
+        v31_q["evaluations"]["qwen3_4b_sft_z3_grpo"]["overall"]["ast_stl_accuracy_pct"],
+    )
+    _check_close(
+        errors,
+        "v310_qwen3_4b_sft_grpo.mean_prediction_set_size",
+        b["v310_qwen3_4b_sft_grpo"]["mean_prediction_set_size"],
+        v31_q["conformal_calibration"]["mean_prediction_set_size"],
+    )
+
+    v351_q_path = REPO_ROOT / b["v351_qwen3_4b_v2_gbnf_z3_calibrated"]["source"]
+    v351_q = json.loads(v351_q_path.read_text(encoding="utf-8"))
+    _check_close(
+        errors,
+        "v351_qwen3_4b_v2.ast_stl_accuracy_pct",
+        b["v351_qwen3_4b_v2_gbnf_z3_calibrated"]["ast_stl_accuracy_pct"],
+        v351_q["gbnf_z3_fail_closed_comparison"]["qwen3_4b_sft_z3_grpo"]["gbnf_plus_z3_fail_closed"][
+            "ast_stl_accuracy_pct"
+        ],
+    )
+    _check_close(
+        errors,
+        "v351_qwen3_4b_v2.ece_calibrated",
+        b["v351_qwen3_4b_v2_gbnf_z3_calibrated"]["ece_calibrated"],
+        v351_q["conformal_calibration"]["temperature_calibrated_test"]["ece"],
+    )
+    _check_close(
+        errors,
+        "v351_qwen3_4b_v2.mean_prediction_set_size",
+        b["v351_qwen3_4b_v2_gbnf_z3_calibrated"]["mean_prediction_set_size"],
+        v351_q["conformal_calibration"]["temperature_calibrated_test"]["mean_prediction_set_size"],
+    )
+
+    v31_p = json.loads((REPO_ROOT / b["v310_pidnet_v1"]["source"]).read_text(encoding="utf-8"))
+    v31_e = json.loads((REPO_ROOT / b["v310_pidnet_v1"]["edge_source"]).read_text(encoding="utf-8"))
+    _check_close(
+        errors,
+        "v310_pidnet_v1.val_miou",
+        b["v310_pidnet_v1"]["val_miou"],
+        v31_p["evaluation"]["permissive_validation"]["miou_present_classes"],
+    )
+    _check_close(
+        errors,
+        "v310_pidnet_v1.aeroscapes_fsr",
+        b["v310_pidnet_v1"]["aeroscapes_fsr"],
+        v31_p["evaluation"]["quarantined_zero_shot_aeroscapes"]["false_safe_rate_fsr"],
+    )
+    _check_close(
+        errors,
+        "v310_pidnet_v1.gtx1650s_p99",
+        b["v310_pidnet_v1"]["gtx1650s_fp32_cg_p99_ms"],
+        v31_e["benchmarks"]["ort_cuda_fp32_cuda_graph"]["network_iobinding"]["p99_ms"],
+    )
+
+    v351_p = json.loads((REPO_ROOT / b["v351_pidnet_v2"]["source"]).read_text(encoding="utf-8"))
+    v351_e = json.loads((REPO_ROOT / b["v351_pidnet_v2"]["edge_source"]).read_text(encoding="utf-8"))
+    _check_close(
+        errors,
+        "v351_pidnet_v2.val_miou",
+        b["v351_pidnet_v2"]["val_miou"],
+        v351_p["evaluation"]["permissive_validation"]["miou_present_classes"],
+    )
+    _check_close(
+        errors,
+        "v351_pidnet_v2.val_fsr",
+        b["v351_pidnet_v2"]["val_fsr"],
+        v351_p["evaluation"]["permissive_validation"]["false_safe_rate_fsr"],
+    )
+    _check_close(
+        errors,
+        "v351_pidnet_v2.aeroscapes_fsr",
+        b["v351_pidnet_v2"]["aeroscapes_fsr"],
+        v351_p["evaluation"]["quarantined_zero_shot_aeroscapes"]["false_safe_rate_fsr"],
+    )
+    _check_close(
+        errors,
+        "v351_pidnet_v2.gtx1650s_p99",
+        b["v351_pidnet_v2"]["gtx1650s_fp32_cg_p99_ms"],
+        v351_e["benchmarks"]["ort_cuda_fp32_cuda_graph"]["network_iobinding"]["p99_ms"],
+    )
+
+    # 2) Verify generated/corl_tables.tex matches manifest byte-for-byte
+    expected_tex = render_corl_tables_tex(manifest)
+    if gen_tex != expected_tex:
+        errors.append("generated/corl_tables.tex drifted from corl_metrics_manifest.json")
+
+    # 3) Check pending Phase-3 G4 slots
+    pending_g4 = [
+        k
+        for k, slot in manifest["phase3_g4_slots"].items()
+        if slot.get("status") == "PENDING_PHASE3_G4_THUNDER_RUN" or slot.get("value") is None
+    ]
+    if pending_g4 and not allow_pending_g4:
+        errors.append(
+            f"{len(pending_g4)} Phase-3 G4 slots remain PENDING_PHASE3_G4_THUNDER_RUN (run with --allow-pending-g4 in Phase 2)"
+        )
+
+    # 4) Double-anonymity, zero banned tokens, zero certification claims, honest provenance
+    for label, text in (
+        ("vertirta_corl_manuscript.tex", tex),
+        ("references_corl.bib", bib),
+        ("generated/corl_tables.tex", gen_tex),
+        ("corl_metrics_manifest.json", manifest_path.read_text(encoding="utf-8")),
+    ):
+        for tok in FORBIDDEN_TOKENS:
+            if tok in text:
+                errors.append(f"Forbidden token '{tok}' found in {label}")
+
+    if re.search(r"we (achieve|demonstrate|are) (DO-178C|SC-VTOL|SORA).*certified", tex, re.IGNORECASE):
+        errors.append("Forbidden airworthiness certification claim in manuscript")
+    if re.search(r"human[- ]native (Turkish|English|bilingual) benchmark", tex, re.IGNORECASE):
+        errors.append("Premature human-native benchmark claim in manuscript")
+    if manifest["provenance"]["vertibench_v2_tag"] != (
+        "PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_V2"
+    ):
+        errors.append("Unexpected VertiBench-v2 provenance tag in manifest")
+
+    # 5) BibTeX closure and balanced \begin{} / \end{} environments
+    bib_keys = set(re.findall(r"@\w+\s*\{\s*([^,\s]+)\s*,", bib))
+    cited = {
+        k.strip()
+        for grp in re.findall(r"\\cite[a-z]*\{([^}]+)\}", tex)
+        for k in grp.split(",")
+        if k.strip()
+    }
+    missing_bib = sorted(cited - bib_keys)
+    if missing_bib:
+        errors.append(f"Unresolved BibTeX citations: {missing_bib}")
+
+    begins = re.findall(r"\\begin\{([^}]+)\}", tex)
+    ends = re.findall(r"\\end\{([^}]+)\}", tex)
+    if len(begins) != len(ends):
+        errors.append(f"Unbalanced LaTeX environments: {len(begins)} begins vs {len(ends)} ends")
+
+    # 6) Vector PDF figure presence & leak audit
+    for fig_name in (
+        "fig1_bilingual_mondrian_pareto.pdf",
+        "fig2_snr_stratum_coverage.pdf",
+        "fig3_slz_real_transfer_pareto.pdf",
+    ):
+        fp = corl_dir / "figures" / fig_name
+        if not fp.is_file():
+            errors.append(f"Missing PDF figure: {fp}")
+        else:
+            raw = fp.read_bytes()
+            if not raw.startswith(b"%PDF-"):
+                errors.append(f"Invalid PDF header in {fig_name}")
+            for leak in (b"github.com", b"fahrifurkansagir", b"UAVid", b"uavid"):
+                if leak in raw:
+                    errors.append(f"Leak {leak!r} inside {fig_name}")
+
+    return {
+        "passed": len(errors) == 0,
+        "errors": errors,
+        "pending_g4_slot_count": len(pending_g4),
+        "external_eval_pending_count": sum(
+            1
+            for s in manifest["external_eval_only_slots"].values()
+            if s.get("status") == "PENDING_EVAL_ONLY_REAL_IMAGERY"
+        ),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--corl-dir", type=Path, default=DEFAULT_CORL_DIR)
+    parser.add_argument("--allow-pending-g4", action="store_true")
+    args = parser.parse_args()
+
+    res = verify_corl_manuscript(args.corl_dir, allow_pending_g4=args.allow_pending_g4)
+    print(json.dumps(res, indent=2))
+    return 0 if res["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

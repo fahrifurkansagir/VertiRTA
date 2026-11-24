@@ -4,6 +4,7 @@ import { CesiumBridgeAdapter } from "./adapters/cesium_bridge_adapter";
 import type { IGeoViewportAdapter } from "./adapters/geo_viewport_adapter";
 import { MapLibreDeckAdapter, clampDevicePixelRatio } from "./adapters/maplibre_deck_adapter";
 import { bindFleetPanel } from "./fleet/fleet_panel";
+import { bindM3Panel } from "./m3/m3_panel";
 import {
   LiveWsTransport,
   SandboxWorkerTransport,
@@ -102,6 +103,12 @@ async function bootstrapVertiGcs(): Promise<void> {
   bindFleetPanel((fleetSnap) => {
     if (viewport instanceof MapLibreDeckAdapter) {
       viewport.updateFleetSnapshot(fleetSnap);
+    }
+  }, setStatus);
+
+  bindM3Panel((m3Snap) => {
+    if (viewport instanceof MapLibreDeckAdapter) {
+      viewport.updateM3Snapshot(m3Snap);
     }
   }, setStatus);
 }

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Minimal W3C XSD 1.0 schema validating VertiRTA draft ECCAIRS2 / E5X XML exports. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://eccairsportal.jrc.ec.europa.eu/schemas/e5x-minimal/v1"
+           xmlns:e5x="http://eccairsportal.jrc.ec.europa.eu/schemas/e5x-minimal/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="ReportingStatusType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="DRAFT_INTERNAL_PRE_SUBMISSION"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ComplianceClaimType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="NONE_RESEARCH_TESTBED_ONLY"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NarrativeLangType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="en"/>
+      <xs:enumeration value="tr"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="AttributeType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="id" type="xs:positiveInteger" use="required"/>
+        <xs:attribute name="name" type="xs:string" use="required"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="AttributesListType">
+    <xs:sequence>
+      <xs:element name="Attribute" type="e5x:AttributeType" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="MetadataType">
+    <xs:sequence>
+      <xs:element name="Cir2026Trigger" type="xs:string"/>
+      <xs:element name="ShgmShyOlayDeadlineHours" type="xs:positiveInteger"/>
+      <xs:element name="VrtaFileSha256" type="xs:string"/>
+      <xs:element name="SidecarChainVerified" type="xs:boolean"/>
+      <xs:element name="NumericGroundingVerified" type="xs:boolean"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EntityWithAttributesType">
+    <xs:sequence>
+      <xs:element name="ATTRIBUTES" type="e5x:AttributesListType"/>
+    </xs:sequence>
+    <xs:attribute name="entityId" type="xs:positiveInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="NarrativeType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="entityId" type="xs:positiveInteger" fixed="22" use="required"/>
+        <xs:attribute name="language" type="e5x:NarrativeLangType" use="required"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="EntitiesType">
+    <xs:sequence>
+      <xs:element name="Aircraft" type="e5x:EntityWithAttributesType" minOccurs="1" maxOccurs="1"/>
+      <xs:element name="Event" type="e5x:EntityWithAttributesType" minOccurs="1" maxOccurs="unbounded"/>
+      <xs:element name="Narrative" type="e5x:NarrativeType" minOccurs="2" maxOccurs="2"/>
+      <xs:element name="PartInfo" type="e5x:EntityWithAttributesType" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="OccurrenceType">
+    <xs:sequence>
+      <xs:element name="ATTRIBUTES" type="e5x:AttributesListType"/>
+      <xs:element name="METADATA" type="e5x:MetadataType"/>
+      <xs:element name="ENTITIES" type="e5x:EntitiesType"/>
+    </xs:sequence>
+    <xs:attribute name="entityId" type="xs:positiveInteger" fixed="24" use="required"/>
+    <xs:attribute name="reportingStatus" type="e5x:ReportingStatusType" use="required"/>
+    <xs:attribute name="complianceClaim" type="e5x:ComplianceClaimType" use="required"/>
+  </xs:complexType>
+
+  <xs:element name="SET">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Occurrence" type="e5x:OccurrenceType" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="schemaVersion" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

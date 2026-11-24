@@ -103,6 +103,40 @@
             </details>
           </section>
 
+          <section class="panel" id="m3-panel">
+            <h2>M3 Perception, GNSS-Denied &amp; Voice ATC</h2>
+            <p id="m3-hud-summary" style="margin: 0 0 8px; font-size: 12px; opacity: 0.9">
+              M3 NOMINAL &bull; Wires 3/64 (22.0 m/s) &bull; H0_NOMINAL / BOUNDED_GNSS_DENIED_CRUISE
+            </p>
+            <dl class="kv-grid m3-kv">
+              <dt>Forward Wire/mmWave</dt><dd id="m3-forward-status">Wires 3/64 &bull; RADAR LOCK &bull; 22.0 m/s</dd>
+              <dt>GNSS Spoof Guard</dt><dd id="m3-gnss-status">H0_NOMINAL &bull; MCUSUM 0.18 (LAND)</dd>
+              <dt>Visual Geo-Reloc</dt><dd id="m3-reloc-status">XFeat+LighterGlue (64 inliers)</dd>
+              <dt>Nav FSM &amp; 3&sigma; CTR</dt><dd id="m3-fsm-status">BOUNDED_GNSS_DENIED_CRUISE &bull; 3&sigma;=4.5 m</dd>
+              <dt>Voice ATC Mondrian</dt><dd id="m3-voice-status">S1_Cruise &bull; |C|=1 &bull; sherpa-onnx 154 ms</dd>
+            </dl>
+            <div class="btn-grid" style="margin-top: 8px">
+              <button type="button" id="btn-m3-wire">Simulate Forward Wire + Grazing Cliff (15 m/s)</button>
+              <button type="button" id="btn-m3-spoof" class="danger">
+                Inject 1.0 m/s Slow-Ramp GNSS Spoof (H3 MCUSUM)
+              </button>
+              <button type="button" id="btn-m3-water" class="danger">
+                Simulate Marmara Open-Water VIO Drift (3&sigma; CTR Inflation)
+              </button>
+              <button type="button" id="btn-m3-voice-mayday" class="danger">
+                Voice ATC MAYDAY in S3_Garbled (Preempt + Readback)
+              </button>
+              <button type="button" id="btn-m3-e5x-preview">
+                1-Click .e5x Draft Incident Preview (ID 431 / SCF-NP)
+              </button>
+              <button type="button" id="btn-m3-reset" class="secondary">Reset M3 Nominal</button>
+            </div>
+            <details id="m3-e5x-details" class="fleet-details">
+              <summary>ECCAIRS2 .e5x Draft Incident Preview (CIR 2026/1821 &bull; ID 431 Draft Only)</summary>
+              <pre id="m3-e5x-xml-preview">Click 1-Click .e5x Draft Incident Preview to inspect grounded XML.</pre>
+            </details>
+          </section>
+
           <section class="panel" id="z3-panel">
             <h2>Z3-STL Audit &amp; Viewport Adapter</h2>
             <pre id="z3-audit-log">Adapter: MapLibre GL v6 + @deck.gl/maplibre v9.4 (MapView z&gt;=8, DPR&lt;=1.5)

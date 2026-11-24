@@ -1,0 +1,101 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.95in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{cite}
+
+\title{Conformal Bilingual Neuro-Symbolic Mission Synthesis and Safety-Bounded Active Visual Landing for Urban eVTOLs}
+
+\author{Anonymous Authors \\
+Double-Anonymous Submission (CoRL 2027, 8-Page Limit)}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Learned language and visual perception modules for urban electric vertical take-off and landing (eVTOL) operations face three acute deployment failures: (i)~ungrounded syntactic or airspace-violating mission commands under bilingual Turkish/English radio traffic; (ii)~under-covered or over-conservative uncertainty sets when pooled conformal calibration ignores language skew and coaxial blade-vortex-interaction (BVI) cockpit noise; and (iii)~catastrophic false-safe landing predictions when nadir-trained segmentation networks encounter oblique urban facades. We present an advisory-only perception and language reasoning layer strictly isolated outside an external deterministic Run-Time Assurance (RTA) cage~\cite{astm_f3269_2021,anonymous_rta_cage_2026}. Our framework combines: (1)~token-level GBNF-constrained decoding over a compact temporal-logic mission DSL trained with Z3 verifiable reinforcement learning (Z3-GRPO)~\cite{demoura_z3_2008}; (2)~language- and four-stratum cockpit-SNR-conditioned Mondrian split conformal gating ($\alpha=0.05$) with asymmetric MAYDAY preemption ($w_m \ge 0.15$) and deterministic low-battery liveness overrides ($<5.0\%$ reserve margin)~\cite{vovk_conformal_2005,ren_knowno_2023,angelopoulos_gentle_2023}; and (3)~zero-ShareAlike real-time Safe Landing Zone (SLZ) distillation (\texttt{PIDNet-S}) paired with boundary-compensated energy out-of-distribution (OOD) detection and lightweight \texttt{XFeat}+\texttt{LightGlue} visual relocalization~\cite{xu_pidnet_2023,liu_energy_ood_2020,potje_xfeat_2024,lindenberger_lightglue_2023}. Across live GPU baselines, GBNF+Z3+NLL calibration raises bilingual AST/STL accuracy from $11.25\%$ (zero-shot) to $91.96\%$ while cutting ECE $2.21\times$ ($0.3322 \to 0.1501$) and shrinking mean conformal set size from $5.438$ to $3.125$ at $95.36\%$ empirical coverage; asymmetric FSR-gated distillation lowers validation False-Safe Rate $5.24\times$ ($21.11\% \to 4.03\%$) and zero-shot AeroScapes FSR $9.46\times$ ($18.44\% \to 1.95\%$) while sustaining $8.89$\,ms p50 / $11.70$\,ms p99 ($<12.0$\,ms) and $155.0$\,MiB VRAM on a physical 4\,GB \texttt{GTX~1650~SUPER}. We openly document residual calibration, oblique-recall, and benchmark-provenance gaps and make \emph{no} airworthiness certification claim.
+\end{abstract}
+
+\section{Introduction and Neutral RTA Isolation}
+\label{sec:intro}
+
+Deploying learned perception and natural-language mission interfaces on urban eVTOL aircraft requires strict architectural containment. Rather than granting neural networks direct actuation authority, we treat the underlying bare-metal 400\,Hz fault-tolerant flight controller and 100\,Hz backward-reachability safety filter strictly as an external, deterministic ASTM~F3269-21 Run-Time Assurance (RTA) cage~\cite{astm_f3269_2021,anonymous_rta_cage_2026}. Every language-generated contingency proposal and every visual landing-zone prior operates at read-only advisory privilege: proposals must pass formal temporal/corridor verification before entering the mission queue, and landing priors can only rank candidate pads without overriding hard geofence or reachability barriers.
+
+\textbf{Scope and Non-Certification Statement:} All software, models, and benchmarks reported in this manuscript constitute a research and software-verification testbed only. We make \emph{no} DO-178C, EASA SC-VTOL, or SORA airworthiness claim, and we explicitly separate live measured baselines from pending batch GPU runs (rendered as dashes in Tables~\ref{tab:corl_copilot_mondrian}--\ref{tab:corl_slz_transfer}) and unexecuted external real-imagery evaluations.
+
+\textbf{Contributions:}
+\begin{enumerate}
+  \item \textbf{Bilingual Z3-GRPO Mission Synthesis:} Combining a deterministic token-level GBNF automaton with exact Microsoft Z3 corridor verification~\cite{demoura_z3_2008} eliminates syntactic failure ($100.00\%$ grammar validity) and raises held-out Turkish/English/code-switched AST/STL accuracy from $11.25\%$ to $91.96\%$, scaled to multi-seed training on \texttt{VertiBench-v2} with strict anti-contamination ($<0.15$ n-gram Jaccard, $0$ seed overlap).
+  \item \textbf{Language- and SNR-Stratified Mondrian Conformal Gating ($\alpha=0.05$):} Extending split conformal prediction~\cite{vovk_conformal_2005,ren_knowno_2023} across both language strata (\texttt{TR}, \texttt{EN}, \texttt{MIX}) and four coaxial cockpit BVI SNR strata (\texttt{S0\_Clean} through \texttt{S3\_Garbled}), backed by $N_{\text{cal}}=2{,}000$ ($n_g=500$/SNR stratum, $800$/primary language) and $100$ Monte Carlo calibration/test resplits to tighten finite-sample coverage bounds and drive mean prediction set size below $1.8$ while preserving MAYDAY emergency preemption ($w_m \ge 0.15$) and $<5.0\%$ state-of-charge (SoC) liveness commits.
+  \item \textbf{Zero-ShareAlike Active Visual SLZ Transfer:} Auditing training corpora to exclude ShareAlike and non-commercial contamination while quarantining \texttt{AeroScapes}~\cite{nigam_aeroscapes_2018}, \texttt{ICG~Drone}, and \texttt{UAVScenes} strictly for zero-shot evaluation, documenting the exact oblique-recall versus False-Safe Rate Pareto frontier and empirical \texttt{FP32+CUDA-Graph} versus \texttt{FP16} latency behavior on constrained Turing hardware (\texttt{GTX~1650~SUPER}).
+\end{enumerate}
+
+\section{Bilingual Z3-GRPO Mission Synthesis (\texttt{VertiBench-v2})}
+\label{sec:copilot}
+
+Urban operators and ATC controllers in multilingual metropolitan corridors issue terse, code-switched contingency requests referencing coastal vertiports, controlled-airspace boundaries, altitude limits, and battery reserves. Free-form LLM outputs frequently hallucinate waypoints or violate airport control-zone constraints. We map bilingual voice transcripts into a bounded $\le 30$-token mission DSL constrained during decoding by an exact token-level GBNF deterministic finite automaton, followed by a fail-closed Microsoft Z3 \texttt{QF\_LRA} corridor and reserve verifier~\cite{demoura_z3_2008} with one-pass UNSAT-core repair.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig1_bilingual_mondrian_pareto.pdf}
+  \caption{Bilingual neuro-symbolic synthesis and conformal calibration progression: (a)~grammar validity and exact AST/STL accuracy from zero-shot prompting to GBNF+Z3-verified SFT+Z3-GRPO; (b)~conformal efficiency frontier (mean set size $|C|$ versus singleton execution rate at $\alpha=0.05$, $\ge 95\%$ empirical coverage) comparing uncalibrated baselines, post-hoc NLL temperature scaling ($\tau=0.5066$), and the \texttt{VertiBench-v2} Mondrian target ($|C|<1.8$).}
+  \label{fig:bilingual_pareto}
+\end{figure*}
+
+During policy optimization, we train a 4B Apache-2.0 backbone (\texttt{Qwen3-4B}) via two-stage BF16 LoRA supervised fine-tuning followed by verifiable-reward Group Relative Policy Optimization (Z3-GRPO) using isolated \texttt{spawn} Z3 worker pools. On the frozen v1 held-out benchmark ($n_{\text{test}}=560$), live GPU evaluations (Table~\ref{tab:corl_copilot_mondrian}, Fig.~\ref{fig:bilingual_pareto}a) show that zero-shot \texttt{Qwen2.5-7B} ($0.00\%$ AST/STL) and \texttt{Qwen3-4B} ($11.25\%$) fail reliably, whereas SFT+Z3-GRPO combined with live GBNF+Z3 enforcement reaches $100.00\%$ grammar validity, $100.00\%$ Z3 constraint satisfaction, and $91.96\%$ AST/STL accuracy ($96.93\%$ TR, $100.00\%$ MIX, $75.00\%$ Bucket-3 adversarial refusal).
+
+\textbf{Honest Benchmark Provenance and \texttt{VertiBench-v2} Upgrade:} Prior pooled v1 calibration ($n_{\text{cal}}=200$) exposed two limitations: an English Bucket-3 adversarial imbalance and wide finite-sample Beta-Binomial intervals ($[91.63\%, 97.58\%]$). To address both without claiming premature human annotation, \texttt{VertiBench-v2} freezes v1 and introduces a balanced Track~A voice-contingency benchmark ($3{,}600$ train, $N_{\text{cal}}=2{,}000$, $N_{\text{test}}=1{,}200$) plus a 200-scenario multi-aircraft Track~B suite, enforcing five-layer anti-contamination (disjoint lexical templates, zero seed overlap, character 5-gram and token 3-gram Jaccard $<0.15$, held-out acoustic homophone corruptions, and zero static canary strings). Every split carries the explicit provenance lock \texttt{PROGRAMMATIC\_PARAPHRASE\_HELDOUT\_LOW\_JACCARD\_PENDING\_HUMAN\_NATIVE\_V2}; genuine human-native operator recordings remain an explicit future campaign rather than an unsubstantiated claim.
+
+\section{Language- and SNR-Stratified Mondrian Conformal Gating}
+\label{sec:mondrian}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig2_snr_stratum_coverage.pdf}
+  \caption{Finite-sample Mondrian calibration design at $\alpha=0.05$: (a)~exact 95\% Beta-Binomial coverage width as a function of per-group calibration size $n_g$, contrasting pooled v1 ($n=200$) against \texttt{VertiBench-v2} per-SNR ($n_g=500$) and per-language ($n_\ell=800$) groups; (b)~four-stratum coaxial BVI cockpit SNR allocation and safety-prioritized escalation policy.}
+  \label{fig:snr_mondrian}
+\end{figure*}
+
+Pooled split conformal prediction guarantees marginal coverage $1-\alpha$ across the full test distribution, but fails conditionally when acoustic degradation or morphological differences shift non-conformity distributions~\cite{vovk_conformal_2005,angelopoulos_gentle_2023}. Under heavy 8-rotor coaxial cockpit noise ($1{,}100$--$2{,}292$\,RPM, $55.0$--$114.6$\,Hz blade-passing fundamental and $2B$ crossover harmonics), speech recognition uncertainty from dual-tier \texttt{whisper.cpp} decoding~\cite{radford_whisper_2023} varies sharply with signal-to-noise ratio (SNR).
+
+We calibrate temperature and length-normalization parameters $(\gamma^*,\tau^*)$ strictly via 5-fold cross-validation on the calibration split (preventing test leakage~\cite{guo_calibration_2017}) and define a composite voice non-conformity score fusing calibrated sequence probability $p_{\text{cal}}$, normalized $K=4$ N-best Shannon entropy $H_{\text{nbest}}$, minimum safety-slot token probability $p_{\min,\text{slot}}$, and no-speech probability $p_{\text{ns}}$:
+\begin{equation}
+  s_{\text{voice}}(x,y) = \mathrm{clip}_{[0,1]}\!\Bigl(1 - p_{\text{cal}}(y\mid x) + \lambda_H H_{\text{nbest}} + \lambda_{\text{slot}}(1 - p_{\min,\text{slot}}) + \lambda_{\text{ns}} p_{\text{ns}}\Bigr).
+  \label{eq:voice_score}
+\end{equation}
+For each Mondrian group $g$ (language $\ell \in \{\texttt{TR},\texttt{EN},\texttt{MIX}\}$ and cockpit SNR stratum $s \in \{\texttt{S0\_Clean}, \texttt{S1\_Cruise}, \texttt{S2\_Hover}, \texttt{S3\_Garbled}\}$, Table~\ref{tab:corl_snr_strata}), we compute the exact finite-sample quantile $\hat{q}_g$ at order statistic $\lceil (n_g+1)(1-\alpha) \rceil / n_g$ with $\alpha=0.05$ and take the conservative envelope $\max(\hat{q}_\ell, \hat{q}_s)$ whenever joint cells fall below $250$ samples (Fig.~\ref{fig:snr_mondrian}).
+
+\textbf{Safety-Prioritized Liveness and Emergency Overrides:} Two deterministic overrides sit above the conformal set $|C_g|$: (i)~asymmetric MAYDAY/PAN-PAN preemption triggers immediately whenever emergency acoustic weight $w_m \ge 0.15$ even inside \texttt{S3\_Garbled} ($<2$\,dB), preventing dangerous silence under distress; and (ii)~when remaining battery margin above reserve falls below $5.0\%$ SoC, a deterministic \texttt{LIVENESS\_EMERGENCY\_COMMIT} selects the highest-scoring Z3-feasible safe diversion pad rather than entering a multi-turn clarification loop. On live v3.5.1 baselines, calibration-only NLL temperature scaling ($\tau=0.5066$) reduced test ECE from $0.3322$ to $0.1501$, lowered mean set size from $5.438$ to $3.125$, and lifted singleton execution from $0.00\%$ to $22.86\%$ at $95.36\%$ coverage (Fig.~\ref{fig:bilingual_pareto}b); Phase-3 multi-seed G4 evaluation with 100 Monte Carlo resplits tests whether joint $(\gamma,\tau)$ CV and balanced \texttt{VertiBench-v2} training drive mean set size below $1.8$.
+
+\input{generated/corl_tables.tex}
+
+\section{Zero-ShareAlike Active Visual SLZ Transfer and Edge Latency}
+\label{sec:slz}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig3_slz_real_transfer_pareto.pdf}
+  \caption{Active visual SLZ real-imagery transfer and physical edge profiling: (a)~False-Safe Rate (FSR) versus semantic mIoU across permissive validation and quarantined zero-shot \texttt{AeroScapes} transfer; (b)~physical \texttt{GTX~1650~SUPER} (TU116, 4\,GB) network latency comparing \texttt{FP32+CUDA-Graph} ($8.89$\,ms p50 / $11.70$\,ms p99 $<12$\,ms gate) against the empirical \texttt{FP16} regression ($34.73$\,ms p50 / $109.68$\,ms p99).}
+  \label{fig:slz_pareto}
+\end{figure*}
+
+Emergency safe landing zone (SLZ) assessment maps aerial RGB imagery to five safety-ordered classes (\texttt{Safe\_Flat\_Ground}, \texttt{Safe\_Flat\_Roof}, \texttt{Hazard\_Obstacle\_Structure}, \texttt{Hazard\_Dynamic\_Human\_Vehicle}, \texttt{Hazard\_Water\_Vegetation}), surface normals, and boundary-compensated free-energy OOD scores~\cite{liu_energy_ood_2020} feeding a bounded 2.5D Bayesian grid. To keep all trained weights strictly Apache-2.0/permissive, our ingestion firewall filters OpenEarthMap live against its attribution table (rejecting $1{,}296$ non-permissive pairs pre-download) and combines strictly permissive sources (\texttt{FLAIR-1}, filtered \texttt{OpenEarthMap}, \texttt{FloodNet}, and \texttt{SkyScenes} with surface-normal facade remapping affecting $49.4\%$ of building pixels). Real oblique UAV benchmarks — \texttt{AeroScapes}~\cite{nigam_aeroscapes_2018}, \texttt{ICG~Drone}, and \texttt{UAVScenes} — are strictly quarantined for zero-shot evaluation only and never enter training or calibration.
+
+Distilling Apache-2.0 foundation teachers into an $8.00$\,M-parameter static-PAPPM \texttt{PIDNet-S}~\cite{xu_pidnet_2023} exposes an instructive safety-accuracy trade-off (Table~\ref{tab:corl_slz_transfer}, Fig.~\ref{fig:slz_pareto}a): adding oblique \texttt{SkyScenes} frames and asymmetric False-Safe Rate gating lifted permissive validation mIoU from $0.3764$ to $0.4848$ ($+10.84$\,pp) while cutting validation FSR $5.24\times$ ($21.11\% \to 4.03\% \le 8.0\%$) and zero-shot \texttt{AeroScapes} FSR $9.46\times$ ($18.44\% \to 1.95\%$). Transparently, the heavy FSR penalty over-suppressed oblique ground recall on \texttt{AeroScapes} (mIoU $0.3395 \to 0.2387$), motivating the balanced focal/FSR objective scheduled for \texttt{PIDNet-S v2.1} alongside lightweight \texttt{XFeat}+\texttt{LightGlue}~\cite{potje_xfeat_2024,lindenberger_lightglue_2023} visual relocalization.
+
+On physical constrained hardware (\texttt{NVIDIA GTX~1650~SUPER}, TU116, 4\,GB VRAM, \texttt{ONNX Runtime 1.23.2}), empirical profiling disproved the common assumption that \texttt{FP16} accelerates compact segmentation models on Turing non-tensor-core paths: \texttt{FP16} regressed to $34.73$\,ms p50 / $109.68$\,ms p99, whereas \texttt{FP32} with CUDA Graphs and exhaustive cuDNN search achieved $8.89$\,ms p50, $11.70$\,ms p99 ($<12.0$\,ms edge gate), and $155.0$\,MiB VRAM delta ($<300$\,MiB budget; Fig.~\ref{fig:slz_pareto}b).
+
+\section{Limitations and Reproducibility}
+\label{sec:limitations}
+
+Four honest boundaries frame this study: (1)~\texttt{VertiBench-v2} remains a low-Jaccard programmatic paraphrase benchmark pending a future human-native Turkish/English cockpit speech collection campaign; (2)~all Phase-3 batch GPU cells (\texttt{Qwen3-4B v3}, 4-stratum \texttt{Whisper} BVI LoRA, \texttt{PIDNet-S v2.1}, \texttt{XFeat} Kartal relocalization) and unrun external zero-shot benchmarks (\texttt{ICG~Drone}, \texttt{UAVScenes}) are explicitly marked with dashes rather than extrapolated; (3)~physical embedded flight-computer hardware-in-the-loop timing and full 6-DOF closed-loop visual SITL remain outside this advisory-layer evaluation; and (4)~every baseline number in Tables~\ref{tab:corl_copilot_mondrian}--\ref{tab:corl_slz_transfer} and Figs.~\ref{fig:bilingual_pareto}--\ref{fig:slz_pareto} is programmatically verified against SHA-256-pinned JSON manifests with zero manual transcription.
+
+\bibliographystyle{plain}
+\bibliography{references_corl}
+
+\end{document}

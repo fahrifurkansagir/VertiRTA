@@ -1,0 +1,48 @@
+{
+  "schema_version": "vertirta.vertibench_v2/v1.0.0",
+  "provenance_tag": "PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_V2",
+  "seed": 20261124,
+  "counts": {
+    "train": 2240,
+    "calibration": 2000,
+    "cal": 2000,
+    "test": 1200,
+    "fleet20": 200
+  },
+  "canonical_snr_strata": [
+    "S0_Clean",
+    "S1_Cruise",
+    "S2_Hover",
+    "S3_Garbled"
+  ],
+  "vertiports": {
+    "Kartal_Sahil": {
+      "lat_deg": 40.886,
+      "lon_deg": 29.188
+    },
+    "Dragos_Plaza": {
+      "lat_deg": 40.91686,
+      "lon_deg": 29.13822
+    },
+    "Maltepe_Park": {
+      "lat_deg": 40.94016,
+      "lon_deg": 29.1079
+    },
+    "Cevizli_Helipad": {
+      "lat_deg": 40.9038,
+      "lon_deg": 29.1545
+    }
+  },
+  "file_sha256": {
+    "train.jsonl": "3f52e1617a53dc4c65d8cc9f6a7f2558dd606ce802c1061e411e57f04a484ded",
+    "cal.jsonl": "c7f53f713810b0b3edba5d4c710da7f0853595cbc5f841d9154fa8934dc94e84",
+    "test.jsonl": "ef71ffd6f1c83992efec4e12a101dbb94d56f22ba0a2b7a0c5ed15d5e24588c9",
+    "fleet20.jsonl": "3fbe725e299d2d0234d470e629e9254468ae5472d535d5893ff69910cba0f9bd"
+  },
+  "file_bytes": {
+    "train.jsonl": 957287,
+    "cal.jsonl": 885165,
+    "test.jsonl": 532346,
+    "fleet20.jsonl": 117544
+  }
+}

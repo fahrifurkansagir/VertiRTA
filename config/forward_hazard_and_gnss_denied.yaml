@@ -1,0 +1,127 @@
+# Canonical M3 (v4.0.0) Forward Hazard & GNSS-Denied Navigation Lock
+# Enforces 01-DR08-13 Overrides #1-#8, config/vehicle_x8_240.yaml, and config/istanbul_ltfj_airspace.yaml.
+# DISCLAIMER: Research & simulation testbed parameters ONLY — NOT for certified airborne navigation.
+schema_version: 1
+
+vehicle_canonical_lock:
+  r_veh_m: 2.10
+  mass_kg: 240.0
+  a_xy_max_mps2: 5.5
+  v_max_nominal_mps: 22.0
+  v_max_radar_degraded_mps: 15.0
+  t_react_s: 0.60
+
+airspace_canonical_lock:
+  kartal_datum_lat_deg: 40.8860
+  kartal_datum_lon_deg: 29.1880
+  kartal_datum_alt_amsl_m: 12.0
+  kartal_datum_egm2008_n_m: 36.7
+  max_lon_near_j2_deg: 29.1895
+  ltfj_arp_lat_deg: 40.898333
+  ltfj_arp_lon_deg: 29.309167
+  ltfj_radius_m: 9260.0
+  ltfj_ceil_amsl_m: 762.0
+  # Verified DHMI AIP Turkey LTBX ARP: 40d59m26sN 029d12m58sE (supersedes DR-10 stale 40d59m56sN)
+  ltbx_arp_lat_deg: 40.990556
+  ltbx_arp_lon_deg: 29.216111
+  ltbx_radius_m: 9260.0
+  ltbx_ceil_amsl_m: 609.6
+
+forward_camera_split_stack:
+  # Strictly decoupled from locked 512x512 80 deg nadir SLZ camera (fx = 305.09 px)
+  nadir_slz_locked_width_px: 512
+  nadir_slz_locked_height_px: 512
+  nadir_slz_locked_hfov_deg: 80.0
+  nadir_slz_locked_fx_px: 305.09
+  forward_width_px: 1280
+  forward_height_px: 720
+  forward_hfov_deg: 45.0
+  forward_f_net_px: 1545.1
+  horizon_roi_width_px: 1280
+  horizon_roi_height_px: 320
+  stacked_width_px: 640
+  stacked_height_px: 640
+  seam_overlap_px: 16
+  max_imu_derotate_deg: 20.0
+
+forward_onnx_runtime:
+  # Override #6: GTX 1650 SUPER (TU116) FP16 is 2.5-3.4x slower than FP32+CUDA Graph
+  enable_fp16: false
+  enable_cuda_graph: true
+  vram_budget_mib: 300
+  mlsd_wireseg_model: "mlsd_wireseg_cldice_op17.onnx"
+  dfine_n_model: "dfine_n_intruder_op17.onnx"
+
+forward_fusion:
+  pose_ring_hz: 200
+  pose_ring_horizon_s: 2.0
+  pose_max_extrapolation_ms: 25.0
+  interp_plane_chi2_gate_2dof: 9.21
+  grazing_parallax_min_deg: 3.0
+  grazing_standoff_range_m: 35.0
+  grazing_standoff_extra_radius_m: 1.50
+  max_wire_capsules: 64
+  max_intruder_tracks: 16
+  max_segments_per_span: 4
+  catenary_wire_clearance_m: 0.35
+
+px4_v116_gnss_lock:
+  # Override #4: PX4 v1.16 (NOT v1.18 vehicle_gnss / SENS_GNSS0_DELAY)
+  px4_version: "v1.16"
+  gps_topic: "/fmu/out/vehicle_gps_position"
+  gps_delay_param: "EKF2_GPS_DELAY"
+  ekf2_gps_delay_ms: 110.0
+  uxrce_dds_synct: 1
+
+gnss_denied_vio:
+  primary_backend: "basalt_bsd3"
+  stereo_baseline_m: 0.80
+  stereo_baseline_min_m: 0.50
+  mask_pidnet_water_pixels: true
+  allow_gnss_feedback_into_vio: false
+
+gnss_spoof_guard:
+  rate_hz: 10.0
+  lag_baseline_epochs_l2: 150
+  guard_band_epochs_l1: 50
+  rollback_horizon_s: 2.0
+  h1_cn0_min_dbhz: 24.0
+  h1_cn0_drop_db: 10.0
+  h1_hdop_max: 2.5
+  h2_step_window_epochs: 5
+  h2_step_chi2_10dof_thresh: 23.21
+  h2_step_jump_m: 4.0
+  h3a_land_water_frac_max: 0.20
+  h3a_water_frac_min: 0.35
+  h3a_land_k_d: 0.25
+  h3a_land_h_t: 2.0
+  h3a_water_k_d: 0.35
+  h3a_water_h_t: 3.4
+  h3b_glrt_short_s: 1.5
+  h3b_glrt_long_s: 4.0
+  sigma_init_spoof_m: 3.5
+  sigma_init_jam_m: 2.0
+
+visual_georeloc:
+  rate_hz: 1.0
+  local_matcher: "xfeat_lighterglue_apache2"
+  lost_in_space_retriever: "megaloc_mit"
+  megaloc_trigger_sigma_m: 50.0
+  min_ransac_inliers: 25
+  max_reproj_rmse_px: 2.5
+  min_convex_hull_ratio: 0.25
+  mahalanobis_chi2_2dof_gate: 9.21
+  ortho_gsd_m: 0.5
+  sentinel2_gross_blunder_cep50_m: 45.0
+
+ctr_inflation_and_fsm:
+  b_map_m: 2.0
+  q_rw_m2_per_s: 0.04
+  kappa_drift_fraction: 0.008
+  sigma_caution_m: 25.0
+  sigma_abort_m: 65.0
+  cbvf_infeasibility_floor_m: 80.0
+  nominal_3sigma_target_m: 25.0
+  caution_v_max_mps: 13.5
+  fsm_hysteresis_m: 5.0
+  ctr_activation_base_margin_m: 500.0

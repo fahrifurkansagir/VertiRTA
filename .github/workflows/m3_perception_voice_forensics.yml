@@ -1,0 +1,327 @@
+name: VertiRTA M3 Forward Hazard, GNSS-Denied, Voice ATC & Regulatory Forensics CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "config/forward_hazard_and_gnss_denied.yaml"
+      - "config/voice_atc.yaml"
+      - "config/forensics_eccairs2.yaml"
+      - "config/eccairs2_nodigit.gbnf"
+      - "core/forward_hazard/**"
+      - "core/gnss_denied/**"
+      - "core/voice/**"
+      - "core/forensics/**"
+      - "sim/gazebo_plugins/mmwave_77ghz/**"
+      - "ros2_ws/src/vertirta_forward_hazard_node/**"
+      - "ros2_ws/src/vertirta_gnss_denied_node/**"
+      - "ros2_ws/src/vertirta_voice_node/**"
+      - "apps/vertigcs/**"
+      - "benchmarks/vertibench_v2/**"
+      - "ml/voice/**"
+      - "ml/copilot/calibrate_conformal.py"
+      - "docs/paper_corl/**"
+      - "scripts/colab/**"
+      - "scripts/bench_gtx1650s_m3_timesliced.py"
+      - "scripts/ci/check_zero_gpl_symbols.py"
+      - "tests/forward_hazard/**"
+      - "tests/gnss_denied/**"
+      - "tests/voice/**"
+      - "tests/forensics/**"
+      - "tests/vertibench_v2/**"
+      - "tests/colab/**"
+      - "tests/integration/test_m3_voice_node_contracts.py"
+      - "tests/ci/test_m3_workflow_contracts.py"
+      - ".github/workflows/m3_perception_voice_forensics.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LIBSODIUM_VERSION: "1.0.22"
+  LIBSODIUM_URL: "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz"
+  LIBSODIUM_FALLBACK_URL: "https://github.com/jedisct1/libsodium/releases/download/1.0.22-RELEASE/libsodium-1.0.22.tar.gz"
+  LIBSODIUM_SHA256: "adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349"
+
+jobs:
+  m3_cpp_matrix:
+    name: "M3 Cross-ISA C++20 Release Matrix (${{ matrix.arch }}, native libsodium 1.0.22 + libz3)"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install C++20 Toolchain, pkg-config & Native libz3-dev (NEVER vulnerable apt libsodium 1.0.18)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build make gcc-14 g++-14 pkg-config libz3-dev curl
+
+      - name: Cache Pinned Immutable libsodium 1.0.22 Build
+        id: cache_sodium
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/vertirta-libsodium-1.0.22
+          key: libsodium-${{ runner.os }}-${{ matrix.arch }}-1.0.22-adbdd8f16149
+
+      - name: Build Immutable libsodium-1.0.22.tar.gz with Verified SHA-256 (>= 1.0.21 CVE Lock)
+        if: steps.cache_sodium.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          mkdir -p "${LIBSODIUM_PREFIX}"
+          curl -fsSL "${LIBSODIUM_URL}" -o /tmp/libsodium-1.0.22.tar.gz \
+            || curl -fsSL "${LIBSODIUM_FALLBACK_URL}" -o /tmp/libsodium-1.0.22.tar.gz
+          echo "${LIBSODIUM_SHA256}  /tmp/libsodium-1.0.22.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/libsodium-1.0.22.tar.gz -C /tmp
+          cd /tmp/libsodium-1.0.22
+          ./configure --prefix="${LIBSODIUM_PREFIX}" --disable-static
+          make -j"$(nproc)"
+          make install
+          rm -rf /tmp/libsodium-1.0.22 /tmp/libsodium-1.0.22.tar.gz
+
+      - name: Build Full Unified Release C++20 Suite (M0+M1+M2+M3, Strict FP, Zero Fallback)
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          pkg-config --modversion libsodium
+          cmake -S . -B build-m3-release -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m3-release -j
+          ctest --test-dir build-m3-release --output-on-failure -j4
+
+      - name: Build & Verify Standalone Non-ROS2 M3 Node Host CLIs
+        run: |
+          set -euo pipefail
+          for pkg in vertirta_forward_hazard_node vertirta_gnss_denied_node vertirta_voice_node; do
+            cmake -S "ros2_ws/src/${pkg}" -B "build-m3-ros2-${pkg}" -G Ninja \
+              -DCMAKE_C_COMPILER=gcc-14 \
+              -DCMAKE_CXX_COMPILER=g++-14 \
+              -DCMAKE_BUILD_TYPE=Release
+            cmake --build "build-m3-ros2-${pkg}" -j
+            "./build-m3-ros2-${pkg}/${pkg}_cli"
+          done
+
+  m3_sanitizers_gpl_and_size_locks:
+    name: "M3 ASan/UBSan + TSan + Zero-GPL Runtime Gate + Cortex-M7 Frozen Size Lock"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Host, Z3, ARM Bare-Metal & Python Toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build make gcc-14 g++-14 pkg-config libz3-dev curl \
+            gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi \
+            python3 python3-pip
+
+      - name: Cache Pinned Immutable libsodium 1.0.22 Build
+        id: cache_sodium_san
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/vertirta-libsodium-1.0.22
+          key: libsodium-${{ runner.os }}-x86_64-1.0.22-adbdd8f16149
+
+      - name: Build Immutable libsodium-1.0.22.tar.gz with Verified SHA-256
+        if: steps.cache_sodium_san.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          mkdir -p "${LIBSODIUM_PREFIX}"
+          curl -fsSL "${LIBSODIUM_URL}" -o /tmp/libsodium-1.0.22.tar.gz \
+            || curl -fsSL "${LIBSODIUM_FALLBACK_URL}" -o /tmp/libsodium-1.0.22.tar.gz
+          echo "${LIBSODIUM_SHA256}  /tmp/libsodium-1.0.22.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/libsodium-1.0.22.tar.gz -C /tmp
+          cd /tmp/libsodium-1.0.22
+          ./configure --prefix="${LIBSODIUM_PREFIX}" --disable-static
+          make -j"$(nproc)"
+          make install
+          rm -rf /tmp/libsodium-1.0.22 /tmp/libsodium-1.0.22.tar.gz
+
+      - name: Build & Run ASan + UBSan on All M3 C++20 Test Suites (Native libsodium + libz3)
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          cmake -S . -B build-m3-asan -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m3-asan --target \
+            test_forward_hazard_fusion \
+            test_mmwave_77ghz_sensor \
+            test_gnss_spoof_mcusum_vio \
+            test_visual_reloc_and_ctr_inflation \
+            test_voice_pipeline \
+            test_mondrian_voice_gate \
+            test_forensics_sidecar_ercs_e5x \
+            vertirta_forensics_cli -j
+          ctest --test-dir build-m3-asan \
+            -R "^(test_forward_hazard_fusion|test_mmwave_77ghz_sensor|test_gnss_spoof_mcusum_vio|test_visual_reloc_and_ctr_inflation|test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x)$" \
+            --output-on-failure -j4
+
+      - name: Build & Run TSan on M3 Voice & Forensics Suites (Targeted libz3 Suppression)
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export PKG_CONFIG_PATH="${LIBSODIUM_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export CMAKE_PREFIX_PATH="${LIBSODIUM_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          cmake -S . -B build-m3-tsan -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DVERTIRTA_BUILD_COMPANION=ON \
+            -DVERTIRTA_BUILD_TESTS=ON \
+            -DVERTIRTA_ENABLE_STRICT_FP=ON \
+            -DVERTIRTA_REQUIRE_LIBSODIUM=ON \
+            -DVERTIRTA_REQUIRE_Z3=ON
+          cmake --build build-m3-tsan --target \
+            test_voice_pipeline \
+            test_mondrian_voice_gate \
+            test_forensics_sidecar_ercs_e5x -j
+          printf 'mutex:libz3.so\ncalled_from_lib:libz3.so\n' > /tmp/tsan_libz3.supp
+          TSAN_OPTIONS="suppressions=/tmp/tsan_libz3.supp" \
+            ctest --test-dir build-m3-tsan \
+              -R "^(test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x)$" \
+              --output-on-failure -j4
+
+      - name: Cross-Compile Cortex-M7 Flight Core (0 B RAM, Zero Heap, Frozen 28886 B Baseline)
+        run: |
+          set -euo pipefail
+          cmake --preset arm-cortex-m7
+          cmake --build --preset arm-cortex-m7 --target vertirta_flight_core
+          python3 scripts/ci/check_no_heap_symbols.py \
+            --archive build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --nm-bin arm-none-eabi-nm \
+            --out build/m3_cm7_noheap.json
+          python3 scripts/ci/check_bare_metal_size.py \
+            --target build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+            --size-bin arm-none-eabi-size \
+            --max-flash-bytes 32768 \
+            --max-ram-bytes 1 \
+            --out build/m3_cm7_size.json
+
+      - name: Enforce Extended Zero-GPL Runtime Symbol Gate, Architecture Isolation & Public Hygiene
+        run: |
+          set -euo pipefail
+          LIBSODIUM_PREFIX="${HOME}/.local/vertirta-libsodium-1.0.22"
+          export LD_LIBRARY_PATH="${LIBSODIUM_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+          python3 scripts/ci/check_zero_gpl_symbols.py \
+            --targets \
+              build/arm-cortex-m7/core/flight_core/libvertirta_flight_core.a \
+              build-m3-asan/core/rta_companion/libvertirta_rta_companion.a \
+              build-m3-asan/core/forward_hazard/libvertirta_forward_hazard.a \
+              build-m3-asan/sim/gazebo_plugins/mmwave_77ghz/libvertirta_mmwave_77ghz_physics.a \
+              build-m3-asan/core/gnss_denied/libvertirta_gnss_denied.a \
+              build-m3-asan/core/voice/libvertirta_voice.a \
+              build-m3-asan/core/forensics/libvertirta_forensics.a \
+              build-m3-asan/core/forensics/vertirta_forensics_cli \
+              build-m3-asan/tests/forward_hazard/test_forward_hazard_fusion \
+              build-m3-asan/tests/forward_hazard/test_mmwave_77ghz_sensor \
+              build-m3-asan/tests/gnss_denied/test_gnss_spoof_mcusum_vio \
+              build-m3-asan/tests/gnss_denied/test_visual_reloc_and_ctr_inflation \
+              build-m3-asan/tests/voice/test_voice_pipeline \
+              build-m3-asan/tests/voice/test_mondrian_voice_gate \
+              build-m3-asan/tests/forensics/test_forensics_sidecar_ercs_e5x \
+            --source-roots \
+              core/forward_hazard \
+              core/gnss_denied \
+              sim/gazebo_plugins/mmwave_77ghz \
+              core/voice \
+              core/forensics \
+              ros2_ws/src/vertirta_forward_hazard_node \
+              ros2_ws/src/vertirta_gnss_denied_node \
+              ros2_ws/src/vertirta_voice_node \
+            --out build/m3_zero_gpl_audit.json
+          python3 scripts/ci/check_arch_isolation.py --repo-root . --out build/m3_arch_isolation.json
+          python3 scripts/ci/check_public_hygiene.py --repo-root . --out build/m3_public_hygiene.json
+
+  m3_python_and_dryrun_contracts:
+    name: "M3 License Firewall, VertiBench-v2, Forensics XSD, Paper 2 CoRL & 0-CU G4 Dry-Run"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run M3 Python Contracts, XSD Grounding, Paper 2 CoRL & 0-CU G4 Dry-Run Gates
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$PWD" uv run --no-project --python 3.11 \
+            --with pytest --with pyyaml --with numpy --with scipy --with lxml --with matplotlib --with z3-solver \
+            pytest \
+              tests/forward_hazard/test_forward_data_license_gate.py \
+              tests/vertibench_v2/ \
+              tests/forensics/test_e5x_xsd_and_grounding.py \
+              tests/integration/test_m3_voice_node_contracts.py \
+              docs/paper_corl/tests/test_paper_corl_contracts.py \
+              tests/colab/test_g4_thunder_contracts.py \
+              tests/ci/test_m3_workflow_contracts.py \
+              tests/wind_acoustics/test_zero_gpl_gate.py -v
+          python3 scripts/colab/run_g4_m3_thunder_run.py --dry-run
+
+  m3_vertigcs_build_and_wasm_lock:
+    name: "M3 VertiGCS Vitest, Production & GitHub Pages Build + WASM Size Lock"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "apps/vertigcs/package-lock.json"
+
+      - name: Install, Test & Build VertiGCS (Local + /VertiRTA/ Pages Base, COI=False)
+        working-directory: apps/vertigcs
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+          npx vite build --base /VertiRTA/
+          test -n "$(find dist/assets -name 'maplibre-gl-worker-*.mjs' -print -quit)"
+          ! grep -E "Cross-Origin-Opener-Policy|Cross-Origin-Embedder-Policy|SharedArrayBuffer|coi-serviceworker" dist/index.html

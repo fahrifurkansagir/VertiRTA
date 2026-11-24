@@ -32,6 +32,11 @@ if(VERTIRTA_BUILD_COMPANION)
       core/wind_acoustics
       core/uspace_fleet
       core/fleet_z3
+      core/forward_hazard
+      sim/gazebo_plugins/mmwave_77ghz
+      core/gnss_denied
+      core/voice
+      core/forensics
       tools/cli
       sim/colab_egl)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_vertirta_opt_dir}/CMakeLists.txt")
@@ -50,6 +55,10 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/wind_acoustics/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/uspace_fleet/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/fleet_z3/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/forward_hazard/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/gnss_denied/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/voice/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/forensics/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
     FetchContent_Declare(
@@ -85,6 +94,18 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/fleet_z3/CMakeLists.txt")
     add_subdirectory(tests/fleet_z3)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/forward_hazard/CMakeLists.txt")
+    add_subdirectory(tests/forward_hazard)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/gnss_denied/CMakeLists.txt")
+    add_subdirectory(tests/gnss_denied)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/voice/CMakeLists.txt")
+    add_subdirectory(tests/voice)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/forensics/CMakeLists.txt")
+    add_subdirectory(tests/forensics)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt")
     add_subdirectory(core/slz_bayes/tests)

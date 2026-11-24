@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 (v4.0.0) Offline Cockpit-Noise TR/EN Voice ATC Configuration
+# Strictly aligned with config/vehicle_x8_240.yaml (Erratum #1) and Zero-GPL Firewall (Erratum #8).
+schema_version: "vertirta.voice_atc/v1.0.0"
+
+vehicle_acoustics_ref:
+  source_config: "config/vehicle_x8_240.yaml"
+  rotor_count: 8
+  blades_per_rotor: 3
+  rotor_radius_m: 0.75
+  coax_spacing_m: 0.35
+  rpm_min: 1100.0
+  rpm_hover: 1449.6
+  rpm_max: 2291.8
+  bpf_hover_hz: 72.5
+  bpf_max_hz: 114.6
+
+vad:
+  engine: "silero-vad-v6.2.0"
+  license: "MIT"
+  sample_rate_hz: 16000
+  frame_samples: 512
+  speech_prob_threshold: 0.50
+  pre_speech_pad_ms: 300
+  hangover_ms: 450
+  max_utterance_s: 12.0
+
+asr:
+  engine: "whisper.cpp"
+  license: "MIT"
+  fast_tier_model: "whisper-small-q8_0"
+  verify_tier_model: "whisper-large-v3-turbo-q8_0"
+  translate: false
+  no_context: true
+  carry_initial_prompt: true
+  min_audio_ctx: 256
+  max_audio_ctx: 384
+  audio_ctx_multiple: 64
+  nbest_k: 4
+  escalate_plog_threshold: -0.35
+  escalate_snr_db_threshold: 8.0
+  escalate_slot_prob_threshold: 0.80
+  initial_prompt: "Kartal Sahil, Dragos Plaza, Maltepe Park, Cevizli Helipad, LTFJ, LTBX, MAYDAY, PAN-PAN, irtifa, divert, hold loiter, abort return"
+
+tts:
+  engine: "sherpa-onnx"
+  min_version: "2.0.0"
+  license: "Apache-2.0"
+  zero_espeak_ng_verified: true
+  zero_piper_phonemize_verified: true
+  ttfa_budget_ms: 250.0
+  num_threads: 2
+  sample_rate_hz: 16000
+  allowed_en_voices:
+    - "en_US-ljspeech-medium"
+    - "en_US-libritts_r-medium"
+  allowed_tr_voices:
+    - "tr_TR-ema-lightning-apache2"
+    - "tr_TR-okur-tts-apache2"
+    - "vits-piper-tr_TR-vertirta-clean"
+  banned_voices_and_engines:
+    - "piper1-gpl"
+    - "espeak-ng"
+    - "piper-phonemize"
+    - "tr_TR-dfki-medium"
+    - "tr_TR-fahrettin-medium"
+    - "tr_TR-fettah-medium"
+    - "en_US-lessac-medium"
+    - "en_US-ryan-medium"
+    - "en_US-hfc_female-medium"
+    - "en_US-l2arctic-medium"
+    - "xtts-v2"
+    - "mms-tts-tur"
+    - "mms-tts-eng"
+    - "omnivoice"
+    - "supertonic"
+    - "matcha-icefall"
+
+mondrian_conformal_gate:
+  alpha: 0.05
+  loiter_liveness_min_soc_margin_pct: 5.0
+  mayday_asymmetric_weight_floor: 0.15
+  nospeech_abstain_threshold: 0.70
+  uncertainty_weights:
+    lambda_entropy: 0.12
+    lambda_slot_uncertainty: 0.18
+    lambda_nospeech: 0.25
+  snr_strata:
+    S0_Clean:
+      min_snr_db: 15.0
+      default_q_hat: 0.35
+    S1_Cruise:
+      min_snr_db: 8.0
+      max_snr_db: 15.0
+      default_q_hat: 0.45
+    S2_Hover:
+      min_snr_db: 2.0
+      max_snr_db: 8.0
+      default_q_hat: 0.60
+    S3_Garbled:
+      max_snr_db: 2.0
+      default_q_hat: 0.78

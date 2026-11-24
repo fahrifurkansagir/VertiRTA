@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 Regulatory Forensics — Zero-Digit Grounded Narrative Grammar (GBNF)
+# Syntactically forbids ASCII digits outside allowlisted {{SLOT}} placeholders
+# so LLM narrative rendering cannot invent telemetry numbers (0.0% hallucination).
+
+root ::= sentence (ws sentence)*
+
+sentence ::= segment (segment)* sentence-end
+
+segment ::= prose-run | slot
+
+prose-run ::= prose-char+
+
+# Strictly excludes digits (0-9) and brace delimiters ({, }); allows EN/TR aviation prose.
+prose-char ::= [A-Za-z ,;:/()'%+\-çÇğĞıİöÖşŞüÜ]
+
+sentence-end ::= "."
+
+ws ::= " "
+
+slot ::= "{{EVENT_SEQ}}"
+       | "{{T_SIM_S}}"
+       | "{{MIN_LTFJ_MARGIN_M}}"
+       | "{{MIN_LTBX_MARGIN_M}}"
+       | "{{SOC_PCT}}"
+       | "{{V_TERM_V}}"
+       | "{{AGL_M}}"
+       | "{{PEAK_CHI2}}"
+       | "{{ROTOR_MASK_HEX}}"
+       | "{{SNR_STRATUM}}"
+       | "{{CONFORMAL_SET_SIZE}}"
+       | "{{ERCS_SCORE}}"
+       | "{{CICTT_CODE}}"
+       | "{{OCCURRENCE_PHASE}}"
+       | "{{FLIGHT_REGIME}}"

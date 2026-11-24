@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 Voice ATC, Mondrian Conformal & Forensics Sidecar ROS 2 Node Configuration
+vertirta_voice_node:
+  ros__parameters:
+    # Canonical M3 ROS 2 topic contract (Plan 6B Task 5)
+    topic_audio_16khz: "/vertirta/voice/audio_16khz"
+    topic_rta_state_snapshot: "/vertirta/rta/state_snapshot"
+    topic_dsl_command: "/vertirta/voice/dsl_command"
+    topic_tts_readback: "/vertirta/voice/tts_readback"
+    topic_sidecar_event: "/vertirta/forensics/sidecar_event"
+    # Permissive zero-GPL audio & TTS stack
+    vad_engine: "silero_vad_v6.2.0"
+    asr_engine: "whisper_cpp_mit"
+    asr_fast_model: "whisper_small_q8_0"
+    asr_heavy_model: "whisper_large_v3_turbo_q8_0"
+    asr_audio_ctx: 256
+    asr_translate: false
+    asr_no_context: true
+    asr_carry_initial_prompt: true
+    asr_nbest_k: 4
+    tts_engine: "sherpa_onnx_v2"
+    tts_min_version: "2.0.0"
+    tts_ttfa_budget_ms: 250.0
+    tts_voice_en: "en_US-ljspeech-medium"
+    tts_voice_tr: "tr_TR-vertirta-clean-vits"
+    # Canonical 4-stratum SNR Mondrian conformal calibration & safety overrides
+    snr_strata:
+      - "S0_Clean"
+      - "S1_Cruise"
+      - "S2_Hover"
+      - "S3_Garbled"
+    mondrian_alpha: 0.05
+    mayday_weight_min: 0.15
+    liveness_emergency_soc_pct: 5.0
+    bvi_fundamental_hz: 114.6

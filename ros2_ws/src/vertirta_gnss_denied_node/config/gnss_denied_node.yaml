@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 GNSS-Denied Navigation, Spoof Guard & CTR Inflation Node Configuration
+vertirta_gnss_denied_node:
+  ros__parameters:
+    # Strict PX4 v1.16 DDS topic & timing contract
+    topic_vehicle_gps_position: "/fmu/out/vehicle_gps_position"
+    topic_vehicle_odometry: "/fmu/out/vehicle_odometry"
+    topic_belly_stereo_left: "/vertirta/belly_stereo/left/image_raw"
+    topic_belly_stereo_right: "/vertirta/belly_stereo/right/image_raw"
+    topic_radalt_range: "/vertirta/radalt/range"
+    topic_slz_water_fraction: "/vertirta/slz_water_fraction"
+    topic_gnss_denied_status: "/vertirta/gnss_denied_status"
+    topic_gnss_denied_odometry: "/vertirta/gnss_denied_odometry"
+    topic_ctr_inflation_markers: "/vertirta/ctr_inflation_markers"
+    topic_gnss_speed_cap: "/vertirta/gnss_speed_cap_mps"
+    ekf2_gps_delay_ms: 110.0
+    uxrce_dds_synct: 1
+    # Permissive BSD-3 VIO + Apache-2.0 / MIT visual reloc backends (zero GPL)
+    vio_backend: "basalt_bsd3"
+    reloc_local_backend: "xfeat_lighterglue_apache2"
+    reloc_global_backend: "megaloc_mit"
+    enable_fp16: false
+    # Adaptive sea/land H3 MCUSUM thresholds (DR-10 + Plan 6A)
+    land_mcusum_kd: 0.25
+    land_mcusum_ht: 2.0
+    water_mcusum_kd: 0.35
+    water_mcusum_ht: 3.4
+    rollback_window_s: 2.0
+    # Confirmed DHMI AIP Turkey LTBX ARP (40 deg 59 min 26 sec N, 029 deg 12 min 58 sec E)
+    kartal_datum_lat_deg: 40.8860
+    kartal_datum_lon_deg: 29.1880
+    ltfj_arp_lat_deg: 40.898333
+    ltfj_arp_lon_deg: 29.309167
+    ltbx_arp_lat_deg: 40.990556
+    ltbx_arp_lon_deg: 29.216111
+    ctr_radius_m: 9260.0
+    map_bias_b_map_m: 2.0
+    # 3-State Navigation FSM thresholds (1-sigma)
+    fsm_caution_sigma_m: 25.0
+    fsm_abort_sigma_m: 65.0
+    v_max_nominal_mps: 22.0
+    v_max_caution_mps: 13.5

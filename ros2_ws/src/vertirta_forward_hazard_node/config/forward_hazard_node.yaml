@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA M3 Forward Hazard Perception & 77 GHz mmWave Fusion Node Configuration
+vertirta_forward_hazard_node:
+  ros__parameters:
+    # Forward camera geometry (strictly decoupled from 512x512 nadir SLZ head)
+    hfov_deg: 45.0
+    frame_width_px: 1280
+    frame_height_px: 720
+    horizon_crop_width_px: 1280
+    horizon_crop_height_px: 320
+    split_stack_size_px: 640
+    # TU116 GTX 1650 SUPER safe FP32 default (no forced FP16 TensorCore overhead)
+    enable_fp16: false
+    # Canonical X8-240 envelope & frozen WireCapsuleTable / IntruderTrackerKf caps
+    r_veh_m: 2.10
+    max_wire_capsules: 64
+    max_intruders: 16
+    v_max_nominal_mps: 22.0
+    v_max_radar_degraded_mps: 15.0
+    radar_grazing_skew_deg: 20.0
+    stale_timeout_ms: 250.0
+    # Canonical ROS 2 topic contract (zero breaking changes to vertirta_msgs)
+    topic_forward_camera: "/vertirta/forward_camera/image_raw"
+    topic_mmwave_detections: "/vertirta/mmwave_77ghz/detections"
+    topic_vehicle_odometry: "/fmu/out/vehicle_odometry"
+    topic_imu_200hz: "/vertirta/imu_200hz"
+    topic_wire_capsules: "/vertirta/wire_capsules"
+    topic_intruders: "/vertirta/intruders"
+    topic_hazard_markers: "/vertirta/forward_hazard_markers"
+    topic_hazard_status: "/vertirta/forward_hazard_status"
+    topic_speed_cap: "/vertirta/forward_speed_cap_mps"
