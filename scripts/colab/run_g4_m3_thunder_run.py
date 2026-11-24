@@ -354,7 +354,18 @@ class LiveColabCliBackend:
             ("g4_thunder_telemetry.json", f"{remote_work_dir}/artifacts/g4_thunder_telemetry.json"),
             ("remote_bundle_manifest.json", f"{remote_work_dir}/artifacts/remote_bundle_manifest.json"),
         ]
-        for job_key in ("qwen3_v3", "whisper_bvi", "forward_wire", "jax_4d_hires_lc", "pidnet_v21_xfeat"):
+        for job_key in (
+            "qwen3_v3",
+            "qwen3_v3_sft",
+            "qwen3_v3_grpo_seed0",
+            "qwen3_v3_grpo_seed1",
+            "qwen3_v3_grpo_seed2",
+            "qwen3_v3_finalize",
+            "whisper_bvi",
+            "forward_wire",
+            "jax_4d_hires_lc",
+            "pidnet_v21_xfeat",
+        ):
             candidates.append((f"{job_key}.log", f"{remote_work_dir}/artifacts/logs/{job_key}.log"))
         for fname, rpath in candidates:
             dst = logs_local / fname

@@ -21,11 +21,13 @@ Implements Plan 6C Task 3 & DR-10 §1.1–§1.3 (#329 hardened for live G4):
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import gc
 import json
 import math
 from pathlib import Path
 import sys
 import time
+import traceback
 from typing import Any
 
 import numpy as np
@@ -530,27 +532,80 @@ def _evaluate_heldout_forward_val(
     cls_correct = 0
     cls_total = 0
 
+    cur_bsz = max(1, int(batch_size))
+    start = 0
     with torch.no_grad():
-        for start in range(0, len(val_records), max(1, batch_size)):
-            chunk = val_records[start : start + max(1, batch_size)]
-            imgs_t = torch.from_numpy(np.stack([r[0] for r in chunk], axis=0)).to(device)
-            mask_t = torch.from_numpy(np.stack([r[1] for r in chunk], axis=0)).to(device)
-            box_t = torch.from_numpy(np.stack([r[3] for r in chunk], axis=0)).to(device)
-            cls_t = torch.from_numpy(np.stack([r[4] for r in chunk], axis=0)).to(device)
+        while start < len(val_records):
+            chunk = val_records[start : start + cur_bsz]
+            imgs_t = mask_t = box_t = cls_t = None
+            pred_mask_logits = prob = pred_bin = gt_bin = None
+            pred_boxes = pred_cls = pred_labels = None
+            try:
+                imgs_t = torch.from_numpy(np.stack([r[0] for r in chunk], axis=0)).to(device)
+                mask_t = torch.from_numpy(np.stack([r[1] for r in chunk], axis=0)).to(device)
+                box_t = torch.from_numpy(np.stack([r[3] for r in chunk], axis=0)).to(device)
+                cls_t = torch.from_numpy(np.stack([r[4] for r in chunk], axis=0)).to(device)
 
-            pred_mask_logits, _ = wire_net(imgs_t)
-            prob = torch.sigmoid(pred_mask_logits.float())
-            pred_bin = (prob >= 0.5).float()
-            gt_bin = (mask_t >= 0.5).float()
-            inter_sum += float((pred_bin * gt_bin).sum().item())
-            union_sum += float(((pred_bin + gt_bin) >= 1.0).float().sum().item())
-            cldice_vals.append(float(cldice_loss_fn.cldice_score(prob, gt_bin).item()))
+                pred_mask_logits, _ = wire_net(imgs_t)
+                prob = torch.sigmoid(pred_mask_logits.float())
+                pred_bin = (prob >= 0.5).float()
+                gt_bin = (mask_t >= 0.5).float()
+                batch_inter = float((pred_bin * gt_bin).sum().item())
+                batch_union = float(((pred_bin + gt_bin) >= 1.0).float().sum().item())
+                batch_cldice = float(cldice_loss_fn.cldice_score(prob, gt_bin).item())
 
-            pred_boxes, pred_cls = det_net(imgs_t)
-            box_l1_vals.append(float(F.l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]).item()))
-            pred_labels = pred_cls[:, :3, :].argmax(dim=-1)
-            cls_correct += int((pred_labels == cls_t[:, :3]).sum().item())
-            cls_total += int(cls_t[:, :3].numel())
+                pred_boxes, pred_cls = det_net(imgs_t)
+                batch_box_l1 = float(F.l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]).item())
+                pred_labels = pred_cls[:, :3, :].argmax(dim=-1)
+                batch_cls_correct = int((pred_labels == cls_t[:, :3]).sum().item())
+                batch_cls_total = int(cls_t[:, :3].numel())
+
+                inter_sum += batch_inter
+                union_sum += batch_union
+                cldice_vals.append(batch_cldice)
+                box_l1_vals.append(batch_box_l1)
+                cls_correct += batch_cls_correct
+                cls_total += batch_cls_total
+                del (
+                    imgs_t,
+                    mask_t,
+                    box_t,
+                    cls_t,
+                    pred_mask_logits,
+                    prob,
+                    pred_bin,
+                    gt_bin,
+                    pred_boxes,
+                    pred_cls,
+                    pred_labels,
+                )
+                start += len(chunk)
+                val_oom_hit = False
+            except torch.cuda.OutOfMemoryError as oom_exc:
+                if oom_exc.__traceback__ is not None:
+                    traceback.clear_frames(oom_exc.__traceback__)
+                del (
+                    imgs_t,
+                    mask_t,
+                    box_t,
+                    cls_t,
+                    pred_mask_logits,
+                    prob,
+                    pred_bin,
+                    gt_bin,
+                    pred_boxes,
+                    pred_cls,
+                    pred_labels,
+                    oom_exc,
+                )
+                if cur_bsz <= 8:
+                    raise
+                val_oom_hit = True
+            if val_oom_hit:
+                gc.collect()
+                torch.cuda.empty_cache()
+                cur_bsz = max(8, cur_bsz // 2)
+                continue
 
     return {
         "val_samples": len(val_records),
@@ -653,7 +708,7 @@ def run_job(args: Any) -> dict[str, Any]:
     real_ttpla_records: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
     ttpla_info: dict[str, Any] = {"source": "TTPLA", "frames_ingested": 0, "origin": "skipped_smoke_cpu"}
     if not args.smoke_cpu:
-        work_dir = Path(args.blob_dir) / "_work_forward_wire"
+        work_dir = Path(args.blob_dir).parent / "_work_forward_wire"
         real_ttpla_records, ttpla_info = ingest_real_ttpla_apache2(
             work_dir, data_dir=args.data_dir, max_samples=int(args.max_ttpla)
         )
@@ -686,43 +741,74 @@ def run_job(args: Any) -> dict[str, Any]:
     opt_wire = torch.optim.AdamW(wire_net.parameters(), lr=3e-4, weight_decay=1e-4)
     opt_det = torch.optim.AdamW(det_net.parameters(), lr=3e-4, weight_decay=1e-4)
 
-    batch_size = 2 if args.smoke_cpu else min(int(args.batch_size), max(2, len(train_records)))
+    requested_batch_size = 2 if args.smoke_cpu else min(int(args.batch_size), max(2, len(train_records)))
+    batch_size = requested_batch_size
     steps = 2 if args.smoke_cpu else int(args.train_steps)
     amp_enabled = use_cuda
+    sched_wire = torch.optim.lr_scheduler.CosineAnnealingLR(opt_wire, T_max=max(1, steps), eta_min=1e-5)
+    sched_det = torch.optim.lr_scheduler.CosineAnnealingLR(opt_det, T_max=max(1, steps), eta_min=1e-5)
 
     wire_losses: list[float] = []
     det_losses: list[float] = []
+    oom_fallback_triggered = False
     wire_net.train()
     det_net.train()
 
-    for _step in range(steps):
+    step_idx = 0
+    while step_idx < steps:
         idxs = rng.integers(0, len(train_records), size=batch_size)
-        imgs_t = torch.from_numpy(np.stack([train_records[i][0] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
-        mask_t = torch.from_numpy(np.stack([train_records[i][1] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
-        junc_t = torch.from_numpy(np.stack([train_records[i][2] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
-        box_t = torch.from_numpy(np.stack([train_records[i][3] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
-        cls_t = torch.from_numpy(np.stack([train_records[i][4] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
+        imgs_t = mask_t = junc_t = box_t = cls_t = None
+        pred_mask = pred_junc = loss_w = pred_boxes = pred_cls = loss_d = None
+        try:
+            imgs_t = torch.from_numpy(np.stack([train_records[i][0] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
+            mask_t = torch.from_numpy(np.stack([train_records[i][1] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
+            junc_t = torch.from_numpy(np.stack([train_records[i][2] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
+            box_t = torch.from_numpy(np.stack([train_records[i][3] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
+            cls_t = torch.from_numpy(np.stack([train_records[i][4] for i in idxs], axis=0)).to(device, non_blocking=use_cuda)
 
-        opt_wire.zero_grad(set_to_none=True)
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled):
-            pred_mask, pred_junc = wire_net(imgs_t)
-            loss_w = cldice_loss_fn(pred_mask.float(), mask_t) + 0.25 * F.mse_loss(pred_junc.float(), junc_t)
-        loss_w.backward()
-        opt_wire.step()
-        wire_losses.append(float(loss_w.detach().cpu().item()))
+            opt_wire.zero_grad(set_to_none=True)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled):
+                pred_mask, pred_junc = wire_net(imgs_t)
+                loss_w = cldice_loss_fn(pred_mask.float(), mask_t) + 0.25 * F.mse_loss(pred_junc.float(), junc_t)
+            loss_w.backward()
+            w_val = float(loss_w.detach().cpu().item())
 
-        opt_det.zero_grad(set_to_none=True)
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled):
-            pred_boxes, pred_cls = det_net(imgs_t)
-            loss_d = F.smooth_l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]) + F.cross_entropy(
-                pred_cls[:, :3, :].float().reshape(-1, 3), cls_t[:, :3].reshape(-1)
-            )
-        loss_d.backward()
-        opt_det.step()
-        det_losses.append(float(loss_d.detach().cpu().item()))
+            opt_det.zero_grad(set_to_none=True)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled):
+                pred_boxes, pred_cls = det_net(imgs_t)
+                loss_d = F.smooth_l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]) + F.cross_entropy(
+                    pred_cls[:, :3, :].float().reshape(-1, 3), cls_t[:, :3].reshape(-1)
+                )
+            loss_d.backward()
+            d_val = float(loss_d.detach().cpu().item())
+
+            opt_wire.step()
+            opt_det.step()
+            sched_wire.step()
+            sched_det.step()
+            wire_losses.append(w_val)
+            det_losses.append(d_val)
+            del imgs_t, mask_t, junc_t, box_t, cls_t, pred_mask, pred_junc, loss_w, pred_boxes, pred_cls, loss_d
+            step_idx += 1
+            train_oom_hit = False
+        except torch.cuda.OutOfMemoryError as oom_exc:
+            if oom_exc.__traceback__ is not None:
+                traceback.clear_frames(oom_exc.__traceback__)
+            del imgs_t, mask_t, junc_t, box_t, cls_t, pred_mask, pred_junc, loss_w, pred_boxes, pred_cls, loss_d, oom_exc
+            opt_wire.zero_grad(set_to_none=True)
+            opt_det.zero_grad(set_to_none=True)
+            if batch_size <= 32:
+                raise
+            train_oom_hit = True
+        if train_oom_hit:
+            gc.collect()
+            torch.cuda.empty_cache()
+            batch_size = 32
+            oom_fallback_triggered = True
+            continue
 
     val_metrics = _evaluate_heldout_forward_val(
-        wire_net, det_net, cldice_loss_fn, val_records, device, batch_size=max(2, min(16, batch_size))
+        wire_net, det_net, cldice_loss_fn, val_records, device, batch_size=max(2, min(32, batch_size))
     )
 
     peak_cuda_mib = (
@@ -771,7 +857,10 @@ def run_job(args: Any) -> dict[str, Any]:
             "canonical_input_shape": [1, 3, 640, 640],
         },
         "training": {
+            "requested_batch_size": requested_batch_size,
             "batch_size": batch_size,
+            "oom_fallback_triggered": oom_fallback_triggered,
+            "lr_scheduler": "CosineAnnealingLR",
             "steps": steps,
             "cldice_iters": 3,
             "wire_loss_start": round(wire_losses[0], 6),
@@ -797,11 +886,11 @@ def main() -> int:
         default_vram_fraction=WAVE_BUDGETS["wave1"]["forward_wire"],
         description="Wave-1 G4 Job: M-LSD-WireSeg (clDice) + D-FINE-N (640x640 split-stack).",
     )
-    parser.add_argument("--batch-size", type=int, default=32, help="G4 BF16 batch size (default: 32).")
-    parser.add_argument("--train-steps", type=int, default=200, help="G4 optimization steps (default: 200).")
-    parser.add_argument("--max-ttpla", type=int, default=320, help="Max real TTPLA Apache-2.0 frames to ingest.")
-    parser.add_argument("--proc-train-samples", type=int, default=240)
-    parser.add_argument("--proc-val-samples", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=64, help="G4 BF16 batch size (default: 64, OOM fallback 32).")
+    parser.add_argument("--train-steps", type=int, default=400, help="G4 optimization steps (default: 400).")
+    parser.add_argument("--max-ttpla", type=int, default=800, help="Max real TTPLA Apache-2.0 frames to ingest.")
+    parser.add_argument("--proc-train-samples", type=int, default=640)
+    parser.add_argument("--proc-val-samples", type=int, default=160)
     args = parser.parse_args()
     run_job(args)
     return 0

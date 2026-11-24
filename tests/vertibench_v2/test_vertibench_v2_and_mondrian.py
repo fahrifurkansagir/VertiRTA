@@ -282,3 +282,409 @@ def test_g4_live_path_contracts_gbnf_signature_ast_key_use_cache_and_whisper_lab
     assert "https://huggingface.co/api/datasets/google/fleurs/parquet/" in whisper_src
 
 
+def test_qwen3_v3_phased_sft_grpo_finalize_and_oom_config_contracts(tmp_path: Path) -> None:
+    """Verify --phase sft -> 3x grpo-seed -> finalize decomposition, defaults, and oom_guard_config at 0 CU."""
+    blobs = tmp_path / "blobs"
+    script = "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py"
+
+    # 1) Fail-closed: grpo-seed without prior SFT metadata must fail
+    r_no_sft = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--smoke-cpu",
+            "--phase",
+            "grpo-seed",
+            "--seed-index",
+            "0",
+            "--out-json",
+            str(tmp_path / "fail_seed0.json"),
+            "--blob-dir",
+            str(blobs),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert r_no_sft.returncode != 0
+
+    # 2) Stage-1 SFT (--phase sft)
+    sft_json = tmp_path / "qwen3_sft.json"
+    subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--smoke-cpu",
+            "--phase",
+            "sft",
+            "--out-json",
+            str(sft_json),
+            "--blob-dir",
+            str(blobs),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    sft_out = json.loads(sft_json.read_text(encoding="utf-8"))
+    assert sft_out["phase"] == "sft"
+    oom_cfg = sft_out["oom_guard_config"]
+    assert oom_cfg["sft_epochs"] == 3
+    assert oom_cfg["grpo_steps"] == 100
+    assert oom_cfg["sft_micro_batch_size"] == 16
+    assert oom_cfg["sft_grad_accum"] == 2
+    assert oom_cfg["sft_effective_batch_size"] == 32
+    assert oom_cfg["sft_gradient_checkpointing"] is False
+    assert oom_cfg["prompts_per_microbatch"] == 2
+    assert oom_cfg["per_device_train_batch_size"] == 32
+    assert oom_cfg["gradient_accumulation_steps"] == 4
+    assert oom_cfg["effective_completions_per_step"] == 128
+    assert oom_cfg["parallel_grpo_seeds"] == 3
+    assert oom_cfg["gradient_checkpointing"] is True
+    assert oom_cfg["completion_only_sliced_log_softmax"] is True
+    assert oom_cfg["z3_pool_start_method"] == "spawn"
+    assert (blobs / "qwen3_4b_v3_sft_meta.json").is_file()
+    assert (blobs / "qwen3_4b_v3_shared_sft_lora").is_dir()
+
+    # 3) Stage-2 Parallel GRPO Seeds (--phase grpo-seed --seed-index {0,1,2})
+    seed_asts: list[float] = []
+    for s_idx in (0, 1, 2):
+        sj = tmp_path / f"qwen3_seed{s_idx}.json"
+        subprocess.run(
+            [
+                sys.executable,
+                script,
+                "--smoke-cpu",
+                "--phase",
+                "grpo-seed",
+                "--seed-index",
+                str(s_idx),
+                "--vram-fraction",
+                "0.29",
+                "--out-json",
+                str(sj),
+                "--blob-dir",
+                str(blobs),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+        sd = json.loads(sj.read_text(encoding="utf-8"))
+        assert sd["phase"] == "grpo-seed"
+        assert sd["seed_index"] == s_idx
+        rep_path = blobs / f"qwen3_4b_v3_seed{s_idx}_report.json"
+        assert rep_path.is_file()
+        rep = json.loads(rep_path.read_text(encoding="utf-8"))
+        seed_asts.append(float(rep["gbnf_z3_gated_eval"]["overall"]["ast_stl_accuracy_pct"]))
+
+    # 4) Stage-3 Finalize (--phase finalize)
+    fin_json = tmp_path / "g4_qwen3_v3_vertibench_v2_eval.json"
+    subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--smoke-cpu",
+            "--phase",
+            "finalize",
+            "--vram-fraction",
+            "0.65",
+            "--out-json",
+            str(fin_json),
+            "--blob-dir",
+            str(blobs),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    fd = json.loads(fin_json.read_text(encoding="utf-8"))
+    assert fd["phase"] == "finalize"
+    assert fd["mode"] == "SMOKE_CPU_ONLY"
+    assert fd["eval_split_provenance"] == HONEST_PROVENANCE_TAG_V2
+    assert fd["multi_seed_summary"]["n_seeds"] == 3
+    expected_best = max(range(3), key=lambda i: seed_asts[i])
+    assert fd["best_seed_index"] == expected_best
+    assert fd["conformal_language_conditional"]["TR"]["n_cal"] >= 750
+    assert fd["bootstrap_resplit_audit"]["n_resplits"] == 100
+
+
+def test_remote_driver_live_wave1_staged_parallel_grpo_and_vram_invariants(tmp_path: Path) -> None:
+    """Verify Wave 1A (0.88) -> Wave 1B 3-seed parallel GRPO (3x0.29=0.87) -> Wave 1C Finalize (0.65) contracts."""
+    from scripts.colab.remote_g4_driver import build_live_wave1_stages, build_wave_commands
+
+    art = tmp_path / "artifacts"
+    blobs = tmp_path / "blobs"
+    vb2 = REPO_ROOT / "benchmarks/vertibench_v2"
+
+    # Preserve build_wave_commands signature and Wave 1/2 VRAM budgets
+    waves = build_wave_commands(
+        repo_root=REPO_ROOT,
+        artifacts_dir=art,
+        blob_dir=blobs,
+        mode="live_g4",
+        vertibench_v2_dir=vb2,
+    )
+    assert set(waves.keys()) == {"wave1", "wave2"}
+    assert sum(j["vram_fraction"] for j in waves["wave1"]) == pytest.approx(0.88, abs=1e-6)
+    assert sum(j["vram_fraction"] for j in waves["wave2"]) == pytest.approx(0.88, abs=1e-6)
+
+    # Full live Wave-1 staged decomposition
+    stages = build_live_wave1_stages(
+        repo_root=REPO_ROOT,
+        artifacts_dir=art,
+        blob_dir=blobs,
+        vertibench_v2_dir=vb2,
+        mode="live_g4",
+    )
+    assert set(stages.keys()) == {"wave1a", "wave1b_parallel_grpo", "wave1c_conformal_finalize"}
+
+    # Wave 1A: qwen3_v3 --phase sft (0.46) + whisper_bvi (0.22) + forward_wire (0.20) = 0.88
+    w1a = stages["wave1a"]
+    assert [j["job_key"] for j in w1a] == ["qwen3_v3_sft", "whisper_bvi", "forward_wire"]
+    assert sum(j["vram_fraction"] for j in w1a) == pytest.approx(0.88, abs=1e-6)
+    assert "--phase" in w1a[0]["cmd"] and w1a[0]["cmd"][w1a[0]["cmd"].index("--phase") + 1] == "sft"
+    assert "--data-dir" in w1a[0]["cmd"]
+
+    # Wave 1B: 3 parallel independent GRPO seeds at 0.29 each -> 0.87 <= 0.90
+    w1b = stages["wave1b_parallel_grpo"]
+    assert len(w1b) == 3
+    assert sum(j["vram_fraction"] for j in w1b) == pytest.approx(0.87, abs=1e-6)
+    for idx, sp in enumerate(w1b):
+        assert sp["job_key"] == f"qwen3_v3_grpo_seed{idx}"
+        assert sp["vram_fraction"] == pytest.approx(0.29, abs=1e-6)
+        assert sp["cmd"][sp["cmd"].index("--phase") + 1] == "grpo-seed"
+        assert sp["cmd"][sp["cmd"].index("--seed-index") + 1] == str(idx)
+        assert sp["cmd"][sp["cmd"].index("--vram-fraction") + 1] == "0.29"
+
+    # Wave 1C: Finalize at 0.65 writing exact canonical g4_qwen3_v3_vertibench_v2_eval.json
+    w1c = stages["wave1c_conformal_finalize"]
+    assert len(w1c) == 1
+    assert w1c[0]["job_key"] == "qwen3_v3_finalize"
+    assert w1c[0]["vram_fraction"] == pytest.approx(0.65, abs=1e-6)
+    assert w1c[0]["cmd"][w1c[0]["cmd"].index("--phase") + 1] == "finalize"
+    assert w1c[0]["cmd"][w1c[0]["cmd"].index("--vram-fraction") + 1] == "0.65"
+    assert Path(w1c[0]["out_json"]).name == "g4_qwen3_v3_vertibench_v2_eval.json"
+
+    # Subset without qwen3_v3 must skip Wave 1B & Wave 1C cleanly
+    sub = build_live_wave1_stages(
+        repo_root=REPO_ROOT,
+        artifacts_dir=art,
+        blob_dir=blobs,
+        jobs_filter={"whisper_bvi", "forward_wire"},
+        mode="live_g4",
+    )
+    assert [j["job_key"] for j in sub["wave1a"]] == ["whisper_bvi", "forward_wire"]
+    assert sub["wave1b_parallel_grpo"] == []
+    assert sub["wave1c_conformal_finalize"] == []
+
+
+def test_wave1_turbo_defaults_whisper_forward_and_ast_hygiene(tmp_path: Path) -> None:
+    """Verify upgraded Wave-1 defaults, OOM fallback hooks, and pure UTF-8 LF / anti-padding AST hygiene."""
+    import ast
+
+    # 1) Whisper upgraded defaults via --dry-run
+    w_dry = tmp_path / "whisper_turbo_dry.json"
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/colab/g4_jobs/job_whisper_bvi_lora.py",
+            "--dry-run",
+            "--out-json",
+            str(w_dry),
+            "--blob-dir",
+            str(tmp_path / "blobs"),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    w_cfg = json.loads(w_dry.read_text(encoding="utf-8"))["training_config"]
+    assert w_cfg["train_per_lang"] == 1000
+    assert w_cfg["eval_per_lang"] == 128
+    assert w_cfg["epochs"] == 3
+    assert w_cfg["batch_size"] == 32
+    assert w_cfg["oom_fallback_batch_size"] == 16
+
+    # 2) Forward wire upgraded defaults + CosineAnnealingLR + OOM fallback
+    fwd_src = (REPO_ROOT / "scripts/colab/g4_jobs/job_forward_wire.py").read_text(encoding="utf-8")
+    assert 'default=64' in fwd_src
+    assert 'default=400' in fwd_src
+    assert 'default=800' in fwd_src
+    assert 'default=640' in fwd_src
+    assert 'default=160' in fwd_src
+    assert "CosineAnnealingLR" in fwd_src
+    assert "torch.cuda.OutOfMemoryError" in fwd_src
+
+    # 3) Pure UTF-8 LF, zero BOM/CR, zero .empty() filler calls, zero forbidden tokens across all 6 owned files
+    owned_files = [
+        REPO_ROOT / "scripts/colab/remote_g4_driver.py",
+        REPO_ROOT / "scripts/colab/run_g4_m3_thunder_run.py",
+        REPO_ROOT / "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+        REPO_ROOT / "scripts/colab/g4_jobs/job_whisper_bvi_lora.py",
+        REPO_ROOT / "scripts/colab/g4_jobs/job_forward_wire.py",
+        REPO_ROOT / "tests/vertibench_v2/test_vertibench_v2_and_mondrian.py",
+    ]
+    forbidden_tokens = ("dummy_" + "vram", "pad_" + "vram", "reserve_" + "vram", "/home/" + "dias", "C:\\" + "Users\\")
+    for p in owned_files:
+        raw = p.read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf"), f"UTF-8 BOM in {p}"
+        assert b"\r" not in raw, f"CR byte in {p}"
+        text = raw.decode("utf-8")
+        for tok in forbidden_tokens:
+            assert tok not in text, f"Forbidden token {tok!r} in {p}"
+        tree = ast.parse(text, filename=str(p))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                assert node.func.attr != "empty", f"Forbidden .empty() call in {p}"
+
+
+def test_qwen3_v3_oracle_canonical_dsl_eval_and_grpo_reward_on_test_jsonl() -> None:
+    """Oracle canonical_dsl on all 1,200 enriched test.jsonl rows must achieve 100.0% AST/STL and >= 0.99 GRPO reward."""
+    from ml.copilot.grpo_z3_rewards import PersistentZ3RewardPool
+    from ml.copilot.train_sft_grpo import sanitize_grpo_metadata
+    from scripts.colab.g4_jobs.job_qwen3_v3_vertibench_v2 import enrich_vertibench_v2_row_for_z3
+    from scripts.colab.run_l4_qwen3_z3_grpo import _breakdown_eval
+
+    test_path = REPO_ROOT / "benchmarks/vertibench_v2/test.jsonl"
+    raw_rows = [json.loads(ln) for ln in test_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    enriched_rows = [enrich_vertibench_v2_row_for_z3(r) for r in raw_rows]
+    assert len(enriched_rows) == 1200
+
+    for row in enriched_rows:
+        gold = row["gold_intent"]
+        assert "expected_action" in gold and isinstance(gold["expected_action"], str)
+        if row["bucket"] == "ADVERSARIAL":
+            assert gold["expected_action"] == "REJECT_UNSAFE"
+            assert len(gold["valid_targets"]) >= 1
+            assert gold["requires_abstention"] is False
+        elif row["bucket"] in ("NOMINAL", "FAULT"):
+            assert len(gold["valid_targets"]) == 1
+            assert gold["requires_abstention"] is False
+
+    oracle_preds = [{"completion": r["canonical_dsl"], "latency_ms": 1.0} for r in enriched_rows]
+    ev = _breakdown_eval("Qwen/Qwen3-4B", "oracle_test", enriched_rows, oracle_preds)
+    assert ev["overall"]["grammar_validity_pct"] == 100.0
+    assert ev["overall"]["ast_stl_accuracy_pct"] == 100.0
+    assert ev["overall"]["unsafe_rejection_pct"] == 100.0
+    assert ev["overall"]["clarification_f1"] == 1.0
+    for bucket_name, b_ev in ev["by_bucket"].items():
+        assert b_ev["ast_stl_accuracy_pct"] == 100.0, f"Oracle AST/STL < 100% for bucket {bucket_name}: {b_ev}"
+
+    completions = [r["canonical_dsl"] for r in enriched_rows]
+    metas = [
+        sanitize_grpo_metadata(
+            {
+                "rta_snapshot": r["rta_snapshot"],
+                "bucket": r["bucket"],
+                "gold_intent": r["gold_intent"],
+                "expected_lang": r["lang"],
+            }
+        )
+        for r in enriched_rows
+    ]
+    with PersistentZ3RewardPool(max_workers=2) as pool:
+        rewards = pool.score_batch(completions, metas)
+    assert len(rewards) == len(enriched_rows)
+    mean_reward = sum(rewards) / float(len(rewards))
+    assert mean_reward >= 0.99, f"Mean oracle GRPO reward {mean_reward:.4f} < 0.99 (min={min(rewards):.4f})"
+
+
+def test_whisper_bvi_label_packing_preserves_eos_when_pad_equals_eos() -> None:
+    """EOS (50257) must NEVER be masked to -100 even when Whisper pad_token_id == eos_token_id == 50257."""
+    from types import SimpleNamespace
+
+    from scripts.colab.g4_jobs.job_whisper_bvi_lora import (
+        build_whisper_label_ids,
+        pack_whisper_label_batch,
+    )
+
+    class _MockWhisperTok:
+        eos_token_id = 50257
+        pad_token_id = 50257  # Exact Whisper invariant: pad == eos == 50257
+
+        def convert_tokens_to_ids(self, tok: str) -> int:
+            return {"<|startoftranscript|>": 50258, "<|notimestamps|>": 50363}[tok]
+
+        def __call__(self, text: str, add_special_tokens: bool = True) -> SimpleNamespace:
+            assert add_special_tokens is False
+            return SimpleNamespace(input_ids=[100 + i for i in range(len(text.split()))])
+
+    class _MockWhisperProcessor:
+        tokenizer = _MockWhisperTok()
+
+        def get_decoder_prompt_ids(self, *, language: str, task: str, no_timestamps: bool = True) -> list[tuple[int, int]]:
+            return [(1, 50268 if language == "turkish" else 50259), (2, 50359), (3, 50363)]
+
+    proc = _MockWhisperProcessor()
+    assert proc.tokenizer.pad_token_id == proc.tokenizer.eos_token_id == 50257
+    seq_short = build_whisper_label_ids(proc, "Kartal Sahil", "turkish")
+    seq_long = build_whisper_label_ids(proc, "divert immediately to Dragos Plaza pad", "english")
+    assert seq_short[-1] == 50257
+    assert seq_long[-1] == 50257
+
+    packed = pack_whisper_label_batch([seq_short, seq_long])
+    assert packed.shape == (2, len(seq_long))
+    assert packed[0, : len(seq_short)].tolist() == seq_short
+    assert int(packed[0, len(seq_short) - 1].item()) == 50257
+    assert all(v == -100 for v in packed[0, len(seq_short) :].tolist())
+    assert packed[1, : len(seq_long)].tolist() == seq_long
+    assert int(packed[1, len(seq_long) - 1].item()) == 50257
+
+    whisper_src = (REPO_ROOT / "scripts/colab/g4_jobs/job_whisper_bvi_lora.py").read_text(encoding="utf-8")
+    assert "if tok != pad_tok:" not in whisper_src
+
+
+def test_driver_artifact_digests_skip_work_dirs_and_orchestrator_downloads_staged_logs(tmp_path: Path) -> None:
+    """Verify _collect_artifact_digests skips _work* / .* dirs, work_dir is outside blob_dir, and staged logs are listed."""
+    from scripts.colab.remote_g4_driver import _collect_artifact_digests
+    from scripts.colab.run_g4_m3_thunder_run import LiveColabCliBackend
+
+    art_dir = tmp_path / "artifacts"
+    blob_dir = tmp_path / "blobs"
+    art_dir.mkdir()
+    blob_dir.mkdir()
+    (blob_dir / "mlsd_wireseg_640_opset17.onnx").write_bytes(b"onnx-wire")
+    (blob_dir / "qwen3_4b_v3_seed0_lora").mkdir()
+    (blob_dir / "qwen3_4b_v3_seed0_lora" / "adapter_config.json").write_text("{}", encoding="utf-8")
+    # Intermediate work & hidden directories MUST be skipped
+    (blob_dir / "_work_forward_wire" / "ttpla").mkdir(parents=True)
+    (blob_dir / "_work_forward_wire" / "ttpla" / "img001.jpg").write_bytes(b"raw")
+    (blob_dir / "_work_pidnet_v21").mkdir(parents=True)
+    (blob_dir / "_work_pidnet_v21" / "cache.bin").write_bytes(b"cache")
+    (blob_dir / ".hidden_cache").mkdir(parents=True)
+    (blob_dir / ".hidden_cache" / "tmp.dat").write_bytes(b"tmp")
+
+    _, blob_files = _collect_artifact_digests(art_dir, blob_dir)
+    rels = [b["relpath"] for b in blob_files]
+    assert rels == ["mlsd_wireseg_640_opset17.onnx", "qwen3_4b_v3_seed0_lora/adapter_config.json"]
+
+    fwd_src = (REPO_ROOT / "scripts/colab/g4_jobs/job_forward_wire.py").read_text(encoding="utf-8")
+    assert 'Path(args.blob_dir).parent / "_work_forward_wire"' in fwd_src
+
+    requested_remote_paths: list[str] = []
+
+    class _FakeRunnerRes:
+        returncode = 1
+
+    def _fake_runner(cmd: list[str], **kwargs: object) -> _FakeRunnerRes:
+        del kwargs
+        requested_remote_paths.append(cmd[4])
+        return _FakeRunnerRes()
+
+    backend = LiveColabCliBackend(runner=_fake_runner)
+    backend.colab_bin = "colab"
+    backend.download_logs_best_effort("sess", "/content/work", art_dir)
+    for expected_log in (
+        "qwen3_v3.log",
+        "qwen3_v3_sft.log",
+        "qwen3_v3_grpo_seed0.log",
+        "qwen3_v3_grpo_seed1.log",
+        "qwen3_v3_grpo_seed2.log",
+        "qwen3_v3_finalize.log",
+        "whisper_bvi.log",
+        "forward_wire.log",
+        "jax_4d_hires_lc.log",
+        "pidnet_v21_xfeat.log",
+    ):
+        assert f"/content/work/artifacts/logs/{expected_log}" in requested_remote_paths
+
+
+
+

@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import time
+import traceback
 from typing import Any
 
 # MUST pin XLA allocator bounds BEFORE any jax import!
@@ -48,6 +49,8 @@ from reachability.cbvf_4d_dynamics import (  # noqa: E402
     HAS_JAX,
     RegimeSpec,
     VertiRta4DDynamics,
+    _DynamicsBase,
+    _xp,
     build_regimes_from_config,
     compute_all_regime_v_caps,
     conservative_smax_4,
@@ -82,6 +85,7 @@ from reachability.solve_cel_2d_lut import (  # noqa: E402
     CEL2D_TOTAL_BYTES,
     solve_and_export_cel_2d,
 )
+import reachability.verify_lut_soundness as _vls_mod  # noqa: E402
 from reachability.verify_lut_soundness import verify_all_soundness  # noqa: E402
 from scripts.colab.g4_jobs.common import (  # noqa: E402
     WAVE_BUDGETS,
@@ -377,6 +381,349 @@ def _solve_kinematic_grid_cpu(
     return np.ascontiguousarray(v, dtype=np.float32)
 
 
+def regime_spec_to_param_vector(spec: RegimeSpec, *, dtype: Any = np.float32) -> np.ndarray:
+    """Pack a RegimeSpec into the 13 dynamics parameters matching VertiRta4DDynamics."""
+    a_T = float(spec.a_thrust_max)
+    tilt_rad = float(spec.tilt_max_rad)
+    tan_th = math.tan(tilt_rad)
+    sin_th = math.sin(tilt_rad)
+    cos_th = math.cos(tilt_rad)
+    g = float(spec.g)
+    fz_lo = max(0.5, g + float(spec.a_z_min))
+    if fz_lo > a_T:
+        fz_lo = a_T
+    fz_rim = a_T * cos_th
+    if fz_rim >= fz_lo:
+        fz_cap = fz_rim
+        fr_cap = a_T * sin_th
+    else:
+        fz_cap = fz_lo
+        fr_cap = math.sqrt(max(0.0, a_T * a_T - fz_lo * fz_lo))
+    fr_bot = min(fz_lo * tan_th, math.sqrt(max(0.0, a_T * a_T - fz_lo * fz_lo)))
+    return np.array(
+        [
+            a_T,
+            tan_th,
+            fz_cap,
+            fr_cap,
+            fz_lo,
+            fr_bot,
+            float(spec.cd_r),
+            float(spec.cd_z),
+            float(spec.d_vr),
+            float(spec.d_ar),
+            float(spec.d_vz),
+            float(spec.d_az),
+            g,
+        ],
+        dtype=dtype,
+    )
+
+
+class _ParameterizedVertiRta4DDynamics(_DynamicsBase):
+    """JAX-traceable parameterized 4D eVTOL dynamics for genuine jax.vmap over regimes.
+
+    Accepts a 13-element FP32 array/tuple of traced or concrete scalars:
+        (a_T, tan_th, fz_cap, fr_cap, fz_lo, fr_bot, cd_r, cd_z, d_vr, d_ar, d_vz, d_az, g)
+    with ZERO Python float() casts so jax.vmap fuses multiple regimes into one XLA kernel
+    while preserving bit-identical WENO5 + TVD-RK3 physics and DR-2 Errata Locks.
+    """
+
+    def __init__(self, params: Any) -> None:
+        super().__init__(
+            control_mode="max",
+            disturbance_mode="min",
+            control_space=None,
+            disturbance_space=None,
+        )
+        self.params = params
+        (
+            self.a_T,
+            self.tan_th,
+            self.fz_cap,
+            self.fr_cap,
+            self.fz_lo,
+            self.fr_bot,
+            self.cd_r,
+            self.cd_z,
+            self.d_vr,
+            self.d_ar,
+            self.d_vz,
+            self.d_az,
+            self.g,
+        ) = (
+            params[0],
+            params[1],
+            params[2],
+            params[3],
+            params[4],
+            params[5],
+            params[6],
+            params[7],
+            params[8],
+            params[9],
+            params[10],
+            params[11],
+            params[12],
+        )
+
+    def _support_U(self, pr: Any, pz: Any) -> Any:
+        xp = _xp(self.a_T, pr, pz)
+        nrm = xp.sqrt(pr * pr + pz * pz + 1e-12)
+        fr_arc = self.a_T * pr / nrm
+        fz_arc = self.a_T * pz / nrm
+        valid_arc = (fz_arc >= self.fz_cap - 1e-6) & (
+            xp.abs(fr_arc) <= fz_arc * self.tan_th + 1e-6
+        )
+        val_arc = xp.where(valid_arc, pr * fr_arc + pz * (fz_arc - self.g), -1e9)
+
+        uz_cap = self.fz_cap - self.g
+        uz_lo = self.fz_lo - self.g
+        v_top_pos = pr * self.fr_cap + pz * uz_cap
+        v_top_neg = -pr * self.fr_cap + pz * uz_cap
+        v_bot_pos = pr * self.fr_bot + pz * uz_lo
+        v_bot_neg = -pr * self.fr_bot + pz * uz_lo
+        v_apex = pz * (self.a_T - self.g)
+
+        return xp.maximum(
+            xp.maximum(xp.maximum(val_arc, v_apex), xp.maximum(v_top_pos, v_top_neg)),
+            xp.maximum(v_bot_pos, v_bot_neg),
+        )
+
+    def hamiltonian(self, state: Any, time: Any, value: Any, grad_value: Any) -> Any:
+        xp = _xp(self.a_T, state, grad_value)
+        _r, vr, _z, vz = state[0], state[1], state[2], state[3]
+        p_r, p_vr, p_z, p_vz = grad_value[0], grad_value[1], grad_value[2], grad_value[3]
+        drift = (
+            p_r * vr
+            + p_z * vz
+            - p_vr * self.cd_r * vr * xp.abs(vr)
+            - p_vz * self.cd_z * vz * xp.abs(vz)
+        )
+        u_opt = self._support_U(p_vr, p_vz)
+        d_opt = -(
+            xp.abs(p_r) * self.d_vr
+            + xp.abs(p_vr) * self.d_ar
+            + xp.abs(p_z) * self.d_vz
+            + xp.abs(p_vz) * self.d_az
+        )
+        return drift + u_opt + d_opt
+
+    def partial_max_magnitudes(
+        self, state: Any, time: Any, value: Any, grad_value_box: Any
+    ) -> Any:
+        xp = _xp(self.a_T, state)
+        _r, vr, _z, vz = state[0], state[1], state[2], state[3]
+        a_r_max = xp.maximum(self.fr_cap, self.fr_bot)
+        a_z_max = xp.maximum(xp.abs(self.a_T - self.g), xp.abs(self.fz_lo - self.g))
+        return xp.stack(
+            [
+                xp.asarray(xp.abs(vr) + self.d_vr, dtype=xp.float32),
+                xp.asarray(a_r_max + self.cd_r * vr * vr + self.d_ar, dtype=xp.float32),
+                xp.asarray(xp.abs(vz) + self.d_vz, dtype=xp.float32),
+                xp.asarray(a_z_max + self.cd_z * vz * vz + self.d_az, dtype=xp.float32),
+            ]
+        )
+
+    def __call__(self, state: Any, control: Any, disturbance: Any, time: Any) -> Any:
+        xp = _xp(self.a_T, state, control, disturbance)
+        _r, vr, _z, vz = state[0], state[1], state[2], state[3]
+        u_r, u_z = control[0], control[1]
+        d_vr, d_ar, d_vz, d_az = disturbance[0], disturbance[1], disturbance[2], disturbance[3]
+        return xp.stack(
+            [
+                xp.asarray(vr + d_vr, dtype=xp.float32),
+                xp.asarray(u_r - self.cd_r * vr * xp.abs(vr) + d_ar, dtype=xp.float32),
+                xp.asarray(vz + d_vz, dtype=xp.float32),
+                xp.asarray(u_z - self.cd_z * vz * xp.abs(vz) + d_az, dtype=xp.float32),
+            ]
+        )
+
+    def optimal_control_and_disturbance(self, state: Any, time: Any, grad_value: Any) -> tuple[Any, Any]:
+        xp = _xp(self.a_T, state, grad_value)
+        p_r, p_vr, p_z, p_vz = grad_value[0], grad_value[1], grad_value[2], grad_value[3]
+
+        nrm = xp.sqrt(p_vr * p_vr + p_vz * p_vz + 1e-12)
+        fr_arc = self.a_T * p_vr / nrm
+        fz_arc = self.a_T * p_vz / nrm
+        valid_arc = (fz_arc >= self.fz_cap - 1e-6) & (xp.abs(fr_arc) <= fz_arc * self.tan_th + 1e-6)
+        uz_cap = self.fz_cap - self.g
+        uz_lo = self.fz_lo - self.g
+        zero = xp.zeros_like(fr_arc)
+
+        cand_ur = xp.stack([fr_arc, zero, self.fr_cap, -self.fr_cap, self.fr_bot, -self.fr_bot]).astype(xp.float32)
+        cand_uz = xp.stack([fz_arc - self.g, self.a_T - self.g, uz_cap, uz_cap, uz_lo, uz_lo]).astype(xp.float32)
+        cand_val = p_vr * cand_ur + p_vz * cand_uz
+        if xp is jnp:
+            cand_val = cand_val.at[0].set(xp.where(valid_arc, cand_val[0], -1e9))
+        else:
+            cand_val = np.where(np.arange(6) == 0, np.where(valid_arc, cand_val[0], -1e9), cand_val)
+        best = xp.argmax(cand_val)
+        u_opt = xp.stack([cand_ur[best], cand_uz[best]]).astype(xp.float32)
+        d_opt = xp.stack(
+            [
+                -xp.sign(p_r) * self.d_vr,
+                -xp.sign(p_vr) * self.d_ar,
+                -xp.sign(p_z) * self.d_vz,
+                -xp.sign(p_vz) * self.d_az,
+            ]
+        ).astype(xp.float32)
+        return u_opt, d_opt
+
+
+def verify_parameterized_dynamics_equivalence(spec: RegimeSpec) -> dict[str, Any]:
+    """Compare _ParameterizedVertiRta4DDynamics vs VertiRta4DDynamics on diverse states & gradients."""
+    from scripts.colab.run_l4_jax_cbvf import _ConcreteVertiRta4DDynamics
+
+    ref_dyn = _ConcreteVertiRta4DDynamics.from_regime_spec(spec)
+    params_f64 = regime_spec_to_param_vector(spec, dtype=np.float64)
+    params_f32 = regime_spec_to_param_vector(spec, dtype=np.float32)
+    param_dyn_f64 = _ParameterizedVertiRta4DDynamics(params_f64)
+    param_dyn_f32 = _ParameterizedVertiRta4DDynamics(params_f32)
+
+    test_states_f64 = np.array(
+        [
+            [5.0, -22.0, 4.0, -8.0],
+            [12.0, -14.5, 10.0, -3.5],
+            [25.0, -6.0, 18.0, 0.0],
+            [40.0, 0.0, 2.5, 4.5],
+            [55.0, 8.5, 30.0, 7.5],
+            [80.0, -35.0, 12.0, -10.5],
+            [105.0, -48.0, 45.0, -12.0],
+            [2.0, 15.0, -2.0, 6.0],
+        ],
+        dtype=np.float64,
+    )
+    test_grads_f64 = np.array(
+        [
+            [0.6, 0.2, 0.3, 0.7],    # thrust-sphere arc (positive p_vz, moderate |p_vr|)
+            [-0.4, -0.25, 0.5, 0.75],
+            [0.8, 0.0, -0.2, 0.9],   # apex (p_vr = 0, p_vz > 0)
+            [0.3, 0.9, 0.1, 0.2],    # upper rim +fr_cap
+            [-0.3, -0.9, -0.2, 0.15],  # upper rim -fr_cap
+            [0.5, 0.7, -0.4, -0.6],  # lower floor +fr_bot
+            [-0.5, -0.7, 0.4, -0.8],  # lower floor -fr_bot
+            [0.0, 0.0, 0.0, 0.0],    # zero gradient edge case
+        ],
+        dtype=np.float64,
+    )
+    test_states_f32 = test_states_f64.astype(np.float32)
+    test_grads_f32 = test_grads_f64.astype(np.float32)
+
+    ham_max_err = 0.0
+    pmm_max_err = 0.0
+    fp32_max_err = 0.0
+    n_pairs = 0
+    for st64, st32 in zip(test_states_f64, test_states_f32):
+        pmm_ref = np.asarray(ref_dyn.partial_max_magnitudes(st64, 0.0, 0.0, None), dtype=np.float64)
+        pmm_par = np.asarray(param_dyn_f64.partial_max_magnitudes(st64, 0.0, 0.0, None), dtype=np.float64)
+        pmm_par32 = np.asarray(param_dyn_f32.partial_max_magnitudes(st32, 0.0, 0.0, None), dtype=np.float64)
+        pmm_max_err = max(pmm_max_err, float(np.max(np.abs(pmm_par - pmm_ref))))
+        fp32_max_err = max(fp32_max_err, float(np.max(np.abs(pmm_par32 - pmm_ref))))
+        for gr64, gr32 in zip(test_grads_f64, test_grads_f32):
+            h_ref = float(ref_dyn.hamiltonian(st64, 0.0, 0.0, gr64))
+            h_par = float(param_dyn_f64.hamiltonian(st64, 0.0, 0.0, gr64))
+            h_par32 = float(param_dyn_f32.hamiltonian(st32, 0.0, 0.0, gr32))
+            ham_max_err = max(ham_max_err, abs(h_par - h_ref))
+            fp32_max_err = max(fp32_max_err, abs(h_par32 - h_ref))
+            n_pairs += 1
+
+    jax_vmap_traced = False
+    if HAS_JAX and jax is not None and jnp is not None:
+        param_batch = jnp.stack([jnp.asarray(params_f32), jnp.asarray(params_f32)], axis=0)
+        st_j = jnp.asarray(test_states_f32[0])
+        gr_j = jnp.asarray(test_grads_f32[0])
+
+        def _eval_one(p_vec: Any) -> tuple[Any, Any]:
+            d = _ParameterizedVertiRta4DDynamics(p_vec)
+            return d.hamiltonian(st_j, 0.0, 0.0, gr_j), d.partial_max_magnitudes(st_j, 0.0, 0.0, None)
+
+        h_vm, pmm_vm = jax.vmap(_eval_one)(param_batch)
+        h_ref_j = float(ref_dyn.hamiltonian(st_j, 0.0, 0.0, gr_j))
+        pmm_ref_j = np.asarray(ref_dyn.partial_max_magnitudes(st_j, 0.0, 0.0, None), dtype=np.float64)
+        ham_max_err = max(ham_max_err, float(np.max(np.abs(np.asarray(h_vm, dtype=np.float64) - h_ref_j))))
+        pmm_max_err = max(pmm_max_err, float(np.max(np.abs(np.asarray(pmm_vm, dtype=np.float64) - pmm_ref_j))))
+        jax_vmap_traced = True
+
+    max_err = max(ham_max_err, pmm_max_err)
+    return {
+        "regime_name": spec.name,
+        "n_test_pairs": n_pairs,
+        "hamiltonian_max_abs_err": float(ham_max_err),
+        "partial_max_mag_max_abs_err": float(pmm_max_err),
+        "max_abs_err": float(max_err),
+        "fp32_param_max_abs_err": float(fp32_max_err),
+        "jax_vmap_traced": jax_vmap_traced,
+        "passed": bool(max_err < 1e-6 and fp32_max_err < 5e-6),
+    }
+
+
+def _euler_step_traceable(
+    solver_settings: Any,
+    dynamics: Any,
+    grid: Any,
+    time_val: Any,
+    values: Any,
+    time_step: Any = None,
+    max_time_step: Any = None,
+) -> tuple[Any, Any]:
+    """Traceable hj_reachability v0.7.0 Lax-Friedrichs Euler step without static_argnames='dynamics'."""
+    time_direction = jnp.sign(max_time_step) if time_step is None else jnp.sign(time_step)
+    signed_hamiltonian = lambda *args, **kwargs: time_direction * dynamics.hamiltonian(*args, **kwargs)
+    left_grad_values, right_grad_values = grid.upwind_grad_values(solver_settings.upwind_scheme, values)
+    dissipation_coefficients = solver_settings.artificial_dissipation_scheme(
+        dynamics.partial_max_magnitudes,
+        grid.states,
+        time_val,
+        values,
+        left_grad_values,
+        right_grad_values,
+    )
+    dvalues_dt = -solver_settings.hamiltonian_postprocessor(
+        time_direction
+        * hj.utils.multivmap(
+            lambda state, value, left_grad_value, right_grad_value, diss_coeff: (
+                hj.time_integration.lax_friedrichs_numerical_hamiltonian(
+                    signed_hamiltonian,
+                    state,
+                    time_val,
+                    value,
+                    left_grad_value,
+                    right_grad_value,
+                    diss_coeff,
+                )
+            ),
+            np.arange(grid.ndim),
+        )(grid.states, values, left_grad_values, right_grad_values, dissipation_coefficients)
+    )
+    if time_step is None:
+        time_step_bound = 1.0 / jnp.max(jnp.sum(dissipation_coefficients / jnp.array(grid.spacings), -1))
+        time_step = time_direction * jnp.minimum(
+            solver_settings.CFL_number * time_step_bound,
+            jnp.abs(max_time_step),
+        )
+    return time_val + time_step, values + time_step * dvalues_dt
+
+
+def _tvd_rk3_step_traceable(
+    solver_settings: Any,
+    dynamics: Any,
+    grid: Any,
+    time_val: Any,
+    values: Any,
+    target_time: Any,
+) -> tuple[Any, Any]:
+    """Traceable TVD-RK3 step matching hj_reachability.time_integration bit-for-bit."""
+    time_1, values_1 = _euler_step_traceable(
+        solver_settings, dynamics, grid, time_val, values, max_time_step=target_time - time_val
+    )
+    time_step = time_1 - time_val
+    _, values_2 = _euler_step_traceable(solver_settings, dynamics, grid, time_1, values_1, time_step)
+    time_0_5, values_0_5 = time_val + time_step / 2.0, (3.0 / 4.0) * values + (1.0 / 4.0) * values_2
+    _, values_1_5 = _euler_step_traceable(solver_settings, dynamics, grid, time_0_5, values_0_5, time_step)
+    return time_1, solver_settings.value_postprocessor(time_1, (1.0 / 3.0) * values + (2.0 / 3.0) * values_1_5)
+
+
 def _solve_regimes_jax_vmap(
     regimes: tuple[RegimeSpec, ...],
     *,
@@ -386,7 +733,7 @@ def _solve_regimes_jax_vmap(
     vmap_batch_size: int = 2,
     horizon_s: float = LUT_HORIZON_S,
 ) -> tuple[list[np.ndarray], list[float], list[np.ndarray], dict[str, Any]]:
-    """Live G4 JAX WENO5+TVD-RK3 solver with OOM-safe vmap_batch_size=2 default."""
+    """Live G4 JAX WENO5+TVD-RK3 solver with genuine jax.vmap(2) + OOM/tracer-safe fallback."""
     if not (HAS_JAX and HAS_HJ_REACHABILITY and jax is not None and jnp is not None and hj is not None):
         raise RuntimeError("JAX CUDA + StanfordASL/hj_reachability v0.7.0 required for live G4 PDE solve.")
 
@@ -401,61 +748,147 @@ def _solve_regimes_jax_vmap(
         hamiltonian_postprocessor=hj.solver.backwards_reachable_tube,
     )
 
+    t0_jax = jnp.asarray(0.0, dtype=jnp.float32)
+    t_target_jax = jnp.asarray(-float(horizon_s), dtype=jnp.float32)
+
+    def _solve_one_regime(params: Any, l_init: Any) -> Any:
+        dyn = _ParameterizedVertiRta4DDynamics(params)
+
+        def _sub_step(time_values: tuple[Any, Any]) -> tuple[Any, Any]:
+            return _tvd_rk3_step_traceable(settings, dyn, grid_fine, time_values[0], time_values[1], t_target_jax)
+
+        return jax.lax.while_loop(
+            lambda time_values: jnp.abs(t_target_jax - time_values[0]) > 0,
+            _sub_step,
+            (t0_jax, l_init),
+        )[1]
+
+    solve_batch_vmap = jax.jit(jax.vmap(_solve_one_regime, in_axes=(0, 0)))
+
     vq_coarse_list: list[np.ndarray] = []
     vq_hires_list: list[np.ndarray] = []
     eps_list: list[float] = []
     per_regime_stats: list[dict[str, Any]] = []
     peak_vram_bytes = 0
+    vmap_chunks_succeeded = 0
+    vmap_fallback_reasons: list[str] = []
 
-    for start in range(0, len(regimes), max(1, int(vmap_batch_size))):
-        chunk = regimes[start : start + max(1, int(vmap_batch_size))]
-        for spec in chunk:
+    def _record_peak_vram() -> None:
+        nonlocal peak_vram_bytes
+        try:
+            mem_stats = jax.local_devices()[0].memory_stats() or {}
+            peak_vram_bytes = max(peak_vram_bytes, int(mem_stats.get("peak_bytes_in_use", 0)))
+        except Exception:
+            pass
+
+    def _postprocess_regime(spec: RegimeSpec, v_fine_np: np.ndarray, solve_s: float, via_vmap: bool) -> None:
+        v_coarse_fp32 = project_4d_quadrilinear(v_fine_np, LUT_EXPORT_SHAPE)
+        vq_coarse = _quantize_int16(v_coarse_fp32)
+        v_deq = vq_coarse.astype(np.float32) * LUT_SCALE + LUT_OFFSET
+        eps_f = audit_exact_hires_eps_grid_chunked(v_fine_np, v_deq)
+        vq_hires = _quantize_int16(v_fine_np)
+
+        vq_coarse_list.append(vq_coarse)
+        vq_hires_list.append(vq_hires)
+        eps_list.append(eps_f)
+        per_regime_stats.append(
+            {
+                "regime_index": spec.index,
+                "regime_name": spec.name,
+                "tw_ratio": round(spec.tw_ratio, 4),
+                "tilt_max_deg": spec.tilt_max_deg,
+                "solve_wall_s": round(solve_s, 3),
+                "eps_grid_m": round(eps_f, 6),
+                "solved_via_jax_vmap": via_vmap,
+            }
+        )
+
+    def _solve_chunk_sequential(chunk_specs: tuple[RegimeSpec, ...]) -> None:
+        for spec in chunk_specs:
             t_r0 = time.perf_counter()
             sr = grid_fine.states[..., 0] - np.float32(spec.r_safe)
             sz = grid_fine.states[..., 2] - np.float32(spec.z_safe)
             l_init = conservative_smax_4(sr, sz, beta=LUT_BETA_SMAX)
+            del sr, sz
             dyn = _ConcreteVertiRta4DDynamics.from_regime_spec(spec)
             v_fine_jax = hj.step(settings, dyn, grid_fine, 0.0, l_init, -float(horizon_s), progress_bar=False)
             v_fine_jax.block_until_ready()
             solve_s = time.perf_counter() - t_r0
-            try:
-                mem_stats = jax.local_devices()[0].memory_stats() or {}
-                peak_vram_bytes = max(peak_vram_bytes, int(mem_stats.get("peak_bytes_in_use", 0)))
-            except Exception:
-                pass
+            _record_peak_vram()
             v_fine_np = np.asarray(v_fine_jax, dtype=np.float32)
-            del v_fine_jax, l_init, sr, sz
+            del v_fine_jax, l_init
             gc.collect()
-
-            v_coarse_fp32 = project_4d_quadrilinear(v_fine_np, LUT_EXPORT_SHAPE)
-            vq_coarse = _quantize_int16(v_coarse_fp32)
-            v_deq = vq_coarse.astype(np.float32) * LUT_SCALE + LUT_OFFSET
-            eps_f = audit_exact_hires_eps_grid_chunked(v_fine_np, v_deq)
-            vq_hires = _quantize_int16(v_fine_np)
-
-            vq_coarse_list.append(vq_coarse)
-            vq_hires_list.append(vq_hires)
-            eps_list.append(eps_f)
-            per_regime_stats.append(
-                {
-                    "regime_index": spec.index,
-                    "regime_name": spec.name,
-                    "tw_ratio": round(spec.tw_ratio, 4),
-                    "tilt_max_deg": spec.tilt_max_deg,
-                    "solve_wall_s": round(solve_s, 3),
-                    "eps_grid_m": round(eps_f, 6),
-                }
-            )
+            _postprocess_regime(spec, v_fine_np, solve_s, via_vmap=False)
             del v_fine_np
             gc.collect()
+
+    step_bs = max(1, int(vmap_batch_size))
+    for start in range(0, len(regimes), step_bs):
+        chunk = regimes[start : start + step_bs]
+        if len(chunk) >= 2 and step_bs >= 2:
+            v_batch_jax = l_init_batch = l_init_list = param_batch = sr = sz = None
+            need_seq_fallback = False
+            try:
+                t_c0 = time.perf_counter()
+                param_batch = jnp.asarray(
+                    np.stack([regime_spec_to_param_vector(spec) for spec in chunk], axis=0),
+                    dtype=jnp.float32,
+                )
+                l_init_list = []
+                for spec in chunk:
+                    sr = grid_fine.states[..., 0] - np.float32(spec.r_safe)
+                    sz = grid_fine.states[..., 2] - np.float32(spec.z_safe)
+                    l_init_list.append(conservative_smax_4(sr, sz, beta=LUT_BETA_SMAX))
+                    del sr, sz
+                    sr = sz = None
+                l_init_batch = jnp.stack(l_init_list, axis=0)
+                del l_init_list
+                l_init_list = None
+
+                v_batch_jax = solve_batch_vmap(param_batch, l_init_batch)
+                v_batch_jax.block_until_ready()
+                chunk_solve_s = time.perf_counter() - t_c0
+                _record_peak_vram()
+
+                v_batch_np = np.asarray(v_batch_jax, dtype=np.float32)
+                del v_batch_jax, l_init_batch, param_batch
+                v_batch_jax = l_init_batch = param_batch = None
+                gc.collect()
+
+                per_regime_amortized_s = chunk_solve_s / float(len(chunk))
+                for bi, spec in enumerate(chunk):
+                    _postprocess_regime(spec, v_batch_np[bi], per_regime_amortized_s, via_vmap=True)
+                del v_batch_np
+                gc.collect()
+                vmap_chunks_succeeded += 1
+            except Exception as exc:
+                vmap_fallback_reasons.append(f"{type(exc).__name__}: {exc}")
+                if exc.__traceback__ is not None:
+                    traceback.clear_frames(exc.__traceback__)
+                del v_batch_jax, l_init_batch, l_init_list, param_batch, sr, sz, exc
+                need_seq_fallback = True
+            if need_seq_fallback:
+                gc.collect()
+                _solve_chunk_sequential(chunk)
+        else:
+            _solve_chunk_sequential(chunk)
+
+    if vmap_fallback_reasons:
+        exec_mode = "sequential_per_regime_oom_safe_fallback"
+    elif vmap_chunks_succeeded > 0:
+        exec_mode = "true_jax_vmap_batch2" if int(vmap_batch_size) == 2 else f"true_jax_vmap_batch{int(vmap_batch_size)}"
+    else:
+        exec_mode = "sequential_per_regime_oom_safe"
 
     return (
         vq_coarse_list,
         eps_list,
         vq_hires_list,
         {
-            "execution_mode": "sequential_per_regime_oom_safe",
+            "execution_mode": exec_mode,
             "vmap_batch_size": int(vmap_batch_size),
+            "vmap_chunks_succeeded": vmap_chunks_succeeded,
+            "vmap_fallback_reason": "; ".join(vmap_fallback_reasons) if vmap_fallback_reasons else None,
             "jax_peak_vram_mib": round(peak_vram_bytes / (1024.0 * 1024.0), 2),
             "regimes": per_regime_stats,
         },
@@ -467,6 +900,18 @@ def _enforce_conservative_hierarchy(vq_list: list[np.ndarray]) -> None:
     vq_list[1] = np.minimum(vq_list[1], vq_list[0])
     vq_list[3] = np.minimum(vq_list[3], vq_list[1])
     vq_list[2] = np.minimum(vq_list[2], vq_list[3])
+
+
+def _verify_x8_soundness_concrete(x8_v1_path: Path, cel2d_path: Path) -> dict[str, Any]:
+    """Run verify_all_soundness with concrete VertiRta4DDynamics bound (hj_reachability v0.7.0 ABC safe)."""
+    from scripts.colab.run_l4_jax_cbvf import _ConcreteVertiRta4DDynamics
+
+    prev_cls = _vls_mod.VertiRta4DDynamics
+    _vls_mod.VertiRta4DDynamics = _ConcreteVertiRta4DDynamics  # type: ignore[assignment]
+    try:
+        return verify_all_soundness(x8_v1_path, cel2d_path)
+    finally:
+        _vls_mod.VertiRta4DDynamics = prev_cls
 
 
 def run_job(args: Any) -> dict[str, Any]:
@@ -516,7 +961,7 @@ def run_job(args: Any) -> dict[str, Any]:
                 "v_ne_mps": LC_VNE_MPS,
                 "hover_oei_tw_eff": lc_regimes[1].tw_ratio,
             },
-            "execution_mode": "sequential_per_regime_oom_safe",
+            "execution_mode": "true_jax_vmap_batch2" if vmap_bs == 2 else f"true_jax_vmap_batch{vmap_bs}",
             "wall_clock_s": round(time.perf_counter() - t0, 4),
         }
         write_canonical_json(args.out_json, payload)
@@ -606,7 +1051,7 @@ def run_job(args: Any) -> dict[str, Any]:
         solve_and_export_cel_2d(cel2d_path)
         assert cel2d_path.stat().st_size == CEL2D_TOTAL_BYTES
 
-        soundness = verify_all_soundness(x8_v1_path, cel2d_path)
+        soundness = _verify_x8_soundness_concrete(x8_v1_path, cel2d_path)
         lc_soundness = verify_lift_cruise_lut_soundness(lc_v1_path)
         x8_ok = bool(soundness.get("passed", False))
         lc_ok = bool(lc_soundness.get("passed", False))
@@ -646,7 +1091,7 @@ def run_job(args: Any) -> dict[str, Any]:
         write_canonical_json(args.out_json, payload)
         return payload
 
-    # Live G4 JAX CUDA solve (101x71x101x71 sequential_per_regime_oom_safe for X8-240 & Lift+Cruise 8+1)
+    # Live G4 JAX CUDA solve (101x71x101x71 genuine jax.vmap(2) + OOM-safe fallback for X8-240 & LC 8+1)
     x8_vq, x8_eps, x8_vq_hires, x8_stats = _solve_regimes_jax_vmap(
         x8_regimes, fine_shape=HIRES_SHAPE, lo=LUT_LO, hi=LUT_HI, vmap_batch_size=vmap_bs
     )
@@ -655,6 +1100,13 @@ def run_job(args: Any) -> dict[str, Any]:
         lc_regimes, fine_shape=HIRES_SHAPE, lo=LC_LUT_LO, hi=LC_LUT_HI, vmap_batch_size=vmap_bs
     )
     lc_vq[1] = np.minimum(lc_vq[1], lc_vq[0])
+
+    if x8_stats["execution_mode"] == lc_stats["execution_mode"]:
+        live_exec_mode = x8_stats["execution_mode"]
+    elif "fallback" in str(x8_stats["execution_mode"]) or "fallback" in str(lc_stats["execution_mode"]):
+        live_exec_mode = "sequential_per_regime_oom_safe_fallback"
+    else:
+        live_exec_mode = str(x8_stats["execution_mode"])
 
     flags_live = FLAG_HAS_V_CAP | FLAG_CONSERVATIVE_SMAX
     x8_v1_path = blob_dir / "cbvf_4d_x8_240_v4_from_101x71.vrta_lut"
@@ -706,14 +1158,14 @@ def run_job(args: Any) -> dict[str, Any]:
 
     cel2d_path = blob_dir / "cel_2d_x8_240.vrta_cel2d"
     solve_and_export_cel_2d(cel2d_path)
-    soundness = verify_all_soundness(x8_v1_path, cel2d_path)
+    soundness = _verify_x8_soundness_concrete(x8_v1_path, cel2d_path)
     lc_soundness = verify_lift_cruise_lut_soundness(lc_v1_path)
     x8_ok = bool(soundness.get("passed", False))
     lc_ok = bool(lc_soundness.get("passed", False))
     payload = {
         "schema_version": "vertirta.g4_jax_4d_hires_and_lc_manifest/v4.0.0",
         "mode": "LIVE_G4_JAX_CUDA_FP32",
-        "execution_mode": "sequential_per_regime_oom_safe",
+        "execution_mode": live_exec_mode,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "xla_mem_fraction": xla_frac,
         "vmap_batch_size": vmap_bs,

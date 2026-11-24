@@ -27,14 +27,23 @@ from scripts.colab.g4_jobs.job_forward_wire import (
 )
 from scripts.colab.g4_jobs.job_jax_4d_hires_and_lc import (
     LC_CD_R,
+    _ParameterizedVertiRta4DDynamics,
+    _verify_x8_soundness_concrete,
     build_lift_cruise_regimes,
+    regime_spec_to_param_vector,
+    verify_parameterized_dynamics_equivalence,
 )
 from scripts.colab.g4_jobs.job_pidnet_v21_xfeat import (
     JPEG_MAGIC,
     PNG_MAGIC,
+    _run_live_g4_pidnet_v21,
+    _shutdown_loader,
+    _train_pidnet_attempt,
     apply_oblique_perspective_aug,
+    build_argparser as build_pidnet_argparser,
     is_valid_skyscenes_image_member,
     select_pareto_checkpoint,
+    select_pidnet_learning_rate,
 )
 from scripts.colab.remote_g4_driver import run_driver, wait_for_gpu_drain_barrier
 from scripts.colab.run_g4_m3_thunder_run import (
@@ -137,6 +146,8 @@ def test_ast_audit_forbids_dummy_vram_padding_and_personal_paths() -> None:
         REPO_ROOT / "scripts/colab/run_g4_m3_thunder_run.py",
         REPO_ROOT / "scripts/colab/remote_g4_driver.py",
         REPO_ROOT / "scripts/colab/g4_jobs/common.py",
+        REPO_ROOT / "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+        REPO_ROOT / "scripts/colab/g4_jobs/job_whisper_bvi_lora.py",
         REPO_ROOT / "scripts/colab/g4_jobs/job_forward_wire.py",
         REPO_ROOT / "scripts/colab/g4_jobs/job_jax_4d_hires_and_lc.py",
         REPO_ROOT / "scripts/colab/g4_jobs/job_pidnet_v21_xfeat.py",
@@ -716,3 +727,123 @@ def test_minimal_source_tarball_preserves_fast_exclusions(tmp_path: Path) -> Non
     assert "scripts/colab/remote_g4_driver.py" in names
     for bad_part in (".agents", "apps", "build", ".venv", ".venv-geo", "node_modules", "dist", "__pycache__", "docs", "viz"):
         assert not any(bad_part in Path(n).parts for n in names), f"Excluded dir {bad_part!r} leaked into tarball: {names}"
+
+
+def test_wave2_jax_vmap_parameterized_dynamics_and_pidnet_bs64_defaults() -> None:
+    """Verify Wave-2 true jax.vmap(2) dynamics equivalence (<1e-6) and PIDNet bs=64 live defaults."""
+    import inspect
+    from reachability.cbvf_4d_dynamics import build_regimes_from_config
+
+    x8_regimes = build_regimes_from_config()
+    lc_regimes = build_lift_cruise_regimes()
+    assert len(x8_regimes) == 4 and len(lc_regimes) == 4
+
+    for spec in (*x8_regimes, *lc_regimes):
+        p_vec = regime_spec_to_param_vector(spec)
+        assert p_vec.shape == (13,)
+        assert p_vec.dtype == np.float32
+        assert bool(np.all(np.isfinite(p_vec)))
+        eq = verify_parameterized_dynamics_equivalence(spec)
+        assert eq["passed"] is True, f"Dynamics mismatch on {spec.name}: {eq}"
+        assert eq["max_abs_err"] < 1e-6, f"max_abs_err={eq['max_abs_err']} >= 1e-6 on {spec.name}"
+
+    # AST check: _ParameterizedVertiRta4DDynamics must contain ZERO Python float() casts (JAX-tracer safe)
+    dyn_src = inspect.getsource(_ParameterizedVertiRta4DDynamics)
+    dyn_tree = ast.parse(dyn_src)
+    for node in ast.walk(dyn_tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id != "float", "Python float() cast forbidden inside _ParameterizedVertiRta4DDynamics"
+
+    # Verify PIDNet-S v2.1 Wave-2 live scaling defaults (2x datasets, bs=64, LR=8e-4/6e-4)
+    pid_args = build_pidnet_argparser().parse_args(["--out-json", "dummy.json"])
+    assert pid_args.batch_size == 64
+    assert pid_args.epochs == 18
+    assert pid_args.max_flair == 600
+    assert pid_args.max_oem == 1000
+    assert pid_args.max_floodnet == 800
+    assert pid_args.max_skyscenes == 800
+    assert select_pidnet_learning_rate(64) == pytest.approx(8e-4)
+    assert select_pidnet_learning_rate(32) == pytest.approx(6e-4)
+
+
+def test_verify_x8_soundness_concrete_handles_hj_abc_dynamics_and_restores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Simulate hj_reachability v0.7.0 abc.ABC VertiRta4DDynamics and verify concrete binding + restore."""
+    import abc
+    import reachability.verify_lut_soundness as vls_mod
+    from reachability.cbvf_4d_dynamics import VertiRta4DDynamics
+    from reachability.solve_cbvf_luts import solve_and_export_lut
+    from reachability.solve_cel_2d_lut import solve_and_export_cel_2d
+    from scripts.colab.run_l4_jax_cbvf import _ConcreteVertiRta4DDynamics
+
+    lut_path = vls_mod.DEFAULT_QUICK_LUT
+    cel_path = vls_mod.DEFAULT_QUICK_CEL2D
+    if not (lut_path.is_file() and cel_path.is_file()):
+        lut_path = tmp_path / "quick_test.vrta_lut"
+        cel_path = tmp_path / "quick_test.vrta_cel2d"
+        solve_and_export_lut(lut_path, quick_cpu_fixture=True)
+        solve_and_export_cel_2d(cel_path)
+
+    class _AbstractVertiRta4DDynamics(VertiRta4DDynamics, abc.ABC):
+        @abc.abstractmethod
+        def __call__(self, state: Any, control: Any, disturbance: Any, time: Any) -> Any:
+            raise NotImplementedError
+
+        @abc.abstractmethod
+        def optimal_control_and_disturbance(self, state: Any, time: Any, grad_value: Any) -> tuple[Any, Any]:
+            raise NotImplementedError
+
+    # Confirm _ConcreteVertiRta4DDynamics implements both hj.Dynamics abstract hooks
+    assert callable(getattr(_ConcreteVertiRta4DDynamics, "__call__", None))
+    assert callable(getattr(_ConcreteVertiRta4DDynamics, "optimal_control_and_disturbance", None))
+
+    monkeypatch.setattr(vls_mod, "VertiRta4DDynamics", _AbstractVertiRta4DDynamics)
+
+    # Without concrete binding, verify_all_soundness crashes exactly as on live Colab G4 with hj_reachability v0.7.0
+    with pytest.raises(TypeError, match="abstract class"):
+        vls_mod.verify_all_soundness(lut_path, cel_path)
+
+    # With _verify_x8_soundness_concrete, soundness passes AND original class binding is restored
+    report = _verify_x8_soundness_concrete(lut_path, cel_path)
+    assert report["passed"] is True
+    assert vls_mod.VertiRta4DDynamics is _AbstractVertiRta4DDynamics
+
+    # Even on error, finally: MUST restore verify_lut_soundness.VertiRta4DDynamics
+    with pytest.raises(FileNotFoundError):
+        _verify_x8_soundness_concrete(tmp_path / "missing.vrta_lut", cel_path)
+    assert vls_mod.VertiRta4DDynamics is _AbstractVertiRta4DDynamics
+
+
+def test_wave2_pidnet_work_dir_isolation_and_dataloader_shutdown() -> None:
+    """Verify PIDNet work_dir lives outside blob_dir and _shutdown_loader shuts down persistent workers."""
+    import inspect
+
+    shutdown_calls: list[str] = []
+
+    class _FakeIter:
+        def _shutdown_workers(self) -> None:
+            shutdown_calls.append("shutdown")
+
+    class _FakeLoader:
+        def __init__(self) -> None:
+            self._iterator: Any = _FakeIter()
+
+    loader = _FakeLoader()
+    _shutdown_loader(loader)
+    assert shutdown_calls == ["shutdown"]
+    assert loader._iterator is None
+    # Safe no-op on None or already-shut-down loaders
+    _shutdown_loader(None)
+    _shutdown_loader(loader)
+    assert shutdown_calls == ["shutdown"]
+
+    live_src = inspect.getsource(_run_live_g4_pidnet_v21)
+    assert 'Path(args.blob_dir).parent / "_work_pidnet_v21"' in live_src
+    assert 'Path(args.blob_dir) / "_work_pidnet_v21"' not in live_src
+    assert "_train_pidnet_attempt(" in live_src
+    assert "traceback.clear_frames" in live_src
+
+    attempt_src = inspect.getsource(_train_pidnet_attempt)
+    assert "_shutdown_loader(train_loader)" in attempt_src
+    assert "_shutdown_loader(val_loader)" in attempt_src

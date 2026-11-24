@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""On-VM Two-Wave G4 Supervisor & 1 Hz nvidia-smi Telemetry Daemon (Plan 6C Task 6).
+"""On-VM Two-Wave G4 Supervisor & 1 Hz nvidia-smi Telemetry Daemon (Plan 6C Task 6 + Wave-1 Turbo).
 
 Executes on the Colab G4 VM (or locally in --dry-run / --smoke-cpu modes with 0 CU):
   - Writes initial `heartbeat.json` (`state="STARTING"`, `pid=os.getpid()`) BEFORE Wave 1.
-  - Wave 1 (3 parallel PyTorch processes, 0.46 + 0.22 + 0.20 = 0.88):
-      1. job_qwen3_v3_vertibench_v2.py (0.46)
-      2. job_whisper_bvi_lora.py       (0.22)
-      3. job_forward_wire.py           (0.20)
+  - Wave 1 (in live_g4 mode when `qwen3_v3` is selected):
+      * Wave 1A (`wave1a`, 0.46 + 0.22 + 0.20 = 0.88):
+          1. job_qwen3_v3_vertibench_v2.py --phase sft (0.46)
+          2. job_whisper_bvi_lora.py                   (0.22)
+          3. job_forward_wire.py                       (0.20)
+      * Wave 1B (`wave1b_parallel_grpo`, 3 x 0.29 = 0.87):
+          3 parallel independent `job_qwen3_v3_vertibench_v2.py --phase grpo-seed --seed-index {0,1,2}`
+      * Wave 1C (`wave1c_conformal_finalize`, 0.65):
+          `job_qwen3_v3_vertibench_v2.py --phase finalize` -> canonical `g4_qwen3_v3_vertibench_v2_eval.json`
   - Hard Wave-1 -> Wave-2 GPU Drain Barrier:
       Waits for ALL Wave-1 PIDs to exit AND polls nvidia-smi until 0 active compute PIDs
       and memory.used < 1,500 MiB (prevents XLA vs PyTorch allocator collision!).
@@ -44,6 +49,9 @@ from scripts.colab.g4_jobs.common import (  # noqa: E402
 )
 
 DRAIN_MEMORY_THRESHOLD_MIB = 1500.0
+WAVE1B_GRPO_SEED_FRACTION = 0.29
+WAVE1B_GRPO_NUM_SEEDS = 3
+WAVE1C_FINALIZE_FRACTION = 0.65
 
 
 class TelemetrySampler:
@@ -196,6 +204,111 @@ def build_wave_commands(
     return waves
 
 
+def build_live_wave1_stages(
+    *,
+    repo_root: Path,
+    artifacts_dir: Path,
+    blob_dir: Path,
+    jobs_filter: set[str] | None = None,
+    vertibench_v2_dir: Path | None = None,
+    mode: str = "live_g4",
+) -> dict[str, list[dict[str, Any]]]:
+    """Build staged Wave-1A (0.88) + Wave-1B Parallel 3-Seed GRPO (3x0.29=0.87) + Wave-1C Finalize (0.65)."""
+    base_waves = build_wave_commands(
+        repo_root=repo_root,
+        artifacts_dir=artifacts_dir,
+        blob_dir=blob_dir,
+        mode=mode,
+        jobs_filter=jobs_filter,
+        vertibench_v2_dir=vertibench_v2_dir,
+    )
+    stages: dict[str, list[dict[str, Any]]] = {
+        "wave1a": [],
+        "wave1b_parallel_grpo": [],
+        "wave1c_conformal_finalize": [],
+    }
+
+    qwen_base: dict[str, Any] | None = None
+    for sp in base_waves["wave1"]:
+        if sp["job_key"] == "qwen3_v3":
+            qwen_base = sp
+        else:
+            stages["wave1a"].append({**sp, "wave": "wave1a"})
+
+    if qwen_base is None:
+        return stages
+
+    qwen_spec = G4_JOB_REGISTRY["qwen3_v3"]
+    qwen_script = repo_root / str(qwen_spec["script"])
+    qwen_sft_frac = float(qwen_spec["vram_fraction"])  # type: ignore[arg-type]
+    qwen_env = dict(qwen_base["env_overrides"])
+
+    def _qwen_stage_cmd(frac: float, out_json: Path, phase: str, seed_index: int | None = None) -> list[str]:
+        cmd = [
+            sys.executable,
+            str(qwen_script),
+            "--vram-fraction",
+            f"{frac:.2f}",
+            "--out-json",
+            str(out_json),
+            "--blob-dir",
+            str(blob_dir),
+            "--phase",
+            phase,
+        ]
+        if seed_index is not None:
+            cmd.extend(["--seed-index", str(seed_index)])
+        if mode == "dry_run":
+            cmd.append("--dry-run")
+        elif mode == "smoke_cpu":
+            cmd.append("--smoke-cpu")
+        if vertibench_v2_dir is not None:
+            cmd.extend(["--data-dir", str(vertibench_v2_dir)])
+        return cmd
+
+    sft_out = artifacts_dir / "g4_qwen3_v3_sft_stage.json"
+    stages["wave1a"].insert(
+        0,
+        {
+            "job_key": "qwen3_v3_sft",
+            "wave": "wave1a",
+            "runtime": "pytorch",
+            "vram_fraction": qwen_sft_frac,
+            "cmd": _qwen_stage_cmd(qwen_sft_frac, sft_out, "sft"),
+            "out_json": str(sft_out),
+            "env_overrides": dict(qwen_env),
+        },
+    )
+
+    for seed_idx in range(WAVE1B_GRPO_NUM_SEEDS):
+        seed_out = artifacts_dir / f"g4_qwen3_v3_grpo_seed{seed_idx}.json"
+        stages["wave1b_parallel_grpo"].append(
+            {
+                "job_key": f"qwen3_v3_grpo_seed{seed_idx}",
+                "wave": "wave1b_parallel_grpo",
+                "runtime": "pytorch",
+                "vram_fraction": WAVE1B_GRPO_SEED_FRACTION,
+                "cmd": _qwen_stage_cmd(WAVE1B_GRPO_SEED_FRACTION, seed_out, "grpo-seed", seed_index=seed_idx),
+                "out_json": str(seed_out),
+                "env_overrides": dict(qwen_env),
+            }
+        )
+
+    final_out = artifacts_dir / str(qwen_spec["out_json_name"])
+    stages["wave1c_conformal_finalize"].append(
+        {
+            "job_key": "qwen3_v3_finalize",
+            "wave": "wave1c_conformal_finalize",
+            "runtime": "pytorch",
+            "vram_fraction": WAVE1C_FINALIZE_FRACTION,
+            "cmd": _qwen_stage_cmd(WAVE1C_FINALIZE_FRACTION, final_out, "finalize"),
+            "out_json": str(final_out),
+            "env_overrides": dict(qwen_env),
+        }
+    )
+    return stages
+
+
 def _write_heartbeat(path: Path, state: str, details: dict[str, Any]) -> None:
     payload = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -299,9 +412,13 @@ def _collect_artifact_digests(artifacts_dir: Path, blob_dir: Path) -> tuple[list
 
     blob_files: list[dict[str, Any]] = []
     for p in sorted(blob_dir.rglob("*")):
-        if p.is_file() and not p.name.startswith("."):
-            rel = str(p.relative_to(blob_dir)).replace("\\", "/")
-            blob_files.append({"relpath": rel, "size_bytes": p.stat().st_size, "sha256": sha256_file(p)})
+        if not p.is_file():
+            continue
+        rel_path = p.relative_to(blob_dir)
+        if any(part.startswith("_work") or part.startswith(".") for part in rel_path.parts):
+            continue
+        rel = str(rel_path).replace("\\", "/")
+        blob_files.append({"relpath": rel, "size_bytes": p.stat().st_size, "sha256": sha256_file(p)})
     return json_files, blob_files
 
 
@@ -330,12 +447,23 @@ def run_driver(
         vertibench_v2_dir=args.vertibench_v2_dir,
     )
 
+    live_wave1_stages = build_live_wave1_stages(
+        repo_root=REPO_ROOT,
+        artifacts_dir=artifacts_dir,
+        blob_dir=blob_dir,
+        jobs_filter=jobs_filter,
+        vertibench_v2_dir=args.vertibench_v2_dir,
+        mode="live_g4" if mode == "live_g4" else mode,
+    )
+    use_staged_live_wave1 = (mode == "live_g4") and any(j["job_key"] == "qwen3_v3" for j in waves["wave1"])
+
     if mode == "dry_run":
         manifest = {
             "schema_version": "vertirta.remote_g4_bundle_manifest/v4.0.0",
             "mode": "DRY_RUN",
             "wave_budgets": WAVE_BUDGETS,
             "waves": waves,
+            "live_wave1_stages": live_wave1_stages,
             "wall_clock_s": round(time.perf_counter() - t0, 4),
         }
         write_canonical_json(artifacts_dir / "remote_bundle_manifest.json", manifest)
@@ -353,6 +481,7 @@ def run_driver(
         {
             "actual_gpu_name": actual_gpu_name,
             "actual_gpu_total_mib": actual_gpu_total_mib,
+            "wave1_schedule": "staged_wave1a_1b_1c" if use_staged_live_wave1 else "single_wave1",
             "wave1_jobs": [j["job_key"] for j in waves["wave1"]],
             "wave2_jobs": [j["job_key"] for j in waves["wave2"]],
         },
@@ -365,9 +494,36 @@ def run_driver(
     driver_error: str | None = None
 
     try:
-        sampler.set_wave("wave1")
-        w1_res = _run_wave_parallel("wave1", waves["wave1"], logs_dir, heartbeat_path)
-        all_results.extend(w1_res)
+        if use_staged_live_wave1:
+            sampler.set_wave("wave1a")
+            w1a_res = _run_wave_parallel("wave1a", live_wave1_stages["wave1a"], logs_dir, heartbeat_path)
+            all_results.extend(w1a_res)
+
+            sft_ok = any(r["job_key"] == "qwen3_v3_sft" and r["returncode"] == 0 for r in w1a_res)
+            if sft_ok:
+                sampler.set_wave("wave1b_parallel_grpo")
+                w1b_res = _run_wave_parallel(
+                    "wave1b_parallel_grpo",
+                    live_wave1_stages["wave1b_parallel_grpo"],
+                    logs_dir,
+                    heartbeat_path,
+                )
+                all_results.extend(w1b_res)
+
+                all_grpo_ok = len(w1b_res) == WAVE1B_GRPO_NUM_SEEDS and all(r["returncode"] == 0 for r in w1b_res)
+                if all_grpo_ok:
+                    sampler.set_wave("wave1c_conformal_finalize")
+                    w1c_res = _run_wave_parallel(
+                        "wave1c_conformal_finalize",
+                        live_wave1_stages["wave1c_conformal_finalize"],
+                        logs_dir,
+                        heartbeat_path,
+                    )
+                    all_results.extend(w1c_res)
+        else:
+            sampler.set_wave("wave1")
+            w1_res = _run_wave_parallel("wave1", waves["wave1"], logs_dir, heartbeat_path)
+            all_results.extend(w1_res)
 
         sampler.set_wave("drain_barrier")
         barrier_info = wait_for_gpu_drain_barrier(

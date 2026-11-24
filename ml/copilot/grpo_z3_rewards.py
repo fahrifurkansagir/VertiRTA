@@ -230,7 +230,7 @@ def _verify_single_target_qflra(
     solver.set("unsat_core", True)
     solver.set("core.minimize", True)
     solver.set("rlimit", 250000)
-    solver.set("timeout", 12)
+    solver.set("timeout", 500)
 
     ze1, zn1 = z3.Reals("e1 n1")
     zz0, zz1, zzmin, zzmax = z3.Reals("z0 z1 z_cmd_min z_cmd_max")

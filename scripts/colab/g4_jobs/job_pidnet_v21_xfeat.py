@@ -28,12 +28,14 @@ from __future__ import annotations
 from collections import Counter
 import copy
 from datetime import datetime, timezone
+import gc
 import json
 import math
 from pathlib import Path
 import random
 import sys
 import time
+import traceback
 from typing import Any
 
 import numpy as np
@@ -100,6 +102,11 @@ def build_pidnet_xfeat_license_manifest() -> tuple[list[dict[str, Any]], list[di
         {"name": "MegaLoc", "repo": "gmberton/MegaLoc", "license": "MIT"},
     ]
     return train_sources, eval_only_sources, models
+
+
+def select_pidnet_learning_rate(batch_size: int) -> float:
+    """Scale AdamW LR cleanly with batch size (8e-4 for bs>=64, 6e-4 for bs<=32)."""
+    return 8e-4 if int(batch_size) >= 64 else 6e-4
 
 
 def select_pareto_checkpoint(
@@ -538,6 +545,149 @@ def _export_and_check_onnx(
     }
 
 
+def _shutdown_loader(loader: Any) -> None:
+    """Explicitly shut down active DataLoader persistent worker pools before releasing references."""
+    if loader is None:
+        return
+    iterator = getattr(loader, "_iterator", None)
+    if iterator is not None and hasattr(iterator, "_shutdown_workers"):
+        try:
+            iterator._shutdown_workers()
+        except Exception:
+            pass
+        try:
+            loader._iterator = None
+        except Exception:
+            pass
+
+
+def _train_pidnet_attempt(
+    *,
+    active_bs: int,
+    effective_lr: float,
+    seed: int,
+    train_dataset: Any,
+    val_dataset: Any,
+    weights: list[float],
+    sampler_num_samples: int,
+    teachers: Any,
+    loss_fn: Any,
+    device: Any,
+    total_epochs: int,
+    use_bf16: bool,
+) -> tuple[Any, Any, list[dict[str, float]], dict[str, Any] | None, tuple[dict[str, Any], Any, Any, Any, dict[str, Any]] | None]:
+    """Run one PIDNet-S v2.1 training attempt; all local step GPU tensors go out of scope on OOM."""
+    import torch
+    import torch.nn.functional as F
+    from torch.utils.data import DataLoader, WeightedRandomSampler
+
+    from ml.slz_perception.data.remappers import NUM_CANONICAL_CLASSES
+    from ml.slz_perception.models.pidnet_slz import PIDNetSlzTrain
+    from ml.slz_perception.train.train_slz_distill import apply_anomaly_mix, compute_boundary_target
+    from scripts.colab.run_l4_pidnet_distill import evaluate_permissive_val_and_ood
+
+    seed_everything(seed)
+    sampler = WeightedRandomSampler(
+        weights=torch.as_tensor(weights, dtype=torch.double),
+        num_samples=sampler_num_samples,
+        replacement=True,
+    )
+    train_loader: Any = None
+    val_loader: Any = None
+    completed = False
+    try:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=active_bs,
+            sampler=sampler,
+            num_workers=4,
+            pin_memory=True,
+            persistent_workers=True,
+            drop_last=(sampler_num_samples >= active_bs),
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=active_bs,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            persistent_workers=True,
+        )
+        pidnet_train = PIDNetSlzTrain(num_classes=NUM_CANONICAL_CLASSES, dino_dim=1024).to(device)
+        opt = torch.optim.AdamW(pidnet_train.parameters(), lr=effective_lr, weight_decay=1e-4)
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, total_epochs), eta_min=1e-5)
+
+        pareto_history: list[dict[str, float]] = []
+        best_state: dict[str, Any] | None = None
+        best_val_tuple: tuple[dict[str, Any], Any, Any, Any, dict[str, Any]] | None = None
+        best_score_key: tuple[int, float, float] = (-1, -1.0, -1.0)
+
+        for epoch in range(1, total_epochs + 1):
+            pidnet_train.train()
+            ramp = 0.5 * (1.0 - math.cos(math.pi * float(epoch) / float(max(1, total_epochs))))
+            lambda_fsr = 0.15 + 0.50 * ramp
+            is_stage2 = epoch > max(1, (total_epochs * 2) // 3)
+            for batch in train_loader:
+                rgb = batch["rgb"].to(device, non_blocking=True)
+                lbl = batch["label"].to(device, non_blocking=True)
+                gt_n = batch["gt_normal"].to(device, non_blocking=True)
+                has_n = batch["has_gt_normal"].to(device, non_blocking=True)
+                if is_stage2:
+                    rgb, lbl = apply_anomaly_mix(rgb, lbl, prob=0.15)
+                t_dino, t_norm = teachers.infer(rgb, gt_n, has_n, use_bf16=use_bf16)
+
+                opt.zero_grad(set_to_none=True)
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
+                    out = pidnet_train(rgb)
+                # Compute all losses strictly in FP32 outside autocast (prevents BCE autocast RuntimeError!)
+                loss_seg, _ = loss_fn(out.seg_logits.float(), lbl, lambda_fsr=lambda_fsr)
+                if t_dino is not None:
+                    s_dino = out.dino_feats.float()
+                    if s_dino.shape[2:] != t_dino.shape[2:]:
+                        s_dino = F.interpolate(s_dino, size=t_dino.shape[2:], mode="bilinear", align_corners=False)
+                    loss_dino = (1.0 - F.cosine_similarity(s_dino, t_dino.float(), dim=1, eps=1e-6)).mean()
+                else:
+                    loss_dino = torch.tensor(0.0, device=device)
+                loss_norm = (1.0 - F.cosine_similarity(out.surf_normals.float(), t_norm.float(), dim=1, eps=1e-6)).mean()
+                bdry_tgt = compute_boundary_target(lbl, out_hw=(64, 64))
+                loss_bdry = F.binary_cross_entropy(out.bdry_prob.float().clamp(1e-5, 1.0 - 1e-5), bdry_tgt)
+                loss_ood = torch.tensor(0.0, device=device)
+                if is_stage2:
+                    energy = -torch.logsumexp(out.seg_logits.float(), dim=1)
+                    id_m = (lbl >= 0) & (lbl < NUM_CANONICAL_CLASSES)
+                    ood_m = lbl == 254
+                    if bool(id_m.any()):
+                        loss_ood = loss_ood + F.relu(energy[id_m] - (-8.0)).pow(2).mean()
+                    if bool(ood_m.any()):
+                        loss_ood = loss_ood + F.relu((-2.5) - energy[ood_m]).pow(2).mean()
+                loss = loss_seg + 0.35 * loss_dino + 0.25 * loss_norm + 0.20 * loss_bdry + 0.02 * loss_ood
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(pidnet_train.parameters(), 2.0)
+                opt.step()
+            sched.step()
+
+            # Real permissive validation + Pareto checkpoint selection (val_FSR <= 0.030)
+            val_tuple = evaluate_permissive_val_and_ood(
+                pidnet_train, val_loader, teachers, device, use_bf16=use_bf16, eval_ood=is_stage2
+            )
+            v_m = val_tuple[0]
+            v_miou = float(v_m["miou_present_classes"])
+            v_fsr = float(v_m["false_safe_rate_fsr"])
+            pareto_history.append({"epoch": float(epoch), "val_miou": round(v_miou, 6), "val_fsr": round(v_fsr, 6)})
+            score_key = (1 if v_fsr <= 0.030 else 0, v_miou if v_fsr <= 0.030 else -v_fsr, -v_fsr)
+            if score_key > best_score_key:
+                best_score_key = score_key
+                best_state = copy.deepcopy({k: v.detach().cpu() for k, v in pidnet_train.state_dict().items()})
+                best_val_tuple = val_tuple
+
+        completed = True
+        return pidnet_train, val_loader, pareto_history, best_state, best_val_tuple
+    finally:
+        _shutdown_loader(train_loader)
+        if not completed:
+            _shutdown_loader(val_loader)
+
+
 def _run_live_g4_pidnet_v21(
     args: Any,
     device: Any,
@@ -547,14 +697,11 @@ def _run_live_g4_pidnet_v21(
 ) -> dict[str, Any]:
     """Real 4-source Zero-ShareAlike PIDNet-S v2.1 training + FrozenApache2Teachers + Pareto + XFeat."""
     import torch
-    import torch.nn.functional as F
-    from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+    from torch.utils.data import Dataset
     from PIL import Image
 
-    from ml.slz_perception.data.remappers import NUM_CANONICAL_CLASSES
-    from ml.slz_perception.models.pidnet_slz import PIDNetSlzDeployWrapper, PIDNetSlzTrain
+    from ml.slz_perception.models.pidnet_slz import PIDNetSlzDeployWrapper
     from ml.slz_perception.train.calibrate_ood import calibrate_temperature_and_tau
-    from ml.slz_perception.train.train_slz_distill import apply_anomaly_mix, compute_boundary_target
     from scripts.colab.run_l4_pidnet_distill import (
         FrozenApache2Teachers,
         IMAGENET_MEAN,
@@ -569,10 +716,10 @@ def _run_live_g4_pidnet_v21(
         run_startup_license_gate,
     )
 
-    work_dir = Path(args.blob_dir) / "_work_pidnet_v21"
-    work_dir.mkdir(parents=True, exist_ok=True)
     blob_dir = Path(args.blob_dir)
     blob_dir.mkdir(parents=True, exist_ok=True)
+    work_dir = Path(args.blob_dir).parent / "_work_pidnet_v21"
+    work_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Live Zero-ShareAlike Startup License Gate BEFORE any dataset download
     attr_path, attr_meta = fetch_or_load_oem_attribution_html(work_dir / "openearthmap_attribution.html")
@@ -651,108 +798,73 @@ def _run_live_g4_pidnet_v21(
     target_ratios = {"FLAIR-1": 0.15, "OpenEarthMap-41": 0.25, "FloodNet-Supervised-v1.0": 0.20, "SkyScenes": 0.40}
     src_counts = Counter(r.source for r in train_recs)
     weights = [target_ratios.get(r.source, 0.1) / float(max(1, src_counts[r.source])) for r in train_recs]
-    sampler = WeightedRandomSampler(
-        weights=torch.as_tensor(weights, dtype=torch.double),
-        num_samples=min(len(train_recs), 1024),
-        replacement=True,
-    )
-    train_loader = DataLoader(
-        ObliqueAugmentedSlzDataset(train_recs, augment=True),
-        batch_size=int(args.batch_size),
-        sampler=sampler,
-        num_workers=2,
-        pin_memory=True,
-        drop_last=True,
-    )
-    val_loader = DataLoader(
-        ObliqueAugmentedSlzDataset(val_recs, augment=False),
-        batch_size=int(args.batch_size),
-        shuffle=False,
-        num_workers=2,
-        pin_memory=True,
-    )
+    sampler_num_samples = min(len(train_recs), 2048)
 
     # 4) Frozen Apache-2.0 Teachers + PIDNet-S v2.1 Student + ObliqueBalancedFocalFsrLoss
+    #    with automatic OOM-safe fallback from batch_size=64 -> 32 inside the 28.8 GB Wave-2 cap
     teachers = FrozenApache2Teachers(device, enabled=True)
     ObliqueBalancedFocalFsrLoss, XFeatLiteNet = _build_oblique_loss_and_xfeat()
-    pidnet_train = PIDNetSlzTrain(num_classes=NUM_CANONICAL_CLASSES, dino_dim=1024).to(device)
     loss_fn = ObliqueBalancedFocalFsrLoss(gamma=2.0, fsr_margin=0.12).to(device)
-    opt = torch.optim.AdamW(pidnet_train.parameters(), lr=6e-4, weight_decay=1e-4)
     total_epochs = int(args.epochs)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, total_epochs), eta_min=1e-5)
+    use_bf16 = torch.cuda.is_bf16_supported()
 
+    requested_bs = max(1, int(args.batch_size))
+    candidate_bs_list = [requested_bs, 32] if requested_bs > 32 else [requested_bs]
+    effective_bs = requested_bs
+    effective_lr = select_pidnet_learning_rate(effective_bs)
+    oom_fallback_triggered = False
+    oom_fallback_reason: str | None = None
+
+    pidnet_train: Any = None
+    val_loader: Any = None
     pareto_history: list[dict[str, float]] = []
     best_state: dict[str, Any] | None = None
     best_val_tuple: tuple[dict[str, Any], Any, Any, Any, dict[str, Any]] | None = None
-    best_score_key: tuple[int, float, float] = (-1, -1.0, -1.0)
-    use_bf16 = torch.cuda.is_bf16_supported()
 
-    for epoch in range(1, total_epochs + 1):
-        pidnet_train.train()
-        ramp = 0.5 * (1.0 - math.cos(math.pi * float(epoch) / float(max(1, total_epochs))))
-        lambda_fsr = 0.15 + 0.50 * ramp
-        is_stage2 = epoch > max(1, (total_epochs * 2) // 3)
-        for batch in train_loader:
-            rgb = batch["rgb"].to(device, non_blocking=True)
-            lbl = batch["label"].to(device, non_blocking=True)
-            gt_n = batch["gt_normal"].to(device, non_blocking=True)
-            has_n = batch["has_gt_normal"].to(device, non_blocking=True)
-            if is_stage2:
-                rgb, lbl = apply_anomaly_mix(rgb, lbl, prob=0.15)
-            t_dino, t_norm = teachers.infer(rgb, gt_n, has_n, use_bf16=use_bf16)
+    for bs_idx, attempt_bs in enumerate(candidate_bs_list):
+        effective_bs = int(attempt_bs)
+        effective_lr = select_pidnet_learning_rate(effective_bs)
+        try:
+            pidnet_train, val_loader, pareto_history, best_state, best_val_tuple = _train_pidnet_attempt(
+                active_bs=effective_bs,
+                effective_lr=effective_lr,
+                seed=args.seed,
+                train_dataset=ObliqueAugmentedSlzDataset(train_recs, augment=True),
+                val_dataset=ObliqueAugmentedSlzDataset(val_recs, augment=False),
+                weights=weights,
+                sampler_num_samples=sampler_num_samples,
+                teachers=teachers,
+                loss_fn=loss_fn,
+                device=device,
+                total_epochs=total_epochs,
+                use_bf16=use_bf16,
+            )
+            break
+        except torch.cuda.OutOfMemoryError as oom_exc:
+            if bs_idx + 1 >= len(candidate_bs_list):
+                raise
+            oom_fallback_triggered = True
+            oom_fallback_reason = f"batch_size={effective_bs} OOM -> fallback to 32: {oom_exc}"
+            if oom_exc.__traceback__ is not None:
+                traceback.clear_frames(oom_exc.__traceback__)
+            del oom_exc
+            pidnet_train = None
+            val_loader = None
+            gc.collect()
+            torch.cuda.empty_cache()
 
-            opt.zero_grad(set_to_none=True)
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
-                out = pidnet_train(rgb)
-            # Compute all losses strictly in FP32 outside autocast (prevents BCE autocast RuntimeError!)
-            loss_seg, _ = loss_fn(out.seg_logits.float(), lbl, lambda_fsr=lambda_fsr)
-            if t_dino is not None:
-                s_dino = out.dino_feats.float()
-                if s_dino.shape[2:] != t_dino.shape[2:]:
-                    s_dino = F.interpolate(s_dino, size=t_dino.shape[2:], mode="bilinear", align_corners=False)
-                loss_dino = (1.0 - F.cosine_similarity(s_dino, t_dino.float(), dim=1, eps=1e-6)).mean()
-            else:
-                loss_dino = torch.tensor(0.0, device=device)
-            loss_norm = (1.0 - F.cosine_similarity(out.surf_normals.float(), t_norm.float(), dim=1, eps=1e-6)).mean()
-            bdry_tgt = compute_boundary_target(lbl, out_hw=(64, 64))
-            loss_bdry = F.binary_cross_entropy(out.bdry_prob.float().clamp(1e-5, 1.0 - 1e-5), bdry_tgt)
-            loss_ood = torch.tensor(0.0, device=device)
-            if is_stage2:
-                energy = -torch.logsumexp(out.seg_logits.float(), dim=1)
-                id_m = (lbl >= 0) & (lbl < NUM_CANONICAL_CLASSES)
-                ood_m = lbl == 254
-                if bool(id_m.any()):
-                    loss_ood = loss_ood + F.relu(energy[id_m] - (-8.0)).pow(2).mean()
-                if bool(ood_m.any()):
-                    loss_ood = loss_ood + F.relu((-2.5) - energy[ood_m]).pow(2).mean()
-            loss = loss_seg + 0.35 * loss_dino + 0.25 * loss_norm + 0.20 * loss_bdry + 0.02 * loss_ood
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(pidnet_train.parameters(), 2.0)
-            opt.step()
-        sched.step()
-
-        # Real permissive validation + Pareto checkpoint selection (val_FSR <= 0.030)
-        val_tuple = evaluate_permissive_val_and_ood(
-            pidnet_train, val_loader, teachers, device, use_bf16=use_bf16, eval_ood=is_stage2
-        )
-        v_m = val_tuple[0]
-        v_miou = float(v_m["miou_present_classes"])
-        v_fsr = float(v_m["false_safe_rate_fsr"])
-        pareto_history.append({"epoch": float(epoch), "val_miou": round(v_miou, 6), "val_fsr": round(v_fsr, 6)})
-        score_key = (1 if v_fsr <= 0.030 else 0, v_miou if v_fsr <= 0.030 else -v_fsr, -v_fsr)
-        if score_key > best_score_key:
-            best_score_key = score_key
-            best_state = copy.deepcopy({k: v.detach().cpu() for k, v in pidnet_train.state_dict().items()})
-            best_val_tuple = val_tuple
-
+    assert pidnet_train is not None and val_loader is not None
     assert best_state is not None and best_val_tuple is not None
     pidnet_train.load_state_dict(best_state)
     pareto_res = select_pareto_checkpoint(pareto_history, max_fsr=0.030)
 
     # Re-run full OOD calibration strictly on permissive ID val split
-    val_metrics, cal_logits, cal_labels, cal_bdry, ood_metrics = evaluate_permissive_val_and_ood(
-        pidnet_train, val_loader, teachers, device, use_bf16=use_bf16, eval_ood=True
-    )
+    try:
+        val_metrics, cal_logits, cal_labels, cal_bdry, ood_metrics = evaluate_permissive_val_and_ood(
+            pidnet_train, val_loader, teachers, device, use_bf16=use_bf16, eval_ood=True
+        )
+    finally:
+        _shutdown_loader(val_loader)
     ood_cal = calibrate_temperature_and_tau(cal_logits, cal_labels, cal_bdry, kappa_b=1.5)
     ood_cal_path = blob_dir / "ood_calibration_v21.json"
     ood_cal.save_json(ood_cal_path)
@@ -813,8 +925,15 @@ def _run_live_g4_pidnet_v21(
         "datasets": dataset_provenance,
         "teachers": teachers.metadata,
         "pidnet_v21_training": {
-            "batch_size": int(args.batch_size),
+            "requested_batch_size": requested_bs,
+            "batch_size": effective_bs,
+            "learning_rate": effective_lr,
             "epochs": total_epochs,
+            "sampler_num_samples": sampler_num_samples,
+            "num_workers": 4,
+            "persistent_workers": True,
+            "oom_fallback_triggered": oom_fallback_triggered,
+            "oom_fallback_reason": oom_fallback_reason,
             "oblique_perspective_aug_prob": 0.35,
             "pareto_selection": pareto_res,
             "pareto_history": pareto_history,
@@ -849,6 +968,15 @@ def run_job(args: Any) -> dict[str, Any]:
             "mode": "DRY_RUN",
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "vram_fraction": float(args.vram_fraction),
+            "batch_size": int(args.batch_size),
+            "learning_rate": select_pidnet_learning_rate(int(args.batch_size)),
+            "epochs": int(args.epochs),
+            "dataset_caps": {
+                "max_flair": int(args.max_flair),
+                "max_oem": int(args.max_oem),
+                "max_floodnet": int(args.max_floodnet),
+                "max_skyscenes": int(args.max_skyscenes),
+            },
             "license_audit": license_audit,
             "skyscenes_nested_tar_max_mb": SKYSCENES_MAX_MEMBER_BYTES // (1024 * 1024),
             "planned_exports": [
@@ -948,18 +1076,23 @@ def run_job(args: Any) -> dict[str, Any]:
     return payload
 
 
-def main() -> int:
+def build_argparser() -> Any:
     parser = build_standard_argparser(
         "job_pidnet_v21_xfeat",
         default_vram_fraction=WAVE_BUDGETS["wave2"]["pidnet_v21_xfeat"],
         description="Wave-2 G4 Job: PIDNet-S v2.1 oblique-recall fix + XFeat/MegaLoc real 0.5m reloc.",
     )
-    parser.add_argument("--batch-size", type=int, default=32, help="G4 BF16 batch size (default: 32).")
+    parser.add_argument("--batch-size", type=int, default=64, help="G4 BF16 batch size (default: 64, OOM-safe fallback to 32).")
     parser.add_argument("--epochs", type=int, default=18, help="Live G4 total training epochs (default: 18).")
-    parser.add_argument("--max-flair", type=int, default=300)
-    parser.add_argument("--max-oem", type=int, default=500)
-    parser.add_argument("--max-floodnet", type=int, default=400)
-    parser.add_argument("--max-skyscenes", type=int, default=400)
+    parser.add_argument("--max-flair", type=int, default=600)
+    parser.add_argument("--max-oem", type=int, default=1000)
+    parser.add_argument("--max-floodnet", type=int, default=800)
+    parser.add_argument("--max-skyscenes", type=int, default=800)
+    return parser
+
+
+def main() -> int:
+    parser = build_argparser()
     args = parser.parse_args()
     run_job(args)
     return 0

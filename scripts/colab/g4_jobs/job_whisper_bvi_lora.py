@@ -9,7 +9,8 @@ Strictly enforces Plan 6B (#314), Plan 6C (#316), and Pre-G4 Readiness Gate (#32
     BPF) across all 4 canonical SNR strata (`S0_Clean`, `S1_Cruise`, `S2_Hover`, `S3_Garbled`).
   - Scopes `license_audit` strictly to actually ingested sources (`FLEURS-CC-BY-4.0` + `VertiRTA-BVI-DSP-Apache2`),
     never falsely listing uningested corpora.
-  - Runs batched BF16 LoRA (`batch_size=16`, `r=32, alpha=64`) with proper Whisper `language`/`task`
+  - Runs batched BF16 LoRA (`batch_size=32` with OOM-safe fallback to `16`, `r=32, alpha=64`, `epochs=3`,
+    `train_per_lang=1000`, `eval_per_lang=128`) with proper Whisper `language`/`task`
     decoder prompts & `-100` pad masking for BOTH `openai/whisper-large-v3-turbo` & `openai/whisper-small`.
   - Runs real `model.generate(...)` Zero-Shot vs BVI-LoRA WER, CER, and latency (`audio_ctx=256` vs
     `1500` speedup) across all 4 SNR strata and both languages (`TR`, `EN`).
@@ -19,6 +20,7 @@ Strictly enforces Plan 6B (#314), Plan 6C (#316), and Pre-G4 Readiness Gate (#32
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import gc
 import json
 import math
 from pathlib import Path
@@ -26,6 +28,7 @@ import random
 import re
 import sys
 import time
+import traceback
 from typing import Any, Sequence
 import urllib.request
 
@@ -168,6 +171,22 @@ def build_whisper_label_ids(
     return seq
 
 
+def pack_whisper_label_batch(
+    label_seqs: Sequence[Sequence[int]],
+    *,
+    device: Any = None,
+) -> Any:
+    """Pack variable-length Whisper label sequences into a -100-padded tensor without masking EOS."""
+    import torch  # type: ignore[import-not-found]
+
+    max_l = max(len(s) for s in label_seqs)
+    labels_t = torch.full((len(label_seqs), max_l), -100, dtype=torch.long, device=device)
+    for bi, seq in enumerate(label_seqs):
+        if seq:
+            labels_t[bi, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
+    return labels_t
+
+
 def _fetch_fleurs_parquet_urls(lang_cfg: str, split: str) -> list[str]:
     """Query HF Datasets Server parquet API directly for google/fleurs (datasets v3+ safe)."""
     api_url = f"https://huggingface.co/api/datasets/google/fleurs/parquet/{lang_cfg}"
@@ -296,15 +315,16 @@ def _eval_whisper_across_strata(
     processor: Any,
     eval_by_stratum: dict[str, list[dict[str, Any]]],
     *,
-    batch_size: int = 16,
+    batch_size: int = 32,
 ) -> dict[str, Any]:
-    """Run real model.generate(...) WER/CER/latency across all 4 SNR strata and TR/EN."""
+    """Run real model.generate(...) WER/CER/latency across all 4 SNR strata and TR/EN (OOM-safe 32 -> 16)."""
     import torch
 
     model.eval()
     stratum_out: dict[str, Any] = {}
     lang_refs: dict[str, list[str]] = {"TR": [], "EN": []}
     lang_hyps: dict[str, list[str]] = {"TR": [], "EN": []}
+    cur_bsz = max(1, int(batch_size))
 
     with torch.no_grad():
         for stratum in CANONICAL_SNR_STRATA:
@@ -317,29 +337,47 @@ def _eval_whisper_across_strata(
 
             for lang_code, whisper_lang in (("TR", "turkish"), ("EN", "english")):
                 sub = [x for x in items if x["lang"] == lang_code]
-                for start in range(0, len(sub), batch_size):
-                    batch = sub[start : start + batch_size]
+                start = 0
+                while start < len(sub):
+                    batch = sub[start : start + cur_bsz]
                     wavs = [b["mixed_audio"] for b in batch]
-                    feats = processor.feature_extractor(
-                        wavs, sampling_rate=16000, return_tensors="pt"
-                    ).input_features.to(device="cuda:0", dtype=torch.bfloat16)
+                    feats = None
+                    gen_ids = None
+                    try:
+                        feats = processor.feature_extractor(
+                            wavs, sampling_rate=16000, return_tensors="pt"
+                        ).input_features.to(device="cuda:0", dtype=torch.bfloat16)
 
-                    if torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    t0 = time.perf_counter()
-                    gen_ids = model.generate(
-                        input_features=feats,
-                        language=whisper_lang,
-                        task="transcribe",
-                        max_new_tokens=96,
-                    )
-                    if torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    dt_ms = (time.perf_counter() - t0) * 1000.0
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        t0 = time.perf_counter()
+                        gen_ids = model.generate(
+                            input_features=feats,
+                            language=whisper_lang,
+                            task="transcribe",
+                            max_new_tokens=96,
+                        )
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        dt_ms = (time.perf_counter() - t0) * 1000.0
+                        eval_oom_hit = False
+                    except torch.cuda.OutOfMemoryError as oom_exc:
+                        if oom_exc.__traceback__ is not None:
+                            traceback.clear_frames(oom_exc.__traceback__)
+                        del gen_ids, feats, oom_exc
+                        if cur_bsz <= 16:
+                            raise
+                        eval_oom_hit = True
+                    if eval_oom_hit:
+                        gc.collect()
+                        torch.cuda.empty_cache()
+                        cur_bsz = 16
+                        continue
                     per_item_ms = dt_ms / float(max(1, len(batch)))
                     lat_ms_list.extend([per_item_ms] * len(batch))
 
                     decoded = processor.batch_decode(gen_ids, skip_special_tokens=True)
+                    del gen_ids, feats
                     for b_item, hyp in zip(batch, decoded):
                         refs.append(b_item["text"])
                         hyps.append(hyp)
@@ -347,6 +385,7 @@ def _eval_whisper_across_strata(
                         per_lang_h[lang_code].append(hyp)
                         lang_refs[lang_code].append(b_item["text"])
                         lang_hyps[lang_code].append(hyp)
+                    start += len(batch)
 
             wer_all, cer_all = compute_wer_cer(refs, hyps)
             wer_tr, cer_tr = compute_wer_cer(per_lang_r["TR"], per_lang_h["TR"])
@@ -484,14 +523,16 @@ def _run_live_g4_whisper_bvi_lora(
         )
         model = get_peft_model(base, lora_cfg)
         opt = torch.optim.AdamW(model.parameters(), lr=1.5e-4, weight_decay=0.01)
-        pad_tok = int(processor.tokenizer.pad_token_id)
 
         losses: list[float] = []
+        cur_batch_size = max(1, int(batch_size))
+        oom_fallback_triggered = False
         model.train()
         for ep in range(epochs):
             rng.shuffle(train_pool)
-            for b_start in range(0, len(train_pool), batch_size):
-                batch = train_pool[b_start : b_start + batch_size]
+            b_start = 0
+            while b_start < len(train_pool):
+                batch = train_pool[b_start : b_start + cur_batch_size]
                 wavs: list[np.ndarray] = []
                 label_seqs: list[list[int]] = []
                 for j, item in enumerate(batch):
@@ -508,25 +549,42 @@ def _run_live_g4_whisper_bvi_lora(
                     w_lang = "turkish" if item["lang"] == "TR" else "english"
                     label_seqs.append(build_whisper_label_ids(processor, item["text"], w_lang, max_tokens=256))
 
-                feats = processor.feature_extractor(
-                    wavs, sampling_rate=16000, return_tensors="pt"
-                ).input_features.to(device="cuda:0", dtype=torch.bfloat16)
+                feats = None
+                labels_t = None
+                out = None
+                try:
+                    feats = processor.feature_extractor(
+                        wavs, sampling_rate=16000, return_tensors="pt"
+                    ).input_features.to(device="cuda:0", dtype=torch.bfloat16)
 
-                max_l = max(len(s) for s in label_seqs)
-                labels_t = torch.full((len(label_seqs), max_l), -100, dtype=torch.long, device="cuda:0")
-                for bi, seq in enumerate(label_seqs):
-                    for ti, tok in enumerate(seq):
-                        if tok != pad_tok:
-                            labels_t[bi, ti] = tok
+                    # Keep trailing EOS (50257) supervised even though Whisper pad_token_id == eos_token_id == 50257.
+                    labels_t = pack_whisper_label_batch(label_seqs, device="cuda:0")
 
-                opt.zero_grad(set_to_none=True)
-                out = model(input_features=feats, labels=labels_t)
-                out.loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                opt.step()
-                losses.append(float(out.loss.detach().cpu().item()))
+                    opt.zero_grad(set_to_none=True)
+                    out = model(input_features=feats, labels=labels_t)
+                    out.loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                    opt.step()
+                    losses.append(float(out.loss.detach().cpu().item()))
+                    del out, feats, labels_t
+                    b_start += len(batch)
+                    train_oom_hit = False
+                except torch.cuda.OutOfMemoryError as oom_exc:
+                    if oom_exc.__traceback__ is not None:
+                        traceback.clear_frames(oom_exc.__traceback__)
+                    del out, feats, labels_t, oom_exc
+                    opt.zero_grad(set_to_none=True)
+                    if cur_batch_size <= 16:
+                        raise
+                    train_oom_hit = True
+                if train_oom_hit:
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                    cur_batch_size = 16
+                    oom_fallback_triggered = True
+                    continue
 
-        bvi_lora_eval = _eval_whisper_across_strata(model, processor, eval_by_stratum, batch_size=batch_size)
+        bvi_lora_eval = _eval_whisper_across_strata(model, processor, eval_by_stratum, batch_size=cur_batch_size)
         out_dir = blob_dir / short_tag
         out_dir.mkdir(parents=True, exist_ok=True)
         model.save_pretrained(out_dir)
@@ -534,7 +592,9 @@ def _run_live_g4_whisper_bvi_lora(
         model_results[short_tag] = {
             "model_id": model_id,
             "epochs": epochs,
-            "batch_size": batch_size,
+            "requested_batch_size": batch_size,
+            "batch_size": cur_batch_size,
+            "oom_fallback_triggered": oom_fallback_triggered,
             "optimizer_steps": len(losses),
             "initial_loss": round(losses[0], 4) if losses else 0.0,
             "final_loss": round(losses[-1], 4) if losses else 0.0,
@@ -545,6 +605,7 @@ def _run_live_g4_whisper_bvi_lora(
             "ggml_q8_0_export_ready": True,
         }
         del model, base, opt
+        gc.collect()
         torch.cuda.empty_cache()
 
     peak_vram_mib = float(torch.cuda.max_memory_allocated(0)) / (1024.0 * 1024.0)
@@ -568,10 +629,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         DEFAULT_VRAM_FRACTION,
         "Wave-1 G4 Job: Real google/fleurs TR+EN + X8-240 BVI Whisper LoRA & 4-Stratum WER/CER Audit.",
     )
-    parser.add_argument("--train-per-lang", type=int, default=400)
-    parser.add_argument("--eval-per-lang", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=2)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--train-per-lang", type=int, default=1000)
+    parser.add_argument("--eval-per-lang", type=int, default=128)
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--batch-size", type=int, default=32)
     args = parser.parse_args(argv)
 
     t0 = time.perf_counter()
@@ -599,6 +660,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "license_audit": license_audit,
             "whisper_inference_locks": WHISPER_INFERENCE_LOCKS,
+            "training_config": {
+                "train_per_lang": int(args.train_per_lang),
+                "eval_per_lang": int(args.eval_per_lang),
+                "epochs": int(args.epochs),
+                "batch_size": int(args.batch_size),
+                "oom_fallback_batch_size": 16,
+            },
             "canonical_snr_strata": list(CANONICAL_SNR_STRATA),
             "elapsed_s": round(time.perf_counter() - t0, 4),
         }

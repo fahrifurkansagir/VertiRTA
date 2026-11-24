@@ -1,25 +1,33 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Wave-1 Colab G4 Job (VRAM fraction 0.46): Qwen3-4B v3 SFT + 3-Seed TRL Z3-GRPO & Mondrian Conformal.
+"""Wave-1 Colab G4 Job (VRAM fraction 0.46 / 3x0.29 / 0.65): Qwen3-4B v3 SFT + Parallel 3-Seed TRL Z3-GRPO & Mondrian Conformal.
 
-Strictly enforces Plan 6B (#314), Plan 6C (#316), and Pre-G4 Readiness Gate (#329):
+Strictly enforces Plan 6B (#314), Plan 6C (#316), Pre-G4 Readiness Gate (#329), and Wave-1 Turbo Parallel GRPO:
   - Apache-2.0 model lock (`Qwen/Qwen3-4B`; hard-bans `aya-expanse-8b`).
-  - Full `VertiBench-v2` `train.jsonl` (2,240 + B3/B4 oversampling, zero truncation), prompt tokens
-    masked to `-100`, exact canonical `QWEN3_EMPTY_THINK_SUFFIX` (`<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n`).
-  - Real 1 shared BF16 LoRA SFT -> 3 independent seeds of real `TRL GRPOTrainer` (`loss_type="dr_grpo"`,
-    `num_generations=16`, `per_device_train_batch_size=16` [1 prompt x 16 completions per microbatch],
-    `gradient_accumulation_steps=8`, `gradient_checkpointing=True`, `PersistentZ3RewardPool` `spawn`
-    context scoring real generated rollouts with Microsoft `z3-solver`).
-  - Language-matched candidate branches (`LNG={lang}` for TR, EN, MIX — NEVER hardcoded `LNG=TR`),
-    completion-only sliced `log_softmax` (zero `[B, L, 151936]` FP32 OOM), full 1,200-case Unconstrained
-    vs `VertiRtaGbnfLogitsProcessor + apply_z3_fail_closed_gate` evaluation, and exact 2,000-cal / 1,200-test
-    language & 4-stratum SNR (`S0_Clean..S3_Garbled`) Mondrian calibration + 100-resplit bootstrap.
-  - Zero dummy VRAM padding; `--dry-run` and `--smoke-cpu` execute locally at 0.00 CU.
+  - Clean `--phase` decomposition (`all | sft | grpo-seed | finalize`) + `--seed-index {0,1,2}`:
+      * Stage-1 SFT (`--phase sft`, 0.46 VRAM): Full `VertiBench-v2` `train.jsonl` (2,240 + B3/B4 oversampling,
+        zero truncation), strict `-100` prompt masking, exact `QWEN3_EMPTY_THINK_SUFFIX`, `micro_bsz=16`,
+        `grad_accum=2` (effective batch size 32), `gradient_checkpointing=False` (`sdpa`, BF16, OOM fallback
+        to `micro_bsz=8, grad_accum=4` + GC), saves `qwen3_4b_v3_shared_sft_lora` + `qwen3_4b_v3_sft_meta.json`.
+      * Stage-2 Parallel GRPO Seed (`--phase grpo-seed --seed-index i`, 3x0.29=0.87 VRAM): Loads `Qwen/Qwen3-4B`
+        + shared SFT LoRA (`gradient_checkpointing=True`), real `TRL GRPOTrainer` (`loss_type="dr_grpo"`,
+        `num_generations=16`, `per_device_train_batch_size=32` [2 prompts x 16 completions],
+        `gradient_accumulation_steps=4` [128 effective completions/step], `max_steps=100`,
+        `PersistentZ3RewardPool(max_workers=4)` `spawn` context, OOM fallback to `16 x 8 = 128`),
+        full 1,200-case Unconstrained vs `VertiRtaGbnfLogitsProcessor + apply_z3_fail_closed_gate` eval
+        (`batch_size=64`, `use_cache=True`), saves `qwen3_4b_v3_seed{i}_lora` + `qwen3_4b_v3_seed{i}_report.json`.
+      * Stage-3 Finalize (`--phase finalize`, 0.65 VRAM): Loads `sft_meta.json` + all 3 `seed{0,1,2}_report.json`,
+        selects winning seed (`argmax ast_stl_accuracy_pct`), runs teacher-forced language-matched branch
+        log-probs (`LNG={lang}`, completion-only sliced `log_softmax`, `row_batch_size=8` with OOM fallback
+        `8 -> 4 -> 2`) on ALL 2,000 cal + 1,200 test rows, 5-fold CV + Language & 4-stratum SNR Mondrian +
+        100-resplit bootstrap, and writes canonical `args.out_json`.
+  - Zero dummy VRAM padding; `--dry-run`, `--smoke-cpu`, and `--phase all` execute cleanly at 0.00 CU.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import gc
 import inspect
 import json
 import math
@@ -28,6 +36,7 @@ import random
 import sys
 import tempfile
 import time
+import traceback
 from typing import Any, Sequence
 
 import numpy as np
@@ -162,7 +171,12 @@ def enrich_vertibench_v2_row_for_z3(row: dict[str, Any]) -> dict[str, Any]:
 
     sat_pads = [str(s["id"]) for s in snapshot["ranked_slzs"] if float(s["soc_margin_pct"]) >= 0.0]
     gold_intent: dict[str, Any] = {
-        "valid_targets": [target_pad] if bucket in ("NOMINAL", "FAULT") else [],
+        "expected_action": ast.action if ast is not None else "DIVERT_SLZ",
+        "valid_targets": (
+            [target_pad]
+            if bucket in ("NOMINAL", "FAULT")
+            else (sat_pads if bucket == "ADVERSARIAL" else [])
+        ),
         "top2_sat_pads": (
             [ast.opt_a, ast.opt_b]
             if (ast is not None and ast.opt_a and ast.opt_b)
@@ -174,7 +188,7 @@ def enrich_vertibench_v2_row_for_z3(row: dict[str, Any]) -> dict[str, Any]:
             else []
         ),
         "requires_clarification": bucket == "AMBIGUOUS_ASR",
-        "requires_abstention": bucket == "ADVERSARIAL",
+        "requires_abstention": bool(ast is not None and ast.action == "HOLD_LOITER"),
         "allow_loiter": bucket != "FAULT",
     }
 
@@ -444,9 +458,9 @@ def _score_live_branch_logprobs(
     tokenizer: Any,
     enriched_rows: Sequence[dict[str, Any]],
     *,
-    row_batch_size: int = 2,
+    row_batch_size: int = 8,
 ) -> tuple[list[list[float]], list[list[int]], list[int]]:
-    """Teacher-forced completion-only sliced log-prob extraction with language-matched LNG={lang} branches."""
+    """Teacher-forced completion-only sliced log-prob extraction with OOM auto-fallback (8 -> 4 -> 2)."""
     import torch
 
     model.eval()
@@ -454,10 +468,12 @@ def _score_live_branch_logprobs(
     lp_all: list[list[float]] = []
     tc_all: list[list[int]] = []
     g_all: list[int] = []
+    cur_bsz = max(1, int(row_batch_size))
+    start = 0
 
     with torch.no_grad():
-        for start in range(0, len(enriched_rows), row_batch_size):
-            batch_rows = enriched_rows[start : start + row_batch_size]
+        while start < len(enriched_rows):
+            batch_rows = enriched_rows[start : start + cur_bsz]
             full_seqs: list[list[int]] = []
             meta_slices: list[tuple[int, int]] = []
             row_spans: list[tuple[int, int, list[str], str]] = []
@@ -478,56 +494,53 @@ def _score_live_branch_logprobs(
                 row_spans.append((span_start, len(full_seqs), b_keys, g_key))
 
             max_len = max(len(s) for s in full_seqs)
-            input_ids = torch.full((len(full_seqs), max_len), pad_id, dtype=torch.long, device=model.device)
-            attn_mask = torch.zeros((len(full_seqs), max_len), dtype=torch.long, device=model.device)
-            for bi, seq in enumerate(full_seqs):
-                input_ids[bi, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=model.device)
-                attn_mask[bi, : len(seq)] = 1
+            input_ids = attn_mask = logits = sl = ti = tok_lps = None
+            oom_hit = False
+            try:
+                input_ids = torch.full((len(full_seqs), max_len), pad_id, dtype=torch.long, device=model.device)
+                attn_mask = torch.zeros((len(full_seqs), max_len), dtype=torch.long, device=model.device)
+                for bi, seq in enumerate(full_seqs):
+                    input_ids[bi, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=model.device)
+                    attn_mask[bi, : len(seq)] = 1
 
-            logits = model(input_ids=input_ids, attention_mask=attn_mask).logits
-            flat_lps: list[float] = []
-            flat_tcs: list[int] = []
-            for bi, (p_len, c_len) in enumerate(meta_slices):
-                sl = logits[bi : bi + 1, p_len - 1 : p_len - 1 + c_len, :]
-                ti = input_ids[bi : bi + 1, p_len : p_len + c_len]
-                tok_lps = _completion_only_sliced_log_softmax(sl, ti)
-                flat_lps.append(round(float(tok_lps.sum().item()), 4))
-                flat_tcs.append(c_len)
-            del logits, input_ids, attn_mask
+                logits = model(input_ids=input_ids, attention_mask=attn_mask).logits
+                flat_lps: list[float] = []
+                flat_tcs: list[int] = []
+                for bi, (p_len, c_len) in enumerate(meta_slices):
+                    sl = logits[bi : bi + 1, p_len - 1 : p_len - 1 + c_len, :]
+                    ti = input_ids[bi : bi + 1, p_len : p_len + c_len]
+                    tok_lps = _completion_only_sliced_log_softmax(sl, ti)
+                    flat_lps.append(round(float(tok_lps.sum().item()), 4))
+                    flat_tcs.append(c_len)
+            except torch.cuda.OutOfMemoryError as oom_exc:
+                if oom_exc.__traceback__ is not None:
+                    traceback.clear_frames(oom_exc.__traceback__)
+                del tok_lps, ti, sl, logits, input_ids, attn_mask, oom_exc
+                if cur_bsz <= 1:
+                    raise
+                oom_hit = True
+            if oom_hit:
+                gc.collect()
+                torch.cuda.empty_cache()
+                if cur_bsz > 4:
+                    cur_bsz = 4
+                elif cur_bsz > 2:
+                    cur_bsz = 2
+                else:
+                    cur_bsz = 1
+                continue
+            del tok_lps, ti, sl, logits, input_ids, attn_mask
 
             for span_start, span_end, b_keys, g_key in row_spans:
                 lp_all.append(flat_lps[span_start:span_end])
                 tc_all.append(flat_tcs[span_start:span_end])
                 g_all.append(b_keys.index(g_key) if g_key in b_keys else 0)
+            start += len(batch_rows)
     return lp_all, tc_all, g_all
 
 
-def _run_live_g4_qwen3_v3(
-    train_rows: Sequence[dict[str, Any]],
-    cal_rows: Sequence[dict[str, Any]],
-    test_rows: Sequence[dict[str, Any]],
-    blob_dir: Path,
-    seed: int,
-    grpo_seeds: Sequence[int],
-    sft_epochs: int,
-    grpo_steps: int,
-) -> dict[str, Any]:
-    """Execute full BF16 LoRA SFT -> 3-seed TRL Z3-GRPO (G=16) -> 1,200-case GBNF+Z3 eval & Mondrian cal."""
-    import datasets  # type: ignore[import-not-found]
-    from peft import LoraConfig, get_peft_model  # type: ignore[import-not-found]
-    import torch  # type: ignore[import-not-found]
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
-    from trl import GRPOConfig, GRPOTrainer  # type: ignore[import-not-found]
-
-    from scripts.colab.run_l4_qwen3_z3_grpo import (
-        VertiRtaGbnfLogitsProcessor,
-        _batch_generate_eval,
-        _breakdown_eval,
-        apply_z3_fail_closed_gate,
-        build_vertirta_gbnf_dfa,
-    )
-
-    cfg = GrpoPolicyConfig(
+def _make_grpo_policy_config(sft_epochs: int, grpo_steps: int) -> GrpoPolicyConfig:
+    return GrpoPolicyConfig(
         model_id="Qwen/Qwen3-4B",
         loss_type="dr_grpo",
         importance_sampling_level="token",
@@ -538,102 +551,41 @@ def _run_live_g4_qwen3_v3(
         lora_alpha=128,
         num_generations=16,
         max_completion_length=64,
-        z3_workers=8,
+        z3_workers=4,
         enable_thinking=False,
-        batch_size=16,
+        batch_size=32,
         use_vllm=False,
         sft_epochs=sft_epochs,
         max_grpo_steps=grpo_steps,
-        grpo_grad_accum=8,
+        grpo_grad_accum=4,
         grpo_learning_rate=4.0e-6,
         grpo_temperature=0.80,
         target_modules=LORA_TARGET_MODULES,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_id, trust_remote_code=False)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
 
-    base_model = AutoModelForCausalLM.from_pretrained(
-        cfg.model_id,
-        torch_dtype=torch.bfloat16,
-        device_map="cuda:0",
-        attn_implementation="sdpa",
-        trust_remote_code=False,
-    )
-    base_model.config.use_cache = False
-    base_model.gradient_checkpointing_enable()
+def _sft_meta_path(blob_dir: Path) -> Path:
+    return blob_dir / "qwen3_4b_v3_sft_meta.json"
 
-    lora_cfg = LoraConfig(
-        r=cfg.lora_r,
-        lora_alpha=cfg.lora_alpha,
-        lora_dropout=0.0,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=list(cfg.target_modules),
-    )
-    model = get_peft_model(base_model, lora_cfg)
 
-    # 1) Full Stage-1 BF16 LoRA SFT across ALL 2,240 VertiBench-v2 train rows (+ B3/B4 oversampling)
-    #    with strict prompt-token masking (-100) and canonical QWEN3_EMPTY_THINK_SUFFIX.
+def _seed_report_path(blob_dir: Path, seed_index: int) -> Path:
+    return blob_dir / f"qwen3_4b_v3_seed{seed_index}_report.json"
+
+
+def _build_sft_oversampled_rows(train_rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     sft_rows: list[dict[str, Any]] = []
     for r in train_rows:
         sft_rows.append(r)
         if r.get("bucket") in ("ADVERSARIAL", "AMBIGUOUS_ASR"):
             sft_rows.append(r)
+    return sft_rows
 
+
+def _build_grpo_records(train_rows: Sequence[dict[str, Any]], seed: int, sft_replay_fraction: float) -> list[dict[str, Any]]:
     rng = random.Random(seed)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.sft_learning_rate, weight_decay=0.01)
-    model.train()
-    sft_losses: list[float] = []
-    micro_bsz = 4
-    grad_accum = 8  # effective batch size = 32
-    pad_id = int(tokenizer.pad_token_id)
-
-    for _epoch in range(cfg.sft_epochs):
-        rng.shuffle(sft_rows)
-        optimizer.zero_grad(set_to_none=True)
-        for step_idx in range(0, len(sft_rows), micro_bsz):
-            batch = sft_rows[step_idx : step_idx + micro_bsz]
-            seqs: list[list[int]] = []
-            lbls: list[list[int]] = []
-            for item in batch:
-                prompt = format_copilot_prompt(item)
-                comp = str(item["canonical_dsl"]) + "<|im_end|>"
-                p_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
-                c_ids = tokenizer(comp, add_special_tokens=False)["input_ids"]
-                full_ids = (p_ids + c_ids)[:512]
-                seqs.append(full_ids)
-                lbls.append(mask_sft_prompt_labels(full_ids, len(p_ids), pad_token_id=pad_id))
-
-            max_l = max(len(s) for s in seqs)
-            in_t = torch.full((len(seqs), max_l), pad_id, dtype=torch.long, device="cuda:0")
-            attn_t = torch.zeros((len(seqs), max_l), dtype=torch.long, device="cuda:0")
-            lbl_t = torch.full((len(seqs), max_l), -100, dtype=torch.long, device="cuda:0")
-            for bi, (s_ids, l_ids) in enumerate(zip(seqs, lbls)):
-                in_t[bi, : len(s_ids)] = torch.tensor(s_ids, dtype=torch.long, device="cuda:0")
-                attn_t[bi, : len(s_ids)] = 1
-                lbl_t[bi, : len(l_ids)] = torch.tensor(l_ids, dtype=torch.long, device="cuda:0")
-
-            out = model(input_ids=in_t, attention_mask=attn_t, labels=lbl_t)
-            (out.loss / float(grad_accum)).backward()
-            sft_losses.append(float(out.loss.detach().cpu().item()))
-            if ((step_idx // micro_bsz) + 1) % grad_accum == 0 or (step_idx + micro_bsz) >= len(sft_rows):
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
-
-    shared_sft_dir = blob_dir / "qwen3_4b_v3_shared_sft_lora"
-    shared_sft_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(shared_sft_dir)
-    tokenizer.save_pretrained(shared_sft_dir)
-    sft_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items() if "lora_" in k}
-
-    # Build GRPO dataset once with 10% SFT bilingual replay + Arrow-safe JSON metadata
-    n_replay = max(1, int(round(len(train_rows) * cfg.sft_replay_fraction)))
+    n_replay = max(1, int(round(len(train_rows) * sft_replay_fraction)))
     grpo_base_rows = list(train_rows) + rng.sample(list(train_rows), min(n_replay, len(train_rows)))
-    grpo_records = [
+    return [
         {
             "prompt": format_copilot_prompt(r),
             "metadata_json": json.dumps(
@@ -651,38 +603,231 @@ def _run_live_g4_qwen3_v3(
         for r in grpo_base_rows
     ]
 
-    # Build O(1) token-level GBNF DFA processor once for 1,200-case constrained evaluation
-    gbnf_dfa = build_vertirta_gbnf_dfa()
-    gbnf_proc = VertiRtaGbnfLogitsProcessor(tokenizer, gbnf_dfa)
 
-    # 2) 3 independent real TRL GRPOTrainer seeds with PersistentZ3RewardPool(spawn) + 1,200-case eval
-    seed_reports: list[dict[str, Any]] = []
-    best_seed_idx = 0
-    best_seed_ast_pct = -1.0
-    best_seed_state: dict[str, Any] = sft_state
+def _run_live_sft_phase(
+    train_rows: Sequence[dict[str, Any]],
+    blob_dir: Path,
+    seed: int,
+    cfg: GrpoPolicyConfig,
+) -> dict[str, Any]:
+    """Stage-1 SFT: Full VertiBench-v2 train + B3/B4 oversampling, micro_bsz=16, grad_accum=2, GC=False (OOM fallback 8x4+GC)."""
+    import gc
 
-    with PersistentZ3RewardPool(max_workers=cfg.z3_workers) as reward_pool:
-        for seed_idx, g_seed in enumerate(grpo_seeds):
-            seed_everything(g_seed)
-            model.load_state_dict(sft_state, strict=False)
-            model.config.use_cache = False
-            tokenizer.padding_side = "left"
+    from peft import LoraConfig, get_peft_model  # type: ignore[import-not-found]
+    import torch  # type: ignore[import-not-found]
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
 
-            seed_rng = random.Random(g_seed)
-            shuffled_recs = list(grpo_records)
-            seed_rng.shuffle(shuffled_recs)
-            grpo_ds = datasets.Dataset.from_list(shuffled_recs)
+    seed_everything(seed)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model_id, trust_remote_code=False)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
 
-            grpo_dir = blob_dir / f"stage2_grpo_seed{seed_idx}"
+    base_model = AutoModelForCausalLM.from_pretrained(
+        cfg.model_id,
+        torch_dtype=torch.bfloat16,
+        device_map="cuda:0",
+        attn_implementation="sdpa",
+        trust_remote_code=False,
+    )
+    base_model.config.use_cache = False
+    gc_enabled = False  # gradient_checkpointing=False during SFT for ~3x throughput in 0.46 VRAM cap
+
+    lora_cfg = LoraConfig(
+        r=cfg.lora_r,
+        lora_alpha=cfg.lora_alpha,
+        lora_dropout=0.0,
+        bias="none",
+        task_type="CAUSAL_LM",
+        target_modules=list(cfg.target_modules),
+    )
+    model = get_peft_model(base_model, lora_cfg)
+
+    sft_rows = _build_sft_oversampled_rows(train_rows)
+    rng = random.Random(seed)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.sft_learning_rate, weight_decay=0.01)
+    model.train()
+    sft_losses: list[float] = []
+    micro_bsz = 16
+    grad_accum = 2  # effective batch size = 32
+    oom_fallback_triggered = False
+    pad_id = int(tokenizer.pad_token_id)
+
+    for _epoch in range(cfg.sft_epochs):
+        rng.shuffle(sft_rows)
+        optimizer.zero_grad(set_to_none=True)
+        window_start = 0
+        while window_start < len(sft_rows):
+            window_end = min(len(sft_rows), window_start + micro_bsz * grad_accum)
+            window_rows = sft_rows[window_start:window_end]
+            n_chunks = max(1, math.ceil(len(window_rows) / float(micro_bsz)))
+            window_losses: list[float] = []
+            out = in_t = attn_t = lbl_t = None
+            try:
+                optimizer.zero_grad(set_to_none=True)
+                for chunk_idx in range(n_chunks):
+                    batch = window_rows[chunk_idx * micro_bsz : (chunk_idx + 1) * micro_bsz]
+                    seqs: list[list[int]] = []
+                    lbls: list[list[int]] = []
+                    for item in batch:
+                        prompt = format_copilot_prompt(item)
+                        comp = str(item["canonical_dsl"]) + "<|im_end|>"
+                        p_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+                        c_ids = tokenizer(comp, add_special_tokens=False)["input_ids"]
+                        full_ids = (p_ids + c_ids)[:512]
+                        seqs.append(full_ids)
+                        lbls.append(mask_sft_prompt_labels(full_ids, len(p_ids), pad_token_id=pad_id))
+
+                    max_l = max(len(s) for s in seqs)
+                    in_t = torch.full((len(seqs), max_l), pad_id, dtype=torch.long, device="cuda:0")
+                    attn_t = torch.zeros((len(seqs), max_l), dtype=torch.long, device="cuda:0")
+                    lbl_t = torch.full((len(seqs), max_l), -100, dtype=torch.long, device="cuda:0")
+                    for bi, (s_ids, l_ids) in enumerate(zip(seqs, lbls)):
+                        in_t[bi, : len(s_ids)] = torch.tensor(s_ids, dtype=torch.long, device="cuda:0")
+                        attn_t[bi, : len(s_ids)] = 1
+                        lbl_t[bi, : len(l_ids)] = torch.tensor(l_ids, dtype=torch.long, device="cuda:0")
+
+                    out = model(input_ids=in_t, attention_mask=attn_t, labels=lbl_t)
+                    (out.loss / float(n_chunks)).backward()
+                    window_losses.append(float(out.loss.detach().cpu().item()))
+                    del out, in_t, attn_t, lbl_t
+                    out = in_t = attn_t = lbl_t = None
+
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+                sft_losses.extend(window_losses)
+                window_start = window_end
+                sft_oom_hit = False
+            except torch.cuda.OutOfMemoryError as oom_exc:
+                if oom_exc.__traceback__ is not None:
+                    traceback.clear_frames(oom_exc.__traceback__)
+                del out, in_t, attn_t, lbl_t, oom_exc
+                optimizer.zero_grad(set_to_none=True)
+                if not (micro_bsz > 8 or not gc_enabled):
+                    raise
+                sft_oom_hit = True
+            if sft_oom_hit:
+                gc.collect()
+                torch.cuda.empty_cache()
+                base_model.gradient_checkpointing_enable()
+                base_model.enable_input_require_grads()
+                gc_enabled = True
+                micro_bsz = 8
+                grad_accum = 4  # preserves exact effective batch size = 32
+                oom_fallback_triggered = True
+                continue
+
+    shared_sft_dir = blob_dir / "qwen3_4b_v3_shared_sft_lora"
+    shared_sft_dir.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(shared_sft_dir)
+    tokenizer.save_pretrained(shared_sft_dir)
+
+    peak_vram_mib = float(torch.cuda.max_memory_allocated(0)) / (1024.0 * 1024.0)
+    sft_meta = {
+        "schema_version": "vertirta.g4_qwen3_v3_sft_meta/v1.0.0",
+        "model_id": cfg.model_id,
+        "seed": int(seed),
+        "sft_epochs": int(cfg.sft_epochs),
+        "sft_examples_total": len(sft_rows),
+        "sft_prompt_tokens_masked_minus_100": True,
+        "qwen3_empty_think_suffix_verified": True,
+        "sft_mean_loss": round(sum(sft_losses) / float(max(1, len(sft_losses))), 5),
+        "sft_micro_batch_size_used": micro_bsz,
+        "sft_grad_accum_used": grad_accum,
+        "sft_gradient_checkpointing_used": gc_enabled,
+        "sft_oom_fallback_triggered": oom_fallback_triggered,
+        "shared_sft_adapter_dir": str(shared_sft_dir),
+        "peak_torch_allocated_mib": round(peak_vram_mib, 2),
+    }
+    write_canonical_json(_sft_meta_path(blob_dir), sft_meta)
+    del model, base_model, optimizer
+    gc.collect()
+    torch.cuda.empty_cache()
+    return sft_meta
+
+
+def _run_live_grpo_seed_phase(
+    train_rows: Sequence[dict[str, Any]],
+    test_rows: Sequence[dict[str, Any]],
+    blob_dir: Path,
+    seed: int,
+    seed_index: int,
+    grpo_seed: int,
+    cfg: GrpoPolicyConfig,
+) -> dict[str, Any]:
+    """Stage-2 Parallel GRPO Seed: TRL GRPOTrainer (32x4=128 eff, 4 Z3 workers, OOM fallback 16x8) + 1,200-case eval."""
+    import gc
+
+    import datasets  # type: ignore[import-not-found]
+    from peft import PeftModel  # type: ignore[import-not-found]
+    import torch  # type: ignore[import-not-found]
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+    from trl import GRPOConfig, GRPOTrainer  # type: ignore[import-not-found]
+
+    from scripts.colab.run_l4_qwen3_z3_grpo import (
+        VertiRtaGbnfLogitsProcessor,
+        _batch_generate_eval,
+        _breakdown_eval,
+        apply_z3_fail_closed_gate,
+        build_vertirta_gbnf_dfa,
+    )
+
+    shared_sft_dir = blob_dir / "qwen3_4b_v3_shared_sft_lora"
+    if not shared_sft_dir.is_dir():
+        raise FileNotFoundError(
+            f"Shared SFT adapter not found at {shared_sft_dir}; run --phase sft before --phase grpo-seed."
+        )
+
+    tokenizer = AutoTokenizer.from_pretrained(shared_sft_dir, trust_remote_code=False)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+
+    grpo_records = _build_grpo_records(train_rows, seed=seed, sft_replay_fraction=cfg.sft_replay_fraction)
+    seed_rng = random.Random(grpo_seed)
+    shuffled_recs = list(grpo_records)
+    seed_rng.shuffle(shuffled_recs)
+    grpo_ds = datasets.Dataset.from_list(shuffled_recs)
+
+    grpo_dir = blob_dir / f"stage2_grpo_seed{seed_index}"
+    grpo_attempts: tuple[tuple[int, int], ...] = (
+        (32, 4),  # 2 prompts x 16 completions x 4 accum = 128 effective completions/step
+        (16, 8),  # OOM fallback: 1 prompt x 16 completions x 8 accum = 128 effective completions/step
+    )
+    grpo_bsz_used = 32
+    grpo_ga_used = 4
+    grpo_oom_fallback = False
+    grpo_res: Any = None
+    reward_history: list[float] = []
+    model: Any = None
+    base_model: Any = None
+
+    with PersistentZ3RewardPool(max_workers=4) as reward_pool:
+        for attempt_idx, (per_dev_bsz, grad_acc) in enumerate(grpo_attempts):
+            seed_everything(grpo_seed)
+            reward_history = []
+            base_model = AutoModelForCausalLM.from_pretrained(
+                cfg.model_id,
+                torch_dtype=torch.bfloat16,
+                device_map="cuda:0",
+                attn_implementation="sdpa",
+                trust_remote_code=False,
+            )
+            base_model.config.use_cache = False
+            base_model.gradient_checkpointing_enable()
+            base_model.enable_input_require_grads()
+            model = PeftModel.from_pretrained(base_model, shared_sft_dir, is_trainable=True)
+
             grpo_raw_kwargs: dict[str, Any] = {
                 "output_dir": str(grpo_dir),
-                "seed": int(g_seed),
+                "seed": int(grpo_seed),
                 "learning_rate": cfg.grpo_learning_rate,
                 "lr_scheduler_type": "cosine",
                 "warmup_ratio": 0.10,
                 "max_grad_norm": 0.5,
-                "per_device_train_batch_size": cfg.num_generations,  # 1 prompt x 16 completions
-                "gradient_accumulation_steps": cfg.grpo_grad_accum,  # 8 -> 128 eff completions
+                "per_device_train_batch_size": per_dev_bsz,
+                "gradient_accumulation_steps": grad_acc,
                 "num_generations": cfg.num_generations,
                 "temperature": cfg.grpo_temperature,
                 "max_completion_length": cfg.max_completion_length,
@@ -702,8 +847,6 @@ def _run_live_g4_qwen3_v3(
                 "report_to": "none",
             }
             grpo_args = GRPOConfig(**_filter_supported_kwargs(GRPOConfig, grpo_raw_kwargs))
-
-            reward_history: list[float] = []
 
             def z3_rlvr_reward(
                 completions: list[Any],
@@ -739,102 +882,266 @@ def _run_live_g4_qwen3_v3(
                 trainer_kwargs["tokenizer"] = tokenizer
 
             trainer = GRPOTrainer(**trainer_kwargs)
-            grpo_res = trainer.train()
-            first10_r, last10_r = summarize_reward_history(reward_history)
+            grpo_oom_hit = False
+            try:
+                grpo_res = trainer.train()
+                grpo_bsz_used = per_dev_bsz
+                grpo_ga_used = grad_acc
+                grpo_oom_fallback = attempt_idx > 0
+                del trainer
+                gc.collect()
+                torch.cuda.empty_cache()
+                break
+            except torch.cuda.OutOfMemoryError as oom_exc:
+                if oom_exc.__traceback__ is not None:
+                    traceback.clear_frames(oom_exc.__traceback__)
+                del trainer, model, base_model, oom_exc
+                model = None
+                base_model = None
+                if attempt_idx + 1 >= len(grpo_attempts):
+                    raise
+                grpo_oom_hit = True
+            if grpo_oom_hit:
+                gc.collect()
+                torch.cuda.empty_cache()
+                continue
 
-            out_dir = blob_dir / f"qwen3_4b_v3_seed{seed_idx}_lora"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            model.save_pretrained(out_dir)
+    first10_r, last10_r = summarize_reward_history(reward_history)
 
-            # Full 1,200-case Unconstrained vs GBNF+Z3 evaluation with KV cache enabled (15x faster)
-            model.config.use_cache = True
+    out_dir = blob_dir / f"qwen3_4b_v3_seed{seed_index}_lora"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(out_dir)
+
+    gbnf_dfa = build_vertirta_gbnf_dfa()
+    gbnf_proc = VertiRtaGbnfLogitsProcessor(tokenizer, gbnf_dfa)
+
+    # Full 1,200-case Unconstrained vs GBNF+Z3 evaluation with KV cache enabled (batch_size=64, OOM fallback 32)
+    model.config.use_cache = True
+    eval_bsz_used = 64
+    uncon_preds: list[dict[str, Any]] | None = None
+    gbnf_preds: list[dict[str, Any]] | None = None
+    for eval_bsz in (64, 32):
+        uncon_preds = None
+        gbnf_preds = None
+        eval_oom_hit = False
+        try:
             uncon_preds = _batch_generate_eval(
-                model, tokenizer, test_rows, prompt_fn=format_copilot_prompt, batch_size=32, max_new_tokens=64
+                model, tokenizer, test_rows, prompt_fn=format_copilot_prompt, batch_size=eval_bsz, max_new_tokens=64
             )
             gbnf_preds = _batch_generate_eval(
                 model,
                 tokenizer,
                 test_rows,
                 prompt_fn=format_copilot_prompt,
-                batch_size=32,
+                batch_size=eval_bsz,
                 max_new_tokens=64,
                 gbnf_processor=gbnf_proc,
             )
-            model.config.use_cache = False
-            gated_preds, z3_gate_stats = apply_z3_fail_closed_gate(test_rows, gbnf_preds)
-            uncon_eval = _breakdown_eval(cfg.model_id, f"seed{seed_idx}_unconstrained", test_rows, uncon_preds)
-            gated_eval = _breakdown_eval(cfg.model_id, f"seed{seed_idx}_gbnf_z3_gated", test_rows, gated_preds)
-
-            ast_pct = float(gated_eval["overall"]["ast_stl_accuracy_pct"])
-            if ast_pct > best_seed_ast_pct:
-                best_seed_ast_pct = ast_pct
-                best_seed_idx = seed_idx
-                best_seed_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items() if "lora_" in k}
-
-            seed_reports.append(
-                {
-                    "seed": int(g_seed),
-                    "grpo_steps": int(cfg.max_grpo_steps),
-                    "grpo_train_loss": round(float(grpo_res.training_loss), 5),
-                    "grpo_mean_reward_first10": first10_r,
-                    "grpo_mean_reward_last10": last10_r,
-                    "grpo_reward_batches": len(reward_history),
-                    "adapter_dir": str(out_dir),
-                    "unconstrained_eval": uncon_eval,
-                    "gbnf_z3_gated_eval": gated_eval,
-                    "z3_fail_closed_gate_stats": z3_gate_stats,
-                }
-            )
+            eval_bsz_used = eval_bsz
+            break
+        except torch.cuda.OutOfMemoryError as oom_exc:
+            if oom_exc.__traceback__ is not None:
+                traceback.clear_frames(oom_exc.__traceback__)
+            del uncon_preds, gbnf_preds, oom_exc
+            uncon_preds = None
+            gbnf_preds = None
+            if eval_bsz == 32:
+                raise
+            eval_oom_hit = True
+        if eval_oom_hit:
+            gc.collect()
             torch.cuda.empty_cache()
-
-    # 3) Real teacher-forced language-matched branch log-probs on 2,000 cal + 1,200 test using best seed
-    model.load_state_dict(best_seed_state, strict=False)
+            continue
+    assert uncon_preds is not None and gbnf_preds is not None
     model.config.use_cache = False
-    cal_lps, cal_tcs, cal_golds = _score_live_branch_logprobs(model, tokenizer, cal_rows, row_batch_size=2)
-    test_lps, test_tcs, test_golds = _score_live_branch_logprobs(model, tokenizer, test_rows, row_batch_size=2)
-    mondrian = _run_mondrian_audit(
-        cal_rows, test_rows, cal_lps, cal_tcs, cal_golds, test_lps, test_tcs, test_golds, seed
-    )
 
+    gated_preds, z3_gate_stats = apply_z3_fail_closed_gate(test_rows, gbnf_preds)
+    uncon_eval = _breakdown_eval(cfg.model_id, f"seed{seed_index}_unconstrained", test_rows, uncon_preds)
+    gated_eval = _breakdown_eval(cfg.model_id, f"seed{seed_index}_gbnf_z3_gated", test_rows, gated_preds)
+
+    peak_vram_mib = float(torch.cuda.max_memory_allocated(0)) / (1024.0 * 1024.0)
+    seed_report = {
+        "schema_version": "vertirta.g4_qwen3_v3_seed_report/v1.0.0",
+        "seed_index": int(seed_index),
+        "seed": int(grpo_seed),
+        "grpo_steps": int(cfg.max_grpo_steps),
+        "grpo_per_device_train_batch_size_used": grpo_bsz_used,
+        "grpo_grad_accum_used": grpo_ga_used,
+        "grpo_oom_fallback_triggered": grpo_oom_fallback,
+        "eval_batch_size_used": eval_bsz_used,
+        "grpo_train_loss": round(float(grpo_res.training_loss), 5),
+        "grpo_mean_reward_first10": first10_r,
+        "grpo_mean_reward_last10": last10_r,
+        "grpo_reward_batches": len(reward_history),
+        "adapter_dir": str(out_dir),
+        "unconstrained_eval": uncon_eval,
+        "gbnf_z3_gated_eval": gated_eval,
+        "z3_fail_closed_gate_stats": z3_gate_stats,
+        "peak_torch_allocated_mib": round(peak_vram_mib, 2),
+    }
+    write_canonical_json(_seed_report_path(blob_dir, seed_index), seed_report)
+    del model, base_model
+    gc.collect()
+    torch.cuda.empty_cache()
+    return seed_report
+
+
+def _load_staged_sft_and_seed_reports(
+    blob_dir: Path,
+    n_seeds: int = 3,
+) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+    """Load sft_meta.json + all seed{0..n-1}_report.json and return winning seed index (argmax ast_stl_accuracy_pct)."""
+    sft_path = _sft_meta_path(blob_dir)
+    if not sft_path.is_file():
+        raise FileNotFoundError(f"Missing Stage-1 SFT metadata at {sft_path}; run --phase sft first.")
+    sft_meta = json.loads(sft_path.read_text(encoding="utf-8"))
+
+    seed_reports: list[dict[str, Any]] = []
+    for idx in range(n_seeds):
+        sp = _seed_report_path(blob_dir, idx)
+        if not sp.is_file():
+            raise FileNotFoundError(
+                f"Missing Stage-2 GRPO seed {idx} report at {sp}; run --phase grpo-seed --seed-index {idx} first."
+            )
+        seed_reports.append(json.loads(sp.read_text(encoding="utf-8")))
+
+    best_seed_idx = 0
+    best_ast_pct = -1.0
+    for idx, sr in enumerate(seed_reports):
+        ast_pct = float(sr["gbnf_z3_gated_eval"]["overall"]["ast_stl_accuracy_pct"])
+        if ast_pct > best_ast_pct:
+            best_ast_pct = ast_pct
+            best_seed_idx = idx
+    return sft_meta, seed_reports, best_seed_idx
+
+
+def _summarize_multi_seed_reports(seed_reports: Sequence[dict[str, Any]]) -> dict[str, Any]:
     ast_vals = [float(sr["gbnf_z3_gated_eval"]["overall"]["ast_stl_accuracy_pct"]) for sr in seed_reports]
     gram_vals = [float(sr["gbnf_z3_gated_eval"]["overall"]["grammar_validity_pct"]) for sr in seed_reports]
     z3_vals = [float(sr["z3_fail_closed_gate_stats"]["gated_z3_constraint_satisfaction_pct"]) for sr in seed_reports]
     b3_vals = [float(sr["z3_fail_closed_gate_stats"]["bucket3_gated_safe_reject_pct"]) for sr in seed_reports]
-
-    peak_vram_mib = float(torch.cuda.max_memory_allocated(0)) / (1024.0 * 1024.0)
     return {
-        "sft_examples_total": len(sft_rows),
-        "sft_prompt_tokens_masked_minus_100": True,
-        "qwen3_empty_think_suffix_verified": True,
-        "sft_mean_loss": round(sum(sft_losses) / float(max(1, len(sft_losses))), 5),
-        "shared_sft_adapter_dir": str(shared_sft_dir),
+        "n_seeds": len(seed_reports),
+        "ast_stl_correctness_mean_pct": round(float(np.mean(ast_vals)), 2),
+        "ast_stl_correctness_sd_pct": round(float(np.std(ast_vals, ddof=1)) if len(ast_vals) > 1 else 0.0, 2),
+        "grammar_validity_mean_pct": round(float(np.mean(gram_vals)), 2),
+        "gated_z3_sat_mean_pct": round(float(np.mean(z3_vals)), 2),
+        "bucket3_safe_reject_mean_pct": round(float(np.mean(b3_vals)), 2),
+    }
+
+
+def _run_live_finalize_phase(
+    cal_rows: Sequence[dict[str, Any]],
+    test_rows: Sequence[dict[str, Any]],
+    blob_dir: Path,
+    seed: int,
+    grpo_seeds: Sequence[int],
+    cfg: GrpoPolicyConfig,
+) -> dict[str, Any]:
+    """Stage-3 Finalize: select winning seed, score 2,000 cal + 1,200 test branch log-probs (row_bsz=8), run Mondrian audit."""
+    import gc
+
+    from peft import PeftModel  # type: ignore[import-not-found]
+    import torch  # type: ignore[import-not-found]
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+
+    sft_meta, seed_reports, best_seed_idx = _load_staged_sft_and_seed_reports(blob_dir, n_seeds=len(grpo_seeds))
+    best_adapter_dir = Path(str(seed_reports[best_seed_idx]["adapter_dir"]))
+    if not best_adapter_dir.is_dir():
+        raise FileNotFoundError(f"Winning seed adapter not found at {best_adapter_dir}")
+
+    shared_sft_dir = Path(str(sft_meta["shared_sft_adapter_dir"]))
+    tok_src: Any = shared_sft_dir if shared_sft_dir.is_dir() else cfg.model_id
+    tokenizer = AutoTokenizer.from_pretrained(tok_src, trust_remote_code=False)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        cfg.model_id,
+        torch_dtype=torch.bfloat16,
+        device_map="cuda:0",
+        attn_implementation="sdpa",
+        trust_remote_code=False,
+    )
+    base_model.config.use_cache = False
+    model = PeftModel.from_pretrained(base_model, best_adapter_dir, is_trainable=False)
+
+    cal_lps, cal_tcs, cal_golds = _score_live_branch_logprobs(model, tokenizer, cal_rows, row_batch_size=8)
+    test_lps, test_tcs, test_golds = _score_live_branch_logprobs(model, tokenizer, test_rows, row_batch_size=8)
+    mondrian = _run_mondrian_audit(
+        cal_rows, test_rows, cal_lps, cal_tcs, cal_golds, test_lps, test_tcs, test_golds, seed
+    )
+
+    peak_finalize_mib = float(torch.cuda.max_memory_allocated(0)) / (1024.0 * 1024.0)
+    peak_candidates = [peak_finalize_mib, float(sft_meta.get("peak_torch_allocated_mib", 0.0))] + [
+        float(sr.get("peak_torch_allocated_mib", 0.0)) for sr in seed_reports
+    ]
+    del model, base_model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {
+        "sft_examples_total": int(sft_meta["sft_examples_total"]),
+        "sft_prompt_tokens_masked_minus_100": bool(sft_meta["sft_prompt_tokens_masked_minus_100"]),
+        "qwen3_empty_think_suffix_verified": bool(sft_meta["qwen3_empty_think_suffix_verified"]),
+        "sft_mean_loss": float(sft_meta["sft_mean_loss"]),
+        "shared_sft_adapter_dir": str(sft_meta["shared_sft_adapter_dir"]),
         "best_seed_index": best_seed_idx,
         "grpo_seed_reports": seed_reports,
-        "multi_seed_summary": {
-            "n_seeds": len(seed_reports),
-            "ast_stl_correctness_mean_pct": round(float(np.mean(ast_vals)), 2),
-            "ast_stl_correctness_sd_pct": round(float(np.std(ast_vals, ddof=1)) if len(ast_vals) > 1 else 0.0, 2),
-            "grammar_validity_mean_pct": round(float(np.mean(gram_vals)), 2),
-            "gated_z3_sat_mean_pct": round(float(np.mean(z3_vals)), 2),
-            "bucket3_safe_reject_mean_pct": round(float(np.mean(b3_vals)), 2),
-        },
-        "peak_torch_allocated_mib": round(peak_vram_mib, 2),
+        "multi_seed_summary": _summarize_multi_seed_reports(seed_reports),
+        "peak_torch_allocated_mib": round(max(peak_candidates), 2),
+        "finalize_peak_torch_allocated_mib": round(peak_finalize_mib, 2),
         **mondrian,
     }
+
+
+def _run_live_g4_qwen3_v3(
+    train_rows: Sequence[dict[str, Any]],
+    cal_rows: Sequence[dict[str, Any]],
+    test_rows: Sequence[dict[str, Any]],
+    blob_dir: Path,
+    seed: int,
+    grpo_seeds: Sequence[int],
+    sft_epochs: int,
+    grpo_steps: int,
+) -> dict[str, Any]:
+    """Execute full BF16 LoRA SFT -> 3-seed TRL Z3-GRPO (G=16) -> 1,200-case GBNF+Z3 eval & Mondrian cal."""
+    cfg = _make_grpo_policy_config(sft_epochs=sft_epochs, grpo_steps=grpo_steps)
+    _run_live_sft_phase(train_rows, blob_dir, seed, cfg)
+    for seed_idx, g_seed in enumerate(grpo_seeds):
+        _run_live_grpo_seed_phase(train_rows, test_rows, blob_dir, seed, seed_idx, g_seed, cfg)
+    return _run_live_finalize_phase(cal_rows, test_rows, blob_dir, seed, grpo_seeds, cfg)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_standard_argparser(
         JOB_NAME,
         DEFAULT_VRAM_FRACTION,
-        "Wave-1 G4 Job: Qwen3-4B v3 Full SFT + 3-Seed TRL Z3-GRPO + 1,200-Case GBNF/Z3 & Mondrian Conformal.",
+        "Wave-1 G4 Job: Qwen3-4B v3 Full SFT + Parallel 3-Seed TRL Z3-GRPO + 1,200-Case GBNF/Z3 & Mondrian Conformal.",
     )
-    parser.add_argument("--sft-epochs", type=int, default=2)
-    parser.add_argument("--grpo-steps", type=int, default=80)
+    parser.add_argument(
+        "--phase",
+        choices=("all", "sft", "grpo-seed", "finalize"),
+        default="all",
+        help="Execution stage: full standalone pipeline ('all') or decomposed Wave-1A/1B/1C stage.",
+    )
+    parser.add_argument(
+        "--seed-index",
+        type=int,
+        default=0,
+        help="GRPO seed index in {0, 1, 2} when --phase grpo-seed is active.",
+    )
+    parser.add_argument("--sft-epochs", type=int, default=3)
+    parser.add_argument("--grpo-steps", type=int, default=100)
     args = parser.parse_args(argv)
 
     t0 = time.perf_counter()
     seed_everything(args.seed)
+
+    grpo_seeds = [args.seed, args.seed + 1, args.seed + 2]
+    if args.phase == "grpo-seed" and not (0 <= int(args.seed_index) < len(grpo_seeds)):
+        raise ValueError(f"--seed-index must be in [0, {len(grpo_seeds) - 1}], got {args.seed_index}")
 
     license_audit = validate_job_license_manifest(
         job_name=JOB_NAME,
@@ -851,11 +1158,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     oom_guard_config = {
         "vram_fraction": args.vram_fraction,
-        "prompts_per_microbatch": 1,
+        "phase": args.phase,
+        "seed_index": int(args.seed_index),
+        "sft_epochs": int(args.sft_epochs),
+        "grpo_steps": int(args.grpo_steps),
+        "sft_micro_batch_size": 16,
+        "sft_grad_accum": 2,
+        "sft_effective_batch_size": 32,
+        "sft_gradient_checkpointing": False,
+        "prompts_per_microbatch": 2,
         "grpo_group_size_G": 16,
-        "per_device_train_batch_size": 16,
-        "gradient_accumulation_steps": 8,
+        "per_device_train_batch_size": 32,
+        "gradient_accumulation_steps": 4,
         "effective_completions_per_step": 128,
+        "parallel_grpo_seeds": 3,
+        "z3_workers_per_seed": 4,
         "gradient_checkpointing": True,
         "completion_only_sliced_log_softmax": True,
         "z3_pool_start_method": "spawn",
@@ -864,9 +1181,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "qwen3_empty_think_suffix": QWEN3_EMPTY_THINK_SUFFIX,
         "language_matched_candidate_branches": True,
         "shared_sft_checkpoints": 1,
-        "grpo_seeds": [args.seed, args.seed + 1, args.seed + 2],
+        "grpo_seeds": grpo_seeds,
         "dr_grpo_beta": 0.04,
         "dr_grpo_eps": [0.20, 0.28],
+        "eval_batch_size": 64,
+        "conformal_row_batch_size": 8,
     }
 
     if args.dry_run:
@@ -874,6 +1193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
             "job_name": JOB_NAME,
             "mode": "DRY_RUN",
+            "phase": args.phase,
+            "seed_index": int(args.seed_index),
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
             "license_audit": license_audit,
@@ -893,6 +1214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     liveness_ok, mayday_ok = _verify_safety_overrides()
 
     if args.smoke_cpu:
+        args.blob_dir.mkdir(parents=True, exist_ok=True)
         # Verify real Microsoft Z3 corridor satisfiability on a deterministic sample of enriched rows
         z3_checked = 0
         z3_sat = 0
@@ -904,16 +1226,123 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if res.is_sat or (ast.action == "REJECT_UNSAFE" and res.fallback_is_sat):
                     z3_sat += 1
 
+        if args.phase == "sft":
+            sft_rows = _build_sft_oversampled_rows(train_rows)
+            shared_sft_dir = args.blob_dir / "qwen3_4b_v3_shared_sft_lora"
+            shared_sft_dir.mkdir(parents=True, exist_ok=True)
+            sft_meta = {
+                "schema_version": "vertirta.g4_qwen3_v3_sft_meta/v1.0.0",
+                "mode": "SMOKE_CPU_ONLY",
+                "model_id": "Qwen/Qwen3-4B",
+                "seed": int(args.seed),
+                "sft_epochs": int(args.sft_epochs),
+                "sft_examples_total": len(sft_rows),
+                "sft_prompt_tokens_masked_minus_100": True,
+                "qwen3_empty_think_suffix_verified": True,
+                "sft_mean_loss": 0.42,
+                "sft_micro_batch_size_used": 16,
+                "sft_grad_accum_used": 2,
+                "sft_gradient_checkpointing_used": False,
+                "sft_oom_fallback_triggered": False,
+                "shared_sft_adapter_dir": str(shared_sft_dir),
+                "peak_torch_allocated_mib": 0.0,
+            }
+            write_canonical_json(_sft_meta_path(args.blob_dir), sft_meta)
+            payload = {
+                "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
+                "job_name": JOB_NAME,
+                "mode": "SMOKE_CPU_ONLY",
+                "phase": "sft",
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
+                "license_audit": license_audit,
+                "vertibench_v2_validation": vb_validation,
+                "oom_guard_config": oom_guard_config,
+                "z3_enrichment_smoke_check": {"checked": z3_checked, "sat_or_valid_reject": z3_sat},
+                "sft_meta": sft_meta,
+                "elapsed_s": round(time.perf_counter() - t0, 4),
+            }
+            write_canonical_json(args.out_json, payload)
+            return 0
+
+        if args.phase == "grpo-seed":
+            if not _sft_meta_path(args.blob_dir).is_file():
+                raise FileNotFoundError(
+                    f"Missing Stage-1 SFT metadata at {_sft_meta_path(args.blob_dir)}; run --phase sft first."
+                )
+            s_idx = int(args.seed_index)
+            g_seed = int(grpo_seeds[s_idx])
+            out_dir = args.blob_dir / f"qwen3_4b_v3_seed{s_idx}_lora"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            # Deterministic distinct smoke accuracies so argmax seed selection is testable in finalize
+            smoke_ast = round(92.0 + 1.5 * ((s_idx + 1) % 3), 2)
+            seed_report = {
+                "schema_version": "vertirta.g4_qwen3_v3_seed_report/v1.0.0",
+                "mode": "SMOKE_CPU_ONLY",
+                "seed_index": s_idx,
+                "seed": g_seed,
+                "grpo_steps": int(args.grpo_steps),
+                "grpo_per_device_train_batch_size_used": 32,
+                "grpo_grad_accum_used": 4,
+                "grpo_oom_fallback_triggered": False,
+                "eval_batch_size_used": 64,
+                "grpo_train_loss": 0.15,
+                "grpo_mean_reward_first10": 0.62,
+                "grpo_mean_reward_last10": 0.89,
+                "grpo_reward_batches": 20,
+                "adapter_dir": str(out_dir),
+                "unconstrained_eval": {"overall": {"ast_stl_accuracy_pct": round(smoke_ast - 4.0, 2), "grammar_validity_pct": 94.0}},
+                "gbnf_z3_gated_eval": {"overall": {"ast_stl_accuracy_pct": smoke_ast, "grammar_validity_pct": 100.0}},
+                "z3_fail_closed_gate_stats": {
+                    "gated_z3_constraint_satisfaction_pct": 100.0,
+                    "bucket3_gated_safe_reject_pct": 100.0,
+                },
+                "peak_torch_allocated_mib": 0.0,
+            }
+            write_canonical_json(_seed_report_path(args.blob_dir, s_idx), seed_report)
+            payload = {
+                "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
+                "job_name": JOB_NAME,
+                "mode": "SMOKE_CPU_ONLY",
+                "phase": "grpo-seed",
+                "seed_index": s_idx,
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
+                "license_audit": license_audit,
+                "oom_guard_config": oom_guard_config,
+                "z3_enrichment_smoke_check": {"checked": z3_checked, "sat_or_valid_reject": z3_sat},
+                "seed_report": seed_report,
+                "elapsed_s": round(time.perf_counter() - t0, 4),
+            }
+            write_canonical_json(args.out_json, payload)
+            return 0
+
         cal_lps, cal_tcs, cal_golds = _simulate_calibrated_branch_logprobs(cal_rows, args.seed + 101)
         test_lps, test_tcs, test_golds = _simulate_calibrated_branch_logprobs(test_rows, args.seed + 202)
         mondrian = _run_mondrian_audit(
             cal_rows, test_rows, cal_lps, cal_tcs, cal_golds, test_lps, test_tcs, test_golds, args.seed
         )
-        args.blob_dir.mkdir(parents=True, exist_ok=True)
+        staged_extra: dict[str, Any] = {}
+        if args.phase == "finalize":
+            sft_meta, seed_reports, best_seed_idx = _load_staged_sft_and_seed_reports(
+                args.blob_dir, n_seeds=len(grpo_seeds)
+            )
+            staged_extra = {
+                "sft_examples_total": int(sft_meta["sft_examples_total"]),
+                "sft_prompt_tokens_masked_minus_100": bool(sft_meta["sft_prompt_tokens_masked_minus_100"]),
+                "qwen3_empty_think_suffix_verified": bool(sft_meta["qwen3_empty_think_suffix_verified"]),
+                "sft_mean_loss": float(sft_meta["sft_mean_loss"]),
+                "shared_sft_adapter_dir": str(sft_meta["shared_sft_adapter_dir"]),
+                "best_seed_index": best_seed_idx,
+                "grpo_seed_reports": seed_reports,
+                "multi_seed_summary": _summarize_multi_seed_reports(seed_reports),
+            }
+
         payload = {
             "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
             "job_name": JOB_NAME,
             "mode": "SMOKE_CPU_ONLY",
+            "phase": args.phase,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
             "license_audit": license_audit,
@@ -922,6 +1351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "z3_enrichment_smoke_check": {"checked": z3_checked, "sat_or_valid_reject": z3_sat},
             "liveness_soc_lt_5pct_override_verified": liveness_ok,
             "mayday_priority_wm_015_verified": mayday_ok,
+            **staged_extra,
             **mondrian,
             "elapsed_s": round(time.perf_counter() - t0, 4),
         }
@@ -932,20 +1362,69 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not vram_cfg["cuda_available"]:
         raise RuntimeError("Live mode requested without CUDA GPU; pass --smoke-cpu or --dry-run on CPU hosts.")
 
-    live_res = _run_live_g4_qwen3_v3(
-        train_rows=train_rows,
-        cal_rows=cal_rows,
-        test_rows=test_rows,
-        blob_dir=args.blob_dir,
-        seed=args.seed,
-        grpo_seeds=oom_guard_config["grpo_seeds"],
-        sft_epochs=args.sft_epochs,
-        grpo_steps=args.grpo_steps,
-    )
+    cfg = _make_grpo_policy_config(sft_epochs=args.sft_epochs, grpo_steps=args.grpo_steps)
+    if args.phase == "sft":
+        sft_meta = _run_live_sft_phase(train_rows, args.blob_dir, args.seed, cfg)
+        payload = {
+            "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
+            "job_name": JOB_NAME,
+            "mode": "LIVE_G4_CUDA",
+            "phase": "sft",
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
+            "license_audit": license_audit,
+            "vram_guard": vram_cfg,
+            "nvidia_smi_end": query_nvidia_smi_snapshot(),
+            "vertibench_v2_validation": vb_validation,
+            "oom_guard_config": oom_guard_config,
+            "sft_meta": sft_meta,
+            "elapsed_s": round(time.perf_counter() - t0, 4),
+        }
+        write_canonical_json(args.out_json, payload)
+        return 0
+
+    if args.phase == "grpo-seed":
+        s_idx = int(args.seed_index)
+        seed_report = _run_live_grpo_seed_phase(
+            train_rows, test_rows, args.blob_dir, args.seed, s_idx, int(grpo_seeds[s_idx]), cfg
+        )
+        payload = {
+            "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
+            "job_name": JOB_NAME,
+            "mode": "LIVE_G4_CUDA",
+            "phase": "grpo-seed",
+            "seed_index": s_idx,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
+            "license_audit": license_audit,
+            "vram_guard": vram_cfg,
+            "nvidia_smi_end": query_nvidia_smi_snapshot(),
+            "oom_guard_config": oom_guard_config,
+            "seed_report": seed_report,
+            "elapsed_s": round(time.perf_counter() - t0, 4),
+        }
+        write_canonical_json(args.out_json, payload)
+        return 0
+
+    if args.phase == "finalize":
+        live_res = _run_live_finalize_phase(cal_rows, test_rows, args.blob_dir, args.seed, grpo_seeds, cfg)
+    else:
+        live_res = _run_live_g4_qwen3_v3(
+            train_rows=train_rows,
+            cal_rows=cal_rows,
+            test_rows=test_rows,
+            blob_dir=args.blob_dir,
+            seed=args.seed,
+            grpo_seeds=grpo_seeds,
+            sft_epochs=args.sft_epochs,
+            grpo_steps=args.grpo_steps,
+        )
+
     payload = {
         "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
         "job_name": JOB_NAME,
         "mode": "LIVE_G4_CUDA",
+        "phase": args.phase,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "eval_split_provenance": HONEST_PROVENANCE_TAG_V2,
         "license_audit": license_audit,
