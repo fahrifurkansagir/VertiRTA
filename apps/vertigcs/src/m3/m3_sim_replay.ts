@@ -103,6 +103,9 @@ export class M3SimReplay {
     if (scenario === "slow_ramp_spoof") {
       this.sigmaPosM = 3.5;
       this.prevCtrInflationM = 12.5;
+    } else if (scenario === "compound_apex") {
+      this.sigmaPosM = 14.5;
+      this.prevCtrInflationM = 45.5;
     } else if (scenario === "water_drift") {
       this.sigmaPosM = 28.0;
       this.prevCtrInflationM = 86.0;
@@ -118,6 +121,8 @@ export class M3SimReplay {
 
     if (this.scenario === "slow_ramp_spoof") {
       this.sigmaPosM = Math.min(18.0, this.sigmaPosM + 0.14 * dt);
+    } else if (this.scenario === "compound_apex") {
+      this.sigmaPosM = Math.min(34.0, this.sigmaPosM + 0.45 * dt);
     } else if (this.scenario === "water_drift") {
       this.sigmaPosM = Math.min(72.0, this.sigmaPosM + 1.85 * dt);
     } else {
@@ -128,10 +133,11 @@ export class M3SimReplay {
   }
 
   snapshot(dtS = 0.2): M3Snapshot {
-    const grazing = this.scenario === "wire_grazing";
-    const spoof = this.scenario === "slow_ramp_spoof";
+    const compound = this.scenario === "compound_apex";
+    const grazing = this.scenario === "wire_grazing" || compound;
+    const spoof = this.scenario === "slow_ramp_spoof" || compound;
     const water = this.scenario === "water_drift";
-    const mayday = this.scenario === "voice_mayday";
+    const mayday = this.scenario === "voice_mayday" || compound;
 
     const wires: WireCapsule3D[] = NOMINAL_WIRES.map((w) => ({ ...w }));
     if (grazing) {
@@ -181,48 +187,64 @@ export class M3SimReplay {
     const relocBackend = this.sigmaPosM > 50.0 ? "MegaLoc" : "XFeat+LighterGlue";
     const relocInliers = water ? 6 : 64;
 
-    const voiceAtc = mayday
+    const voiceAtc = compound
       ? {
-          snrStratum: "S3_Garbled" as const,
-          snrDb: -3.5,
+          snrStratum: "S2_Hover" as const,
+          snrDb: 4.5,
           asrTier: "whisper-large-v3-turbo-Q8" as const,
-          conformalSetSize: 3,
+          conformalSetSize: 2,
           maydayPreempted: true,
-          maydayPosterior: 0.21,
+          maydayPosterior: 0.24,
           livenessEmergencyCommit: false,
           ttsEngine: "sherpa-onnx >= 2.0.0",
           ttsTtfaMs: 142.0,
-          lastTranscript: "MAYDAY rotor vibration Kartal immediate landing",
-          lastReadback: "EMERGENCY PREEMPT CONFIRMED: Diverting to SLZ_KARTAL_PARK.",
+          lastTranscript: "MAYDAY rotor uc arizasi Kartal Sahil acil inis",
+          lastReadback: "ACIL ONCELIK ONAYLANDI: Kartal_Sahil guvenli inis sahasina yonlendiriliyor.",
         }
-      : {
-          snrStratum: "S1_Cruise" as const,
-          snrDb: 14.2,
-          asrTier: "whisper-small-Q8" as const,
-          conformalSetSize: 1,
-          maydayPreempted: false,
-          maydayPosterior: 0.01,
-          livenessEmergencyCommit: false,
-          ttsEngine: "sherpa-onnx >= 2.0.0",
-          ttsTtfaMs: 154.0,
-          lastTranscript: "Kartal Sahil SLZ_KARTAL_PARK inis onayi",
-          lastReadback: "Z3 koridoru dogrulandi: Kartal inis rotasi aktif.",
-        };
+      : mayday
+        ? {
+            snrStratum: "S3_Garbled" as const,
+            snrDb: -3.5,
+            asrTier: "whisper-large-v3-turbo-Q8" as const,
+            conformalSetSize: 3,
+            maydayPreempted: true,
+            maydayPosterior: 0.21,
+            livenessEmergencyCommit: false,
+            ttsEngine: "sherpa-onnx >= 2.0.0",
+            ttsTtfaMs: 142.0,
+            lastTranscript: "MAYDAY rotor vibration Kartal immediate landing",
+            lastReadback: "EMERGENCY PREEMPT CONFIRMED: Diverting to Kartal_Sahil.",
+          }
+        : {
+            snrStratum: "S1_Cruise" as const,
+            snrDb: 14.2,
+            asrTier: "whisper-small-Q8" as const,
+            conformalSetSize: 1,
+            maydayPreempted: false,
+            maydayPosterior: 0.01,
+            livenessEmergencyCommit: false,
+            ttsEngine: "sherpa-onnx >= 2.0.0",
+            ttsTtfaMs: 154.0,
+            lastTranscript: "Kartal Sahil inis onayi",
+            lastReadback: "Z3 koridoru dogrulandi: Kartal inis rotasi aktif.",
+          };
 
-    const ercsCode = mayday || navFsmState === "DETERMINISTIC_VISUAL_SLZ_ABORT"
+    const ercsCode = compound || mayday || navFsmState === "DETERMINISTIC_VISUAL_SLZ_ABORT"
       ? "E4"
       : spoof || grazing
         ? "C4"
         : "A1";
-    const headline = mayday
-      ? "Voice MAYDAY emergency preemption along Kartal coastal corridor"
-      : spoof
-        ? "Slow-ramp GNSS spoof isolated via H3 MCUSUM with 2.0 s VIO rollback"
-        : water
-          ? "Open-water VIO uncertainty triggered CTR wall inflation and SLZ abort"
-          : grazing
-            ? "Grazing-angle unconfirmed cable engaged 15.0 m/s CBVF speed cap"
-            : "Nominal M3 Kartal coastal corridor surveillance";
+    const headline = compound
+      ? "6-Fault Compound Apex: Rotor #3 CSFL, 12 m/s wind, H3 spoof, grazing wire, Part-IS quarantine & TR MAYDAY"
+      : mayday
+        ? "Voice MAYDAY emergency preemption along Kartal coastal corridor"
+        : spoof
+          ? "Slow-ramp GNSS spoof isolated via H3 MCUSUM with 2.0 s VIO rollback"
+          : water
+            ? "Open-water VIO uncertainty triggered CTR wall inflation and SLZ abort"
+            : grazing
+              ? "Grazing-angle unconfirmed cable engaged 15.0 m/s CBVF speed cap"
+              : "Nominal M3 Kartal coastal corridor surveillance";
 
     const e5xDraft = buildE5xDraft(
       this.seq,
@@ -240,6 +262,15 @@ export class M3SimReplay {
     return {
       scenario: this.scenario,
       simTimeS: this.simTimeS,
+      compoundFaults: {
+        active: compound,
+        rotor3Csfl: compound,
+        canyonWind12Mps: compound,
+        gnssSlowRampSpoof: compound,
+        grazingWire15MpsCap: compound,
+        partIsUsspQuarantine: compound,
+        voiceHoverMaydayTr: compound,
+      },
       forwardHazard: {
         wireCount: wires.length,
         wireCap: 64,

@@ -2,6 +2,13 @@
 // Interactive M3 Mission Control Panel: Forward Wire/mmWave, GNSS Spoof MCUSUM + 3-sigma CTR,
 // Voice ATC SNR Mondrian Card & 1-Click .e5x Draft Incident Preview
 
+import {
+  buildSampleSignedSidecarJsonl,
+  buildXsdValidE5xXml,
+  triggerE5xXmlDownload,
+  verifyVrtaEventsJsonlChain,
+  type SidecarChainVerificationResult,
+} from "./m3_forensics_inspector";
 import { M3SimReplay } from "./m3_sim_replay";
 import type { M3Snapshot } from "./m3_types";
 
@@ -18,6 +25,29 @@ export interface M3PanelElements {
   fsmEl: HTMLElement | null;
   voiceEl: HTMLElement | null;
   e5xPreEl: HTMLElement | null;
+}
+
+export function renderSidecarVerificationDom(
+  statusEl: HTMLElement | null,
+  timelineEl: HTMLElement | null,
+  result: SidecarChainVerificationResult
+): void {
+  if (statusEl) {
+    statusEl.textContent = result.valid
+      ? `CHAIN VALID (${result.events.length} events verified via WebCrypto SHA-256)`
+      : `CHAIN INVALID: ${result.errorMessage}`;
+    statusEl.setAttribute("data-valid", result.valid ? "1" : "0");
+  }
+  if (!timelineEl) return;
+  timelineEl.replaceChildren();
+  const doc = timelineEl.ownerDocument;
+  for (const ev of result.events) {
+    const li = doc.createElement("li");
+    li.textContent =
+      `#${ev.seq} (${(ev.tSimUs / 1e6).toFixed(2)}s) ${ev.kind} [${ev.snrStratum}, |C|=${ev.conformalSetSize}] ` +
+      `${ev.eventSha256.slice(0, 10)}…`;
+    timelineEl.appendChild(li);
+  }
 }
 
 export function renderM3PanelDom(snap: M3Snapshot, els: M3PanelElements): void {
@@ -57,7 +87,7 @@ export function renderM3PanelDom(snap: M3Snapshot, els: M3PanelElements): void {
     const e = snap.e5xDraft;
     els.e5xPreEl.textContent =
       `[${e.occurrenceClassId431} | ${e.cicttCategory} | Barrier#8=${e.barrier8Score} | ERCS ${e.ercsMatrixCode} | 0.0% num halluc]\n` +
-      e.xmlSnippet;
+      buildXsdValidE5xXml(snap);
   }
 }
 
@@ -65,13 +95,21 @@ export function bindM3Panel(
   onSnapshot: (snapshot: M3Snapshot | null) => void,
   onStatus: (message: string) => void
 ): M3PanelHandle {
+  const btnCompound = document.getElementById("btn-m3-compound") as HTMLButtonElement | null;
   const btnWire = document.getElementById("btn-m3-wire") as HTMLButtonElement | null;
   const btnSpoof = document.getElementById("btn-m3-spoof") as HTMLButtonElement | null;
   const btnWater = document.getElementById("btn-m3-water") as HTMLButtonElement | null;
   const btnVoice = document.getElementById("btn-m3-voice-mayday") as HTMLButtonElement | null;
   const btnE5x = document.getElementById("btn-m3-e5x-preview") as HTMLButtonElement | null;
+  const btnE5xDownload = document.getElementById("btn-m3-e5x-download") as HTMLButtonElement | null;
+  const btnSampleSidecar = document.getElementById("btn-m3-sample-sidecar") as HTMLButtonElement | null;
   const btnReset = document.getElementById("btn-m3-reset") as HTMLButtonElement | null;
   const e5xDetails = document.getElementById("m3-e5x-details") as HTMLDetailsElement | null;
+  const sidecarDetails = document.getElementById("m3-sidecar-details") as HTMLDetailsElement | null;
+  const sidecarDropzone = document.getElementById("m3-sidecar-dropzone");
+  const sidecarInput = document.getElementById("m3-sidecar-file-input") as HTMLInputElement | null;
+  const sidecarStatusEl = document.getElementById("m3-sidecar-status");
+  const sidecarTimelineEl = document.getElementById("m3-sidecar-timeline");
 
   const els: M3PanelElements = {
     summaryEl: document.getElementById("m3-hud-summary"),
@@ -107,9 +145,31 @@ export function bindM3Panel(
     }
   };
 
+  const inspectSidecarText = async (text: string, sourceLabel: string) => {
+    const res = await verifyVrtaEventsJsonlChain(text);
+    if (sidecarDetails) {
+      sidecarDetails.open = true;
+    }
+    renderSidecarVerificationDom(sidecarStatusEl, sidecarTimelineEl, res);
+    onStatus(
+      res.valid
+        ? `Sidecar ${sourceLabel}: WebCrypto SHA-256 chain VERIFIED (${res.events.length} events).`
+        : `Sidecar ${sourceLabel}: TAMPER / CHAIN FAILURE — ${res.errorMessage}`
+    );
+  };
+
   // Initial nominal render
   renderM3PanelDom(current, els);
   onSnapshot(current);
+
+  btnCompound?.addEventListener("click", () => {
+    const snap = replay.activateScenario("compound_apex");
+    emit(snap);
+    ensureTicker();
+    onStatus(
+      "M3 6-Fault Compound Apex (E1): Rotor #3 CSFL + 12 m/s wind + H3 GNSS spoof + grazing wire 15.0 m/s + Part-IS quarantine + S2 TR MAYDAY."
+    );
+  });
 
   btnWire?.addEventListener("click", () => {
     stop();
@@ -155,6 +215,36 @@ export function bindM3Panel(
     onStatus(
       `M3 Forensics .e5x Draft: ${current.e5xDraft.occurrenceClassId431} (${current.e5xDraft.cicttCategory}, ERCS ${current.e5xDraft.ercsMatrixCode}, Barrier #8=0).`
     );
+  });
+
+  btnE5xDownload?.addEventListener("click", () => {
+    const fname = triggerE5xXmlDownload(current);
+    onStatus(
+      `Downloaded XSD-valid draft ${fname} (${current.e5xDraft.occurrenceClassId431}, ${current.e5xDraft.cicttCategory}, Barrier #8=0).`
+    );
+  });
+
+  btnSampleSidecar?.addEventListener("click", () => {
+    void buildSampleSignedSidecarJsonl().then((jsonl) =>
+      inspectSidecarText(jsonl, "sample_compound.vrta_events.jsonl")
+    );
+  });
+
+  sidecarInput?.addEventListener("change", () => {
+    const file = sidecarInput.files?.[0];
+    if (!file) return;
+    void file.text().then((txt) => inspectSidecarText(txt, file.name));
+  });
+
+  sidecarDropzone?.addEventListener("dragover", (evt) => {
+    evt.preventDefault();
+  });
+
+  sidecarDropzone?.addEventListener("drop", (evt) => {
+    evt.preventDefault();
+    const file = (evt as DragEvent).dataTransfer?.files?.[0];
+    if (!file) return;
+    void file.text().then((txt) => inspectSidecarText(txt, file.name));
   });
 
   btnReset?.addEventListener("click", () => {

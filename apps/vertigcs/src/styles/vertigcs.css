@@ -259,6 +259,41 @@ button.secondary {
   font-size: 10px;
 }
 
+.sidecar-status {
+  margin: 6px 0 4px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #b7cde4;
+}
+
+.sidecar-status[data-valid="1"] {
+  color: #00e676;
+}
+
+.sidecar-status[data-valid="0"] {
+  color: var(--danger);
+}
+
+.sidecar-timeline {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #b7cde4;
+}
+
+.sidecar-timeline li {
+  margin-bottom: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .fleet-details {
   margin-top: 8px;
   border-top: 1px solid var(--border);

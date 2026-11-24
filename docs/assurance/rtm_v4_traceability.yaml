@@ -1,0 +1,897 @@
+# SPDX-License-Identifier: Apache-2.0
+# VertiRTA v4.0.0 Machine-Auditable Bidirectional Requirements Traceability Matrix (R01..R48)
+# Verified programmatically by scripts/ci/verify_rtm_traceability.py (0 broken paths, 0 missing symbols).
+# Honest Non-Certification Boundary: research & software-verification testbed ONLY.
+
+schema_version: "vertirta.rtm/v4.0.0"
+verified_date: "2026-11-24"
+compliance_claim: "NONE_RESEARCH_TESTBED_ONLY"
+standards_registry_ref: "docs/standards_registry.yaml"
+
+requirements:
+  # ============================================================================
+  # Block A (R01..R08): ASTM F3269-21 Simplex RTA & Bare-Metal Determinism
+  # ============================================================================
+  - id: "R01"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 5.1-5.3 — Simplex RTA Isolation Boundary"
+    title: "Strict zero-leak isolation of 400 Hz flight core and 100 Hz RTA companion from AI/ROS/ONNX/Python"
+    dal_or_assurance_tier: "RTA_CORE_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "scripts/ci/check_arch_isolation.py"
+      - "core/rta_companion/include/vertirta/rta/slz_prior_provider.hpp"
+    cpp_or_py_symbols:
+      - "ISlzPriorProvider"
+      - "SlzProviderSnapshot"
+    verification_tests:
+      - "tests/determinism/test_ci_gates.py"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/arch_isolation_report.json"
+    honest_scope_note: "Static include/link boundary audit in CI; not a DO-178C partitioning certification."
+
+  - id: "R02"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 6.2 — Bare-Metal Deterministic Recovery Core Footprint"
+    title: "Freestanding C++17 flight_core stays frozen at 28,886 B Flash / 0 B static library RAM on Cortex-M7"
+    dal_or_assurance_tier: "RTA_CORE_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/indi_wls.hpp"
+      - "scripts/ci/check_bare_metal_size.py"
+    cpp_or_py_symbols:
+      - "IndiWlsController"
+    verification_tests:
+      - "tests/determinism/test_ci_gates.py"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/bare_metal_size_cortex_m7.json"
+    honest_scope_note: "Verified by arm-none-eabi-size CI gate; physical board timing remains pending."
+
+  - id: "R03"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 6.2 — Zero Dynamic Memory Allocation in Flight Core"
+    title: "Zero heap symbols (malloc/free/new/delete) verified via nm and link-time --wrap traps"
+    dal_or_assurance_tier: "RTA_CORE_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/daqp_qp.hpp"
+      - "scripts/ci/check_no_heap_symbols.py"
+    cpp_or_py_symbols:
+      - "StaticDaqpSolver"
+      - "DaqpSolveResult"
+    verification_tests:
+      - "tests/determinism/test_flight_core_noheap.cpp"
+      - "tests/determinism/no_heap_link_trap.cpp"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_daqp_bounds.c"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/no_heap_cortex_m7.json"
+      - "artifacts/v1.0.0/benchmarks/no_heap_x86_64.json"
+    honest_scope_note: "Link-time & symbol-table proof in CI; not DO-178C object-code verification."
+
+  - id: "R04"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 6.2 — Bounded Static Call-Graph Stack Depth (Zero Recursion)"
+    title: "Cortex-M7 worst-case static call-graph DAG bounded at 2,960 B <= 16 KiB with 0 recursion cycles"
+    dal_or_assurance_tier: "RTA_CORE_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/indi_wls.hpp"
+      - "scripts/ci/check_stack_usage.py"
+    cpp_or_py_symbols:
+      - "IndiWlsController"
+      - "WlsResult"
+    verification_tests:
+      - "tests/determinism/test_ci_gates.py"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/stack_usage_cortex_m7.json"
+      - "artifacts/v1.0.0/benchmarks/stack_usage_x86_64.json"
+    honest_scope_note: "GCC -fstack-usage/-fcallgraph-info static DAG bound; excludes RTOS ISR nesting."
+
+  - id: "R05"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 5.4 — 100 Hz HJI-CBVF-QP Safety Monitor & u*_HJ Fallback"
+    title: "4D HJI-CBVF-QP safety filter backed by SHA-256-verified mmap LUT and closed-form worst-case braking"
+    dal_or_assurance_tier: "RTA_COMPANION_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/rta_companion/include/vertirta/rta/cbvf_safety_filter.hpp"
+      - "core/rta_companion/include/vertirta/rta/mmap_cbvf_lut.hpp"
+    cpp_or_py_symbols:
+      - "CbvfSafetyFilter"
+      - "MmapCbvf4DLut"
+      - "SafetyFilterOutput"
+    verification_tests:
+      - "tests/rta_companion/test_cbvf_safety_filter.cpp"
+      - "tests/rta_companion/test_lut_dryden.cpp"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_cbvf_filter.cpp"
+    evidence_artifacts:
+      - "artifacts/v3.1.0/jax_4d_cbvf_l4_manifest.json"
+      - "artifacts/v3.1.0/paired_30k_ral_stats.json"
+    honest_scope_note: "Verified in 30,000 paired 6-DOF simulations and ESBMC; not flight-certified."
+
+  - id: "R06"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 5.5 — Robocentric Obstacle & Wire Hazard Ingestion"
+    title: "Bounded 3.094 MiB robocentric ESDF, <=64 wire capsules, and <=16 intruder tracks feed RTA QP"
+    dal_or_assurance_tier: "RTA_COMPANION_SIMULATION_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/rta_companion/include/vertirta/rta/robocentric_esdf.hpp"
+      - "core/rta_companion/include/vertirta/rta/wire_capsules.hpp"
+      - "core/rta_companion/include/vertirta/rta/intruder_kf.hpp"
+    cpp_or_py_symbols:
+      - "RobocentricEsdfMap"
+      - "WireCapsuleTable"
+      - "IntruderTrackerKf"
+    verification_tests:
+      - "tests/rta_companion/test_esdf_hazards_slz.cpp"
+    honest_scope_note: "Deterministic fixed-capacity containers verified under ASan/UBSan."
+
+  - id: "R07"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 7 — Cross-ISA Deterministic Flight Replay"
+    title: "Zero-ULP deterministic .vrta replay parity across x86_64 and ARM64 Cobalt 100 CI"
+    dal_or_assurance_tier: "VERIFICATION_INFRASTRUCTURE"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/vrta_recorder.hpp"
+      - "core/flight_core/include/vertirta/core/frames.hpp"
+    cpp_or_py_symbols:
+      - "VrtaFrame100Hz"
+      - "verify_vrta_frame"
+    verification_tests:
+      - "tests/flight_core/test_daqp_vrec_plant.cpp"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/cloud_ci/tier2_cross_isa.json"
+      - "artifacts/v1.0.0/benchmarks/cloud_ci/tier4_wallclock_arm64.json"
+    honest_scope_note: "User-space CI determinism & latency regression only (never DO-178C WCET)."
+
+  - id: "R08"
+    standard_id: "ASTM-F3269-21"
+    clause: "Sec 7 — Zero-Install Single-Threaded WASM Sandbox Parity"
+    title: "Exact frozen flight_core compiled to 38,470 B (< 150 KiB) single-threaded Worker WASM with 0 SAB/COI"
+    dal_or_assurance_tier: "RESEARCH_SANDBOX"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "wasm/build_wasm.sh"
+      - "core/flight_core/include/vertirta/core/sim_plant_6dof.hpp"
+    cpp_or_py_symbols:
+      - "CoaxialPlant6Dof"
+    verification_tests:
+      - "tests/wasm/test_wasm_abi_host.cpp"
+      - "tests/wasm/test_wasm_build_contracts.py"
+    honest_scope_note: "Browser visualization sandbox only; zero operational GCS certification."
+
+  # ============================================================================
+  # Block B (R09..R16): EASA SC-VTOL-02, MOC-1..5, Part-IAM & SCSC-141C GSN v3
+  # ============================================================================
+  - id: "R09"
+    standard_id: "SC-VTOL-MOC-5"
+    clause: "MOC-5 VTOL.2300 — Continuous Fly-by-Wire Latent-Fault Monitoring"
+    title: "400 Hz 3-IMU TMR median voter and 8-tick chi-square monitor quarantine IMU faults in <= 20 ms"
+    dal_or_assurance_tier: "DESIGN_DRIVER_CAT_ENHANCED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/tmr_voter.hpp"
+    cpp_or_py_symbols:
+      - "TmrVoter"
+      - "TmrState"
+      - "TmrVoteOutput"
+    verification_tests:
+      - "tests/flight_core/test_tmr_voter.cpp"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_tmr_voter.cpp"
+    honest_scope_note: "Algorithmic TMR cross-monitor verified in CTest & ESBMC; hardware FMEA undeveloped."
+
+  - id: "R10"
+    standard_id: "SC-VTOL-02"
+    clause: "VTOL.2005 / VTOL.2510 — Single & Cross-Arm Dual Rotor CSFL Recovery"
+    title: "Dual-channel Motor FDI and float64 INDI-WLS achieve 95.98% paired CSFL survival (n=6,500)"
+    dal_or_assurance_tier: "DESIGN_DRIVER_CAT_ENHANCED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/motor_fdi.hpp"
+      - "core/flight_core/include/vertirta/core/indi_wls.hpp"
+    cpp_or_py_symbols:
+      - "MotorFdiObserver"
+      - "IndiWlsController"
+    verification_tests:
+      - "tests/flight_core/test_indi_wls_thevenin.cpp"
+      - "tests/verification/test_atlas_stats.py"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_motor_fdi.cpp"
+      - "verification/formal/esbmc/verify_indi_wls.cpp"
+    evidence_artifacts:
+      - "artifacts/v3.1.0/paired_30k_ral_stats.json"
+      - "artifacts/v1.0.0/tier1_atlas/failure_cliff_ledger.json"
+    honest_scope_note: "Conditional simulated CSFL recovery only; cannot prove 10^-9/FH catastrophic rate."
+
+  - id: "R11"
+    standard_id: "SC-VTOL-02"
+    clause: "VTOL.2005 — Honest CSFL vs. Last-Resort CEL Separation"
+    title: "Same-arm coaxial dual loss irreversibly latches Option B1b flat-spin CEL (100.00% survival, excluded from CSFL)"
+    dal_or_assurance_tier: "DESIGN_DRIVER_CAT_BASIC_CEL"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/coax_envelope.hpp"
+      - "core/rta_companion/include/vertirta/rta/cel_2d_lut.hpp"
+    cpp_or_py_symbols:
+      - "FlightRegime"
+      - "Cel2DLut"
+    verification_tests:
+      - "tests/flight_core/test_indi_wls_thevenin.cpp"
+      - "tests/python/test_v31_jax_and_ral_closure.py"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_coax_envelope.cpp"
+    evidence_artifacts:
+      - "artifacts/v3.1.0/paired_30k_ral_stats.json"
+    honest_scope_note: "Explicitly exempted from passenger-grade CSFL; evaluated strictly in isolated S4 CEL pool."
+
+  - id: "R12"
+    standard_id: "SC-VTOL-MOC-4"
+    clause: "MOC-4 VTOL.2105 — Coaxial Unblanking & 1-RC Thevenin ESS Power Coupling"
+    title: "Models eta_coax=0.85 -> 1.0 unblanking and 112S12P 403.2 V / 21.77 kWh battery voltage sag"
+    dal_or_assurance_tier: "DESIGN_DRIVER_PHYSICS"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/coax_envelope.hpp"
+      - "config/vehicle_x8_240.yaml"
+    cpp_or_py_symbols:
+      - "CoaxEffectiveness"
+      - "TheveninBattery1RC"
+    verification_tests:
+      - "tests/flight_core/test_indi_wls_thevenin.cpp"
+      - "tests/config/test_config_contracts.py"
+    honest_scope_note: "Lumped 1-RC NMC811 electrical model; physical cell thermal-runaway testing undeveloped."
+
+  - id: "R13"
+    standard_id: "REG-EU-2024-1111-PART-IAM"
+    clause: "UAM.OP.VCA.190/.191/.195 — Final Energy Reserve & Alternate SLZ Reachability"
+    title: "Enforces >= 12% airborne energy reserve floor and > 1 wind-adjusted reachable alternate SLZ past PoC"
+    dal_or_assurance_tier: "DESIGN_DRIVER_OPERATIONS"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/rta_companion/include/vertirta/rta/slz_reach.hpp"
+      - "verification/ODD.yaml"
+    cpp_or_py_symbols:
+      - "SlzReachRanker"
+    verification_tests:
+      - "tests/rta_companion/test_esdf_hazards_slz.cpp"
+      - "tests/verification/test_assurance_gsn.py"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/benchmarks/odd_part_iam_validation.json"
+    honest_scope_note: "Machine-readable ODD & Part-IAM reserve validator; not an approved AOC operations manual."
+
+  - id: "R14"
+    standard_id: "SC-VTOL-02"
+    clause: "VTOL.2115 / VTOL.2135 — Multi-Airframe Lift+Cruise 8+1 Hover-OEI & Transition Control"
+    title: "Zero-heap IAirframeDynamics Lift+Cruise 8+1 sustains hover OEI <= 79.2% T_max and < 0.30 m transition alt error"
+    dal_or_assurance_tier: "DESIGN_DRIVER_MULTI_AIRFRAME"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/airframes/lift_cruise/include/vertirta/airframes/airframe_dynamics.hpp"
+      - "core/airframes/lift_cruise/include/vertirta/airframes/lift_cruise_dynamics.hpp"
+      - "core/airframes/lift_cruise/include/vertirta/airframes/transition_indi_wls.hpp"
+    cpp_or_py_symbols:
+      - "IAirframeDynamics"
+      - "LiftCruiseDynamics"
+      - "TransitionIndiWlsController"
+    verification_tests:
+      - "tests/airframes/test_lift_cruise_dynamics.cpp"
+      - "tests/airframes/test_transition_indi_wls.cpp"
+      - "tests/airframes/test_px4_v116_overlay_contracts.py"
+    honest_scope_note: "Parallel M2 library outside frozen flight_core; 400 Hz kept internal to PX4 v1.16 wq:rate_ctrl."
+
+  - id: "R15"
+    standard_id: "SAE-ARP4761A"
+    clause: "Sec 4 & App D — Mini-FHA, FMEA & Hardware/Software Cut-Set Separation"
+    title: "Traces hazard severities, failure modes, and common-cause beta-factor boundaries across M0-M3"
+    dal_or_assurance_tier: "ASSURANCE_DOCUMENTATION"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "docs/FHA_FMEA_TRACEABILITY.md"
+      - "docs/standards_registry.yaml"
+    cpp_or_py_symbols:
+      - "SC-VTOL-02"
+      - "SAE-ARP4761A"
+    verification_tests:
+      - "tests/verification/test_assurance_gsn.py"
+    honest_scope_note: "Research-grade FHA/FMEA traceability; full PSSA/SSA requires certified hardware data."
+
+  - id: "R16"
+    standard_id: "SCSC-141C-GSN-V3"
+    clause: "GSN v3 Sec 1.3 — CI-Hashed Living Safety Case with Mandatory Undeveloped Goals"
+    title: "Generates SHA-256-linked GSN v3 argument (Sn1-Sn14) preserving G5 and G6 explicitly [UNDEVELOPED]"
+    dal_or_assurance_tier: "ASSURANCE_DOCUMENTATION"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "docs/SAFETY_CASE.md"
+      - "verification/gsn/build_gsn.py"
+    cpp_or_py_symbols:
+      - "UNDEVELOPED"
+    verification_tests:
+      - "tests/verification/test_assurance_gsn.py"
+      - "tests/python/test_v31_jax_and_ral_closure.py"
+    evidence_artifacts:
+      - "artifacts/v1.0.0/gsn_evidence_hashes.json"
+    honest_scope_note: "Explicitly flags hardware qualification (G5) and certification lifecycle (G6) as undeveloped."
+
+  # ============================================================================
+  # Block C (R17..R21): STM32H7 ES0392 Rev 16 Silicon, OpenCyphal SIL & Formal
+  # ============================================================================
+  - id: "R17"
+    standard_id: "STM32H7-ES0392-REV16"
+    clause: "Erratum 2.24.2 — FDCAN RAM Corruption Silicon Revision V Gate"
+    title: "Bare-metal boot checks DBGMCU->IDCODE == 0x2003 (Rev V) and blocks safety-critical arming on Rev Y"
+    dal_or_assurance_tier: "EMBEDDED_BSP_LOCK"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "firmware/stm32h7_hitl/include/vertirta_bsp/stm32h7_boot.hpp"
+      - "firmware/stm32h7_hitl/src/stm32h7_boot.cpp"
+    cpp_or_py_symbols:
+      - "SiliconRevInfo"
+      - "inspect_silicon_rev"
+    verification_tests:
+      - "tests/firmware/test_stm32h7_tcm_elf.py"
+      - "tests/firmware/test_hitl_profiler_and_elf.py"
+    honest_scope_note: "Cross-compiled arm-none-eabi ELF & host unit tested; physical board flash pending."
+
+  - id: "R18"
+    standard_id: "STM32H7-ES0392-REV16"
+    clause: "Errata 2.1.1 / 2.1.6 & 480 MHz VOS0 TCM Linker Hardening"
+    title: "Locks FLASH_ACR.LATENCY=4, VTOR=0x400 bottom 1 KiB ITCM null trap, no Write-Through MPU, LSPEN=0, FPSCR poll"
+    dal_or_assurance_tier: "EMBEDDED_BSP_LOCK"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "firmware/stm32h7_hitl/stm32h753_tcm.ld"
+      - "firmware/stm32h7_hitl/include/vertirta_bsp/stm32h7_boot.hpp"
+    cpp_or_py_symbols:
+      - "init_clocks_480mhz_or_fallback"
+    verification_tests:
+      - "tests/firmware/test_stm32h7_tcm_elf.py"
+      - "tests/firmware/test_formal_and_hil_workflow.py"
+    honest_scope_note: "Linker script & register locks verified on ELF; physical silicon stress test pending."
+
+  - id: "R19"
+    standard_id: "STM32H7-ES0392-REV16"
+    clause: "DWT->CYCCNT Empirical High-Water Mark Profiling (Physical STM32H753 HITL)"
+    title: "Physical STM32H753 / NUCLEO-H743ZI2 Rev V on-silicon DWT cycle profiling (Empirical HWM ONLY, not WCET)"
+    dal_or_assurance_tier: "HARDWARE_HITL_PENDING"
+    verification_status: "CERTIFICATION_UNDEVELOPED"
+    source_files:
+      - "firmware/stm32h7_hitl/include/vertirta_bsp/dwt_profiler.hpp"
+      - "firmware/stm32h7_hitl/src/dwt_profiler.cpp"
+    cpp_or_py_symbols:
+      - "DwtCycleProfiler"
+      - "CycleSummary"
+    verification_tests:
+      - "tests/firmware/test_hitl_profiler_and_elf.py"
+    honest_scope_note: "HONEST OPEN BOUNDARY (PENDING_PHYSICAL_STM32H7_HITL): firmware builds cleanly; physical Rev V silicon capture remains open and will be Empirical HWM only, never analytical DO-178C WCET."
+
+  - id: "R20"
+    standard_id: "SC-VTOL-MOC-1-3"
+    clause: "MOC VTOL.2510 — Dual-FCC Active/Standby Failover over OpenCyphal CAN-FD"
+    title: "Dual-FCC Renode v1.17.0 SIL achieves 12.50 ms (< 20 ms) failover using MIT libcanard + o1heap in BSP outside flight_core"
+    dal_or_assurance_tier: "FUNCTIONAL_SIL_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "firmware/renode_cyphal/include/vertirta_cyphal/cyphal_bus_node.hpp"
+      - "firmware/renode_cyphal/include/vertirta_cyphal/o1heap_arena.hpp"
+      - "firmware/renode_cyphal/include/vertirta_cyphal/fdcan_stm32h7.hpp"
+    cpp_or_py_symbols:
+      - "CyphalFccNode"
+      - "O1HeapDtcmArena"
+      - "fdcan1_init"
+    verification_tests:
+      - "tests/firmware/test_cyphal_bus_and_o1heap.cpp"
+      - "tests/firmware/test_renode_failover_contracts.py"
+      - "tests/firmware/test_dsdl_contract.py"
+    formal_or_sil_harnesses:
+      - "firmware/renode_cyphal/renode/dual_fcc_failover.resc"
+    honest_scope_note: "Functional/protocol SIL only in Renode v1.17.0 (3/3 PASS in CI); not cycle-accurate WCET."
+
+  - id: "R21"
+    standard_id: "SC-VTOL-MOC-1-3"
+    clause: "Supplemental Formal Verification & MISRA-Aligned High-Integrity Profile"
+    title: "Live ESBMC v8.7.0 --32 proves 1,905/1,905 properties across 6 core modules + clang-tidy/Cppcheck + gap register"
+    dal_or_assurance_tier: "SUPPLEMENTAL_FORMAL_VERIFICATION"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "verification/formal/esbmc/run_esbmc_suite.sh"
+      - "verification/formal/misra_profile/run_static_profile.sh"
+      - "verification/formal/misra_profile/MISRA_GAP_REGISTER.md"
+    cpp_or_py_symbols:
+      - "esbmc"
+      - "cppcheck"
+    verification_tests:
+      - "tests/firmware/test_formal_harnesses.py"
+      - "tests/firmware/test_static_profile_contracts.py"
+    formal_or_sil_harnesses:
+      - "verification/formal/esbmc/verify_tmr_voter.cpp"
+      - "verification/formal/esbmc/verify_indi_wls.cpp"
+      - "verification/formal/esbmc/verify_motor_fdi.cpp"
+      - "verification/formal/esbmc/verify_coax_envelope.cpp"
+      - "verification/formal/esbmc/verify_daqp_bounds.c"
+      - "verification/formal/esbmc/verify_cbvf_filter.cpp"
+    honest_scope_note: "Supplemental engineering verification only (zero DO-330 TQL-5 or certified MISRA C++:2023 claim)."
+
+  # ============================================================================
+  # Block D (R22..R27): Part-IS (EU) 2022/1645 & 2023/203 & Multi-eVTOL U-Space
+  # ============================================================================
+  - id: "R22"
+    standard_id: "REG-EU-2023-203-PART-IS"
+    clause: "IS.I.OR.205 / OMG DDS Security 1.2 IV_s Replay Mitigation"
+    title: "40 B VertiRtaSecureHeader + ReplayWindow128 + TAI skew check closes V2V/USSP replay gap"
+    dal_or_assurance_tier: "PART_IS_TESTBED_PROTOCOL"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/uspace_fleet/include/vertirta/uspace/part_is_security.hpp"
+    cpp_or_py_symbols:
+      - "ReplayWindow128"
+      - "ReplayStatus"
+      - "SecuredPacket"
+    verification_tests:
+      - "tests/uspace_fleet/test_part_is_security.cpp"
+      - "tests/ci/test_m2_workflow_contracts.py"
+    honest_scope_note: "Research protocol testbed; NIS2 != Part-IS and zero certified Part-IS authority approval."
+
+  - id: "R23"
+    standard_id: "REG-EU-2022-1645-PART-IS"
+    clause: "IS.D.OR.200 — Supply-Chain Cryptographic CVE Pinning (libsodium >= 1.0.21)"
+    title: "Compile- and runtime-rejects vulnerable libsodium <= 1.0.20 (Ed25519 subgroup CVE) across M2 & M3"
+    dal_or_assurance_tier: "PART_IS_SUPPLY_CHAIN_PIN"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/uspace_fleet/include/vertirta/uspace/part_is_security.hpp"
+      - "core/forensics/include/vertirta/forensics/vrta_events_sidecar.hpp"
+    cpp_or_py_symbols:
+      - "PartIsBackend"
+      - "check_forensics_libsodium_min_version"
+    verification_tests:
+      - "tests/uspace_fleet/test_part_is_security.cpp"
+      - "tests/ci/test_m2_workflow_contracts.py"
+      - "tests/ci/test_m3_workflow_contracts.py"
+    honest_scope_note: "Cloud CI builds immutable libsodium-1.0.22.tar.gz with pinned SHA-256 and -DVERTIRTA_REQUIRE_LIBSODIUM=ON."
+
+  - id: "R24"
+    standard_id: "REG-EU-2023-203-PART-IS"
+    clause: "IS.I.OR.220 / IS.I.OR.230 — RTO <= 10 s Cyber Fail-Safe FSM & Quarantine"
+    title: "Spoofed USSP or V2V attack transitions CyberState to SEC_AUTONOMOUS_RTB within <= 10 s RTO"
+    dal_or_assurance_tier: "PART_IS_TESTBED_PROTOCOL"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/uspace_fleet/include/vertirta/uspace/part_is_security.hpp"
+      - "docs/standards_registry.yaml"
+    cpp_or_py_symbols:
+      - "CyberState"
+    verification_tests:
+      - "tests/uspace_fleet/test_part_is_security.cpp"
+      - "tests/integration/test_m2_uspace_node_contracts.py"
+    honest_scope_note: "Deterministic cyber fail-safe FSM; actual IS.I.OR.230 72h authority portal reporting is operational."
+
+  - id: "R25"
+    standard_id: "ASTM-F3548-21"
+    clause: "Sec 6 — 20-eVTOL U-Space Tactical Separation & < 500 ms P0 CEL Preemption"
+    title: "20-agent SoA FleetSimEngine + Top-10 3D CBF-ORCA + RHR curl feeds <= 14 <= 15 frozen RTA slots"
+    dal_or_assurance_tier: "USPACE_SIMULATION_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/uspace_fleet/include/vertirta/uspace/fleet_sim_engine.hpp"
+      - "core/uspace_fleet/include/vertirta/uspace/cbf_orca_3d.hpp"
+    cpp_or_py_symbols:
+      - "FleetSimEngine"
+      - "CbfOrcaCommand"
+      - "CelPreemptionEncounterResult"
+    verification_tests:
+      - "tests/uspace_fleet/test_cbf_orca_and_fleet_sim.cpp"
+    honest_scope_note: "Measured 0.151 ms/tick in simulation; zero certified USSP or ATC operational approval."
+
+  - id: "R26"
+    standard_id: "ASTM-F3411-22A"
+    clause: "Vertiport 15 C Liquid-Chilled 68 kg Turnaround & Remote ID Broadcast"
+    title: "Models 4 coastal vertiports (< 29.1895 E), 68 kg 112S12P thermal turnaround, and F3411-22a/RFC 9575 DRIP"
+    dal_or_assurance_tier: "USPACE_SIMULATION_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/uspace_fleet/include/vertirta/uspace/thermal_turnaround.hpp"
+      - "core/uspace_fleet/include/vertirta/uspace/vertiport_queue.hpp"
+    cpp_or_py_symbols:
+      - "ThermalPackParams"
+      - "CoolingMode"
+      - "TurnaroundResult"
+    verification_tests:
+      - "tests/uspace_fleet/test_vertiport_thermal_queue.cpp"
+      - "tests/integration/test_m2_uspace_node_contracts.py"
+    honest_scope_note: "Fast DDS >= 3.4.1 CVE pin and 228 B F3411-22a framing verified in contracts."
+
+  - id: "R27"
+    standard_id: "ASTM-F3548-21"
+    clause: "Two-Tier Separate-Context Fleet Z3 Strategic Deconfliction"
+    title: "QF_RDL fast path (< 3 ms) + bounded |N_local| <= 6 QF_LRA (< 25 ms) with 100% SMT-LIB2 parity"
+    dal_or_assurance_tier: "USPACE_ADVISORY_SCHEDULER"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/fleet_z3/include/vertirta/fleet_z3/fleet_z3_scheduler.hpp"
+    cpp_or_py_symbols:
+      - "SolverTier"
+      - "AircraftSlotRequest"
+      - "FleetScheduleRequest"
+    verification_tests:
+      - "tests/fleet_z3/test_fleet_z3_scheduler.cpp"
+      - "tests/fleet_z3/test_fleet_z3_smt2_crosscheck.py"
+    honest_scope_note: "Separate Z3 contexts prevent smt.arith.solver=3 cross-contamination; zero fleet MILP blowup."
+
+  # ============================================================================
+  # Block E (R28..R32): Wind/Acoustics, SHGM SHT-IHA / SHT-21 Ek-6 & Zero-GPL
+  # ============================================================================
+  - id: "R28"
+    standard_id: "SC-VTOL-MOC-4"
+    clause: "Urban Wake ROM & Tamper-Verified mmap Wind LUT"
+    title: "Offline GPL-3.0 OpenFOAM POD-RBF -> Apache-2.0 mmap VRTAWND1 with mlock(), SHA-256 check, and eps_rom_p95"
+    dal_or_assurance_tier: "COMPANION_ENVIRONMENT_MODEL"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/wind_acoustics/include/vertirta/wind_acoustics/mmap_vrta_wind_lut.hpp"
+    cpp_or_py_symbols:
+      - "MmapVrtaWindLut"
+      - "CbvfWindBuffer"
+    verification_tests:
+      - "tests/wind_acoustics/test_mmap_vrta_wind_lut.cpp"
+      - "tests/wind_acoustics/test_cfd_offline_gpl_contracts.py"
+    honest_scope_note: "Strictly air-gapped from GPL OpenFOAM runtime; 1-bit SHA-256 tamper rejected fail-closed."
+
+  - id: "R29"
+    standard_id: "SHGM-SHT-IHA"
+    clause: "Community Aeroacoustics & Hospital Helipad Hard Separation"
+    title: "180-node BVI/BPM/ISO 9613 dBA router preserves Kartal Hospital Tier-2 hard cylinder with 10 ms OEI noise shed"
+    dal_or_assurance_tier: "SAFETY_SUBORDINATED_PLANNER"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/wind_acoustics/include/vertirta/wind_acoustics/aeroacoustics.hpp"
+      - "core/wind_acoustics/include/vertirta/wind_acoustics/noise_aware_router.hpp"
+    cpp_or_py_symbols:
+      - "AeroacousticEngine"
+      - "NoiseAwareRouter"
+    verification_tests:
+      - "tests/wind_acoustics/test_aeroacoustics_hemisphere.cpp"
+      - "tests/wind_acoustics/test_noise_aware_router_lexicographic.cpp"
+    honest_scope_note: "Safety barriers lexicographically dominate acoustic soft cost (0 breaches in 500-run stress)."
+
+  - id: "R30"
+    standard_id: "SHGM-SHT-IHA"
+    clause: "Md. 23/2 Active Geofencing & DHMI AIP LTFJ/LTBX Airspace Lock"
+    title: "Enforces official DHMI AIP LTFJ NW J2 (< 29.1895 E) & LTBX (40 deg 59 min 26 sec N) + 28-day AIRAC 2611 lock"
+    dal_or_assurance_tier: "HARD_GEOFENCE_INVARIANT"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "config/istanbul_ltfj_airspace.yaml"
+      - "core/flight_core/include/vertirta/core/geodesy.hpp"
+    cpp_or_py_symbols:
+      - "GeodeticWgs84"
+      - "Vec3Ecef"
+    verification_tests:
+      - "tests/config/test_config_contracts.py"
+      - "tests/viz/test_geodesy_airspace.py"
+    honest_scope_note: "Verified against official DHMI AIP Turkey coordinates; operational flight requires live AIP cycle."
+
+  - id: "R31"
+    standard_id: "REG-EU-2022-1645-PART-IS"
+    clause: "Open-Core Apache-2.0 / Zero-GPL Runtime Symbol & Header Firewall"
+    title: "Automated nm/ldd/source gate verifies 0 GPL/LGPL/AGPL runtime symbols across all M2 & M3 targets"
+    dal_or_assurance_tier: "LICENSE_SUPPLY_CHAIN_GATE"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "scripts/ci/check_zero_gpl_symbols.py"
+      - "CONTRIBUTING.md"
+    cpp_or_py_symbols:
+      - "BANNED_LDD_PATTERNS"
+      - "BANNED_NM_PATTERNS"
+    verification_tests:
+      - "tests/wind_acoustics/test_zero_gpl_gate.py"
+      - "tests/ci/test_m3_workflow_contracts.py"
+    honest_scope_note: "Blocks OpenFOAM, OpenVINS, VINS-Fusion, ORB-SLAM3, BlenderProc, Ultralytics, espeak-ng, piper1-gpl."
+
+  - id: "R32"
+    standard_id: "SHGM-SHT-21-EK6"
+    clause: "M3 (>= 150 kg) VTOL Alignment & Stage-A SORA 2.5 Subscale Separation"
+    title: "Strictly separates Stage-A 25 kg unmanned SORA 2.5 CONOPS from Stage-B 240 kg M3 VTOL reference architecture"
+    dal_or_assurance_tier: "REGULATORY_FRAMING_LOCK"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "docs/standards_registry.yaml"
+      - "verification/ODD.yaml"
+    cpp_or_py_symbols:
+      - "SHGM-SHT-21-EK6"
+      - "ED-2025-018-R-SORA-25"
+    verification_tests:
+      - "docs/paper_ral/tests/test_paper_ral_and_governance.py"
+      - "tests/verification/test_assurance_gsn.py"
+    honest_scope_note: "Prevents regulatory category error (passenger carriage legally excluded from SORA 2.5)."
+
+  # ============================================================================
+  # Block F (R33..R38): M3 Forward Thin-Wire Perception & GNSS-Denied VIO
+  # ============================================================================
+  - id: "R33"
+    standard_id: "ASTM-F3269-21"
+    clause: "M3 Forward 45-deg Thin-Wire & Intruder Fusion into Frozen RTA Slots"
+    title: "IMU-stabilized 1280x320 -> 640x640 split-stack + radar fusion feeds <=64 capsules & enforces <=15 m/s grazing cap"
+    dal_or_assurance_tier: "M3_PERCEPTION_ADVISORY_TO_RTA"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/forward_hazard/include/vertirta/forward_hazard/horizon_split_stack.hpp"
+      - "core/forward_hazard/include/vertirta/forward_hazard/forward_hazard_fusion.hpp"
+    cpp_or_py_symbols:
+      - "HorizonSplitStackPreprocessor"
+      - "ForwardHazardFusion"
+    verification_tests:
+      - "tests/forward_hazard/test_forward_hazard_fusion.cpp"
+      - "tests/forward_hazard/test_forward_data_license_gate.py"
+    honest_scope_note: "TTPLA Apache-2.0 quarantined strictly to forward 45-deg wire head; banned in nadir SLZ."
+
+  - id: "R34"
+    standard_id: "SC-VTOL-MOC-4"
+    clause: "77 GHz 4D mmWave Radar Fresnel/Bragg/Doppler Physics Model"
+    title: "Custom Gazebo sensor physics models 1/R^3 Fresnel glint, ACSR Bragg lobes, Doppler separation, and -45 dBsm skew cliff"
+    dal_or_assurance_tier: "SIMULATION_SENSOR_MODEL"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "sim/gazebo_plugins/mmwave_77ghz/include/vertirta/sim/mmwave_77ghz_physics.hpp"
+    cpp_or_py_symbols:
+      - "MmWaveRadarConfig"
+      - "DopplerTargetClass"
+    verification_tests:
+      - "tests/forward_hazard/test_mmwave_77ghz_sensor.cpp"
+    honest_scope_note: "Analytical electromagnetic scattering simulation; physical 77 GHz radar flight testing pending."
+
+  - id: "R35"
+    standard_id: "SC-VTOL-MOC-5"
+    clause: "GNSS-Denied BSD-3 Basalt VIO Isolation (Zero GPL SLAM)"
+    title: "BasaltVioAdapter runs purely on stereo-IMU frames with zero GNSS inputs and zero GPL VIO/SLAM libraries"
+    dal_or_assurance_tier: "M3_NAVIGATION_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/gnss_denied/include/vertirta/gnss_denied/basalt_vio_adapter.hpp"
+    cpp_or_py_symbols:
+      - "BasaltVioAdapter"
+      - "VioStateEstimate"
+    verification_tests:
+      - "tests/gnss_denied/test_gnss_spoof_mcusum_vio.cpp"
+    honest_scope_note: "Hard-bans OpenVINS/VINS-Fusion/HybVIO/ORB-SLAM3/sqrtVINS; BSD-3 Basalt contract only."
+
+  - id: "R36"
+    standard_id: "REG-EU-2023-203-PART-IS"
+    clause: "GNSS Slow-Ramp Anti-Spoofing (0.5-2.0 m/s) & Marmara Wave-Glint Immunity"
+    title: "4-hypothesis Lagged-Baseline 2D MCUSUM detects slow-ramp spoofing in <= 1.4 s P95 with 2.0 s state rollback"
+    dal_or_assurance_tier: "M3_CYBER_NAVIGATION_GUARD"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/gnss_denied/include/vertirta/gnss_denied/gnss_spoof_guard.hpp"
+    cpp_or_py_symbols:
+      - "GnssSpoofGuard"
+      - "GnssHypothesis"
+      - "GnssFixV116"
+    verification_tests:
+      - "tests/gnss_denied/test_gnss_spoof_mcusum_vio.cpp"
+    honest_scope_note: "Verified in Catch2 simulation across land (0.25/2.0) and Marmara water (0.35/3.4) regimes."
+
+  - id: "R37"
+    standard_id: "SC-VTOL-MOC-4"
+    clause: "Apache-2.0 XFeat+LighterGlue / MIT MegaLoc Visual Geo-Relocalization"
+    title: "3-gate visual relocalization + Joseph-form KF bounds VIO drift using pure vertirta::core::geodesy (zero libproj)"
+    dal_or_assurance_tier: "M3_NAVIGATION_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/gnss_denied/include/vertirta/gnss_denied/visual_georeloc_adapter.hpp"
+    cpp_or_py_symbols:
+      - "VisualGeoRelocConfig"
+      - "GeoRelocDecision"
+    verification_tests:
+      - "tests/gnss_denied/test_visual_reloc_and_ctr_inflation.cpp"
+    honest_scope_note: "10 m Sentinel-2 restricted to gross-blunder check only; local VPS requires 0.5-1.0 m ortho."
+
+  - id: "R38"
+    standard_id: "SHGM-SHT-IHA"
+    clause: "Dynamic 3-Sigma + dh/dt Lie-Derivative CTR Wall Inflation Near LTFJ/LTBX"
+    title: "CtrInflationFsm inflates CTR boundaries via exact h.vel_ned = +r_dot_infl * er and triggers >= 65 m visual-SLZ abort"
+    dal_or_assurance_tier: "M3_RTA_SAFETY_INTERFACE"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/gnss_denied/include/vertirta/gnss_denied/ctr_inflation_fsm.hpp"
+    cpp_or_py_symbols:
+      - "CtrInflationFsm"
+      - "GnssDeniedNavState"
+    verification_tests:
+      - "tests/gnss_denied/test_visual_reloc_and_ctr_inflation.cpp"
+    honest_scope_note: "Feeds unmodified frozen CbvfSafetyFilter::step_100hz with 0 LTFJ/LTBX boundary breaches."
+
+  # ============================================================================
+  # Block G (R39..R43): AI Advisory Isolation (AI CP Iss.02/03, MLEAP-D4) & Voice
+  # ============================================================================
+  - id: "R39"
+    standard_id: "EASA-AI-CP-ISS03"
+    clause: "Proposed Issue 03 — Strict DAL E Advisory Isolation of LLM / Neuro-Symbolic Co-Pilot"
+    title: "Zero-heap STL monitor, GBNF DFA, and Z3 QF_LRA verifier run read-only outside 100 Hz RTA actuation loop"
+    dal_or_assurance_tier: "DAL_E_ADVISORY_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "include/vertirta/stl/stl_monitor.hpp"
+      - "include/vertirta/copilot/z3_corridor_verifier.hpp"
+      - "include/vertirta/copilot/llama_gbnf_engine.hpp"
+    cpp_or_py_symbols:
+      - "FixedMonotonicWedge"
+      - "Z3VerifyResult"
+      - "VertiLlamaEngine"
+    verification_tests:
+      - "tests/stl/test_stl_monitor_zero_heap.cpp"
+      - "tests/copilot/test_z3_verifier_and_repair.cpp"
+      - "tests/copilot/test_z3_smt2_crosscheck.py"
+    evidence_artifacts:
+      - "artifacts/v3.5.1/l4_qwen3_4b_v2_calibrated_eval.json"
+    honest_scope_note: "EASA AI CP Iss.03 is PROPOSED_DRAFT; cited purely to justify strict DAL E advisory containment."
+
+  - id: "R40"
+    standard_id: "EASA-MLEAP-D4"
+    clause: "W-Shaped Learning Assurance — Anti-Contamination & Honest Provenance"
+    title: "VertiBench-v1/v2 enforce < 0.15 n-gram Jaccard, 0 seed overlap, and honest PENDING_HUMAN_NATIVE provenance lock"
+    dal_or_assurance_tier: "ML_BENCHMARK_ASSURANCE"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "benchmarks/vertibench_v2/schema.py"
+      - "benchmarks/vertibench_v2/validate_vertibench_v2.py"
+    cpp_or_py_symbols:
+      - "HONEST_PROVENANCE_TAG_V2"
+      - "validate_vertibench_v2"
+    verification_tests:
+      - "tests/python/test_vertibench_integrity.py"
+      - "tests/vertibench_v2/test_vertibench_v2_and_mondrian.py"
+    honest_scope_note: "Explicitly prohibits premature human-native claims until an audited human speech campaign runs."
+
+  - id: "R41"
+    standard_id: "EASA-AI-CP-ISS02"
+    clause: "Level 1B/2A Advisory Visual SLZ, OOD Energy Variance Floor & Zero-ShareAlike Audit"
+    title: "Cell-local 1.5625 MiB Bayesian SLZ grid + PIDNet-S v2 meets < 12 ms p99 & < 300 MiB VRAM on physical GTX 1650S"
+    dal_or_assurance_tier: "DAL_E_ADVISORY_ONLY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/slz_bayes/include/vertirta/perception/slz_belief_grid.hpp"
+      - "core/slz_bayes/include/vertirta/perception/active_inspection_policy.hpp"
+      - "core/slz_bayes/include/vertirta/perception/slz_ort_engine.hpp"
+    cpp_or_py_symbols:
+      - "SlzBeliefGrid"
+      - "ActiveInspectionPolicy"
+      - "SlzOrtRunner"
+    verification_tests:
+      - "tests/python/test_slz_l4_runner.py"
+    evidence_artifacts:
+      - "artifacts/v3.5.1/l4_pidnet_v2_distill_metrics.json"
+      - "artifacts/v3.5.1/local_gtx1650s_pidnet_v2_proof.json"
+    honest_scope_note: "Zero-ShareAlike training verified; AeroScapes/ICG/UAVScenes quarantined eval-only; UAVid banned."
+
+  - id: "R42"
+    standard_id: "EASA-AI-CP-ISS02"
+    clause: "Offline Cockpit-Noise TR/EN Voice ATC & Zero-GPL sherpa-onnx >= 2.0.0 TTS"
+    title: "Silero VAD + dual-tier whisper.cpp (audio_ctx 256-384) + zero-espeak sherpa-onnx >= 2.0.0 (< 250 ms TTFA)"
+    dal_or_assurance_tier: "DAL_E_VOICE_ADVISORY"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/voice/include/vertirta/voice/silero_vad.hpp"
+      - "core/voice/include/vertirta/voice/dual_tier_whisper_asr.hpp"
+      - "core/voice/include/vertirta/voice/zero_gpl_tts.hpp"
+    cpp_or_py_symbols:
+      - "SileroVadGate"
+      - "DualTierWhisperAsr"
+      - "ZeroGplSherpaTts"
+      - "TurkishG2pPhonemizer"
+    verification_tests:
+      - "tests/voice/test_voice_pipeline.cpp"
+      - "tests/vertibench_v2/test_voice_bvi_and_license_gate.py"
+      - "tests/integration/test_m3_voice_node_contracts.py"
+    honest_scope_note: "Bans piper1-gpl, espeak-ng, all prebuilt tr_TR Piper NC voices, UWB-ATCC, ATCO2, ESC-50, DEMAND."
+
+  - id: "R43"
+    standard_id: "EASA-MLEAP-D4"
+    clause: "Finite-Sample Conformal Uncertainty Alignment & Deterministic Liveness"
+    title: "4-stratum SNR Mondrian gate (alpha=0.05) enforces MAYDAY w_m >= 0.15 preempt and < 5.0% SoC liveness commit"
+    dal_or_assurance_tier: "DAL_E_UNCERTAINTY_GATE"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/voice/include/vertirta/voice/mondrian_voice_gate.hpp"
+      - "include/vertirta/copilot/conformal_gate.hpp"
+    cpp_or_py_symbols:
+      - "MondrianVoiceConformalGate"
+      - "ConformalOutcome"
+    verification_tests:
+      - "tests/voice/test_mondrian_voice_gate.cpp"
+      - "tests/copilot/test_conformal_gate.cpp"
+      - "tests/vertibench_v2/test_vertibench_v2_and_mondrian.py"
+    honest_scope_note: "Deterministic < 5.0% SoC override prevents clarification deadlock under low battery."
+
+  # ============================================================================
+  # Block H (R44..R48): Forensics (ED-155A, CIR 2026/1821, ERCS, SHY-OLAY) & Open Gate
+  # ============================================================================
+  - id: "R44"
+    standard_id: "EUROCAE-ED-155A"
+    clause: "Power-Loss-Safe Append-Only Recording & Cryptographic Sidecar Chain"
+    title: "Frozen 128 B/256 B CRC-32C .vrta frames join via (seq, t_sim_us) to O_APPEND fsync SHA-256 + Ed25519 sidecar"
+    dal_or_assurance_tier: "FORENSIC_RECORDER_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/flight_core/include/vertirta/core/vrta_recorder.hpp"
+      - "core/forensics/include/vertirta/forensics/vrta_events_sidecar.hpp"
+    cpp_or_py_symbols:
+      - "VrtaFileHeader"
+      - "VrtaEventsSidecarWriter"
+      - "VrtaEventsSidecarReader"
+    verification_tests:
+      - "tests/forensics/test_forensics_sidecar_ercs_e5x.cpp"
+    honest_scope_note: "Zero bytes added to frozen VRTA0001 binary schema; physical crash-survivable memory module undeveloped."
+
+  - id: "R45"
+    standard_id: "CDR-EU-2020-2034-ERCS"
+    clause: "Annex — Deterministic 8-Barrier ERCS Scoring & CICTT SCF-NP Lock"
+    title: "Locks SCF-NP for rotor/control/SW/datalink, Barrier #8 = 0 on high-energy MAC/LOC-I, and draft ID 431 ONLY"
+    dal_or_assurance_tier: "REGULATORY_FORENSICS_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/forensics/include/vertirta/forensics/ercs_scorer.hpp"
+      - "config/forensics_eccairs2.yaml"
+    cpp_or_py_symbols:
+      - "score_ercs_cdr_2020_2034"
+      - "OccurrenceClassDraft"
+      - "ErcsResult"
+    verification_tests:
+      - "tests/forensics/test_forensics_sidecar_ercs_e5x.cpp"
+      - "tests/forensics/test_e5x_xsd_and_grounding.py"
+    honest_scope_note: "Software NEVER auto-classifies Accident or Serious Incident (statutory SIA/Safety Manager prerogative)."
+
+  - id: "R46"
+    standard_id: "CIR-EU-2026-1821"
+    clause: "Annex I/II eVTOL/U-Space Mandatory Occurrence Triggers & XSD-Valid E5X"
+    title: "Emits W3C XSD-valid .e5x XML with strictly ascending <ATTRIBUTES> IDs, N/A injury omission & Article 16 PII strip"
+    dal_or_assurance_tier: "REGULATORY_FORENSICS_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/forensics/include/vertirta/forensics/eccairs2_e5x_emitter.hpp"
+      - "core/forensics/schemas/eccairs2_e5x_minimal.xsd"
+    cpp_or_py_symbols:
+      - "emit_eccairs2_e5x_xml"
+      - "E5xOccurrenceDraft"
+    verification_tests:
+      - "tests/forensics/test_forensics_sidecar_ercs_e5x.cpp"
+      - "tests/forensics/test_e5x_xsd_and_grounding.py"
+    honest_scope_note: "Draft pre-submission generator only; operational ECCAIRS2 portal submission requires human review."
+
+  - id: "R47"
+    standard_id: "SHGM-SHY-OLAY"
+    clause: "72h Bilingual TR/EN ADREP Reporting & Zero-Hallucination Numeric Grounding"
+    title: "Enforces eccairs2_nodigit.gbnf + verify_numeric_grounding() (0.0% numeric hallucination) on parallel EN/TR narratives"
+    dal_or_assurance_tier: "REGULATORY_FORENSICS_TESTBED"
+    verification_status: "TESTBED_VERIFIED"
+    source_files:
+      - "core/forensics/include/vertirta/forensics/narrative_grounding.hpp"
+      - "config/eccairs2_nodigit.gbnf"
+    cpp_or_py_symbols:
+      - "render_and_verify_grounded_narrative"
+      - "verify_numeric_grounding"
+      - "sanitize_article16_headline"
+    verification_tests:
+      - "tests/forensics/test_forensics_sidecar_ercs_e5x.cpp"
+      - "tests/forensics/test_e5x_xsd_and_grounding.py"
+    honest_scope_note: "SHY-OLAY takes effect 2027-03-18; verified fail-closed across 25 randomized synthetic traces."
+
+  - id: "R48"
+    standard_id: "SC-VTOL-02"
+    clause: "VTOL.2510 / DO-178C / DO-254 / DO-330 — Airworthiness Type Certification Boundary"
+    title: "GSN G5/G6 hardware qualification, local PX4/Gazebo SITL, human-native ATC audit, and EASA/SHGM certification"
+    dal_or_assurance_tier: "CERTIFICATION_BOUNDARY_OPEN"
+    verification_status: "CERTIFICATION_UNDEVELOPED"
+    source_files:
+      - "docs/SAFETY_CASE.md"
+      - "docs/standards_registry.yaml"
+    cpp_or_py_symbols:
+      - "NONE_RESEARCH_TESTBED_ONLY"
+    evidence_artifacts:
+      - "docs/SAFETY_CASE.md"
+    honest_scope_note: "HONEST OPEN BOUNDARY: Physical hardware qualification (DO-254/RTCA DO-160G), DO-178C/DO-330 lifecycle, local PX4/Gazebo SITL, human-native ATC speech validation, and EASA/SHGM TC/approval remain strictly UNDEVELOPED."

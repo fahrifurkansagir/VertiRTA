@@ -33,6 +33,18 @@
 #include "vertirta/uspace/part_is_security.hpp"
 #endif
 
+#if defined(VERTIRTA_SDK_HAS_M3) && VERTIRTA_SDK_HAS_M3
+#include <filesystem>
+#include <fstream>
+#include "vertirta/forensics/ercs_scorer.hpp"
+#include "vertirta/forensics/forensics_pipeline.hpp"
+#include "vertirta/forensics/vrta_events_sidecar.hpp"
+#include "vertirta/forward_hazard/forward_hazard_fusion.hpp"
+#include "vertirta/gnss_denied/ctr_inflation_fsm.hpp"
+#include "vertirta/gnss_denied/gnss_spoof_guard.hpp"
+#include "vertirta/voice/mondrian_voice_gate.hpp"
+#endif
+
 namespace nb = nanobind;
 
 namespace {
@@ -632,6 +644,424 @@ class NativeLiftCruiseSim {
 };
 #endif
 
+#if defined(VERTIRTA_SDK_HAS_M3) && VERTIRTA_SDK_HAS_M3
+class NativeForwardHazardFusion {
+ public:
+  NativeForwardHazardFusion() : fusion_(vertirta::forward_hazard::ForwardFusionConfig{}) {}
+
+  void reset() noexcept { fusion_.reset(); }
+
+  void push_pose_200hz(
+      uint64_t stamp_ns,
+      std::array<double, 3> pos_ned,
+      std::array<double, 3> vel_ned) noexcept {
+    vertirta::forward_hazard::TimedPoseSe3 pose{};
+    pose.stamp_ns = stamp_ns;
+    pose.pos_ned = {pos_ned[0], pos_ned[1], pos_ned[2]};
+    pose.vel_ned = {vel_ned[0], vel_ned[1], vel_ned[2]};
+    pose.valid = true;
+    fusion_.push_pose_200hz(pose);
+  }
+
+  nb::dict step(
+      uint64_t frame_stamp_ns,
+      bool radar_healthy,
+      const std::vector<std::array<double, 5>>& wire_lines,
+      const std::vector<std::array<double, 5>>& radar_points,
+      const std::vector<std::array<double, 5>>& intruder_boxes) {
+    vertirta::forward_hazard::ForwardSensorBundle bundle{};
+    bundle.frame_stamp_ns = frame_stamp_ns;
+    bundle.radar_stamp_ns = frame_stamp_ns;
+    bundle.radar_healthy = radar_healthy;
+    bundle.camera_healthy = true;
+
+    const std::size_t n_wires =
+        std::min(wire_lines.size(), vertirta::forward_hazard::kMaxForwardLineDetections);
+    bundle.wire_line_count = n_wires;
+    for (std::size_t i = 0U; i < n_wires; ++i) {
+      auto& w = bundle.wire_lines[i];
+      w.u0_px = wire_lines[i][0];
+      w.v0_px = wire_lines[i][1];
+      w.u1_px = wire_lines[i][2];
+      w.v1_px = wire_lines[i][3];
+      w.score = wire_lines[i][4];
+    }
+
+    const std::size_t n_radar =
+        std::min(radar_points.size(), vertirta::forward_hazard::kMaxRadarDetections);
+    bundle.radar_point_count = n_radar;
+    for (std::size_t i = 0U; i < n_radar; ++i) {
+      auto& r = bundle.radar_points[i];
+      r.range_m = radar_points[i][0];
+      r.az_rad = radar_points[i][1];
+      r.el_rad = radar_points[i][2];
+      r.radial_vel_mps = radar_points[i][3];
+      r.residual_doppler_mps = radar_points[i][3];
+      r.snr_db = radar_points[i][4];
+      r.rcs_dbsm = -20.0;
+      r.doppler_class = (std::abs(radar_points[i][3]) > 1.2)
+                            ? vertirta::forward_hazard::RadarDopplerClass::kDynamicIntruder
+                            : vertirta::forward_hazard::RadarDopplerClass::kStaticOrHoverCandidate;
+      r.valid = true;
+    }
+
+    const std::size_t n_boxes =
+        std::min(intruder_boxes.size(), vertirta::forward_hazard::kMaxForwardBoxDetections);
+    bundle.intruder_box_count = n_boxes;
+    for (std::size_t i = 0U; i < n_boxes; ++i) {
+      auto& b = bundle.intruder_boxes[i];
+      b.cx_px = intruder_boxes[i][0];
+      b.cy_px = intruder_boxes[i][1];
+      b.width_px = intruder_boxes[i][2];
+      b.height_px = intruder_boxes[i][3];
+      b.score = intruder_boxes[i][4];
+    }
+
+    vertirta::forward_hazard::ForwardHazardOutput out{};
+    bool ok = false;
+    {
+      nb::gil_scoped_release release;
+      ok = fusion_.step(bundle, out);
+    }
+
+    nb::dict res;
+    res["ok"] = ok;
+    res["recommended_v_max_mps"] = out.recommended_v_max_mps;
+    res["radar_degraded"] = out.radar_degraded;
+    res["grazing_parallax_active"] = out.grazing_parallax_active;
+    res["standoff_capsule_emitted"] = out.standoff_capsule_emitted;
+    res["active_wire_spans"] = out.active_wire_spans;
+    res["active_wire_capsules"] = out.active_wire_capsules;
+    res["active_intruders"] = out.active_intruders;
+    res["hover_intruders_rescued"] = out.hover_intruders_rescued;
+    return res;
+  }
+
+ private:
+  vertirta::forward_hazard::ForwardHazardFusion fusion_;
+};
+
+class NativeGnssDeniedSuite {
+ public:
+  NativeGnssDeniedSuite() : guard_{}, ctr_{} { ctr_.reset(2.0); }
+
+  void reset(double sigma_init_m = 2.0) noexcept {
+    guard_.reset();
+    ctr_.reset(sigma_init_m);
+  }
+
+  nb::dict step_spoof_guard_10hz(
+      uint64_t stamp_ns,
+      std::array<double, 3> gnss_pos_ned,
+      std::array<double, 3> gnss_vel_ned,
+      std::array<double, 3> vio_pos_ned,
+      std::array<double, 3> vio_vel_ned,
+      double water_fraction = 0.05,
+      double cn0_dbhz = 40.0,
+      double hdop = 0.9,
+      bool valid = true) {
+    vertirta::gnss_denied::GnssFixV116 fix{};
+    fix.stamp_ns = stamp_ns;
+    fix.pos_ned = {gnss_pos_ned[0], gnss_pos_ned[1], gnss_pos_ned[2]};
+    fix.vel_ned = {gnss_vel_ned[0], gnss_vel_ned[1], gnss_vel_ned[2]};
+    fix.cn0_avg_dbhz = cn0_dbhz;
+    fix.hdop = hdop;
+    fix.valid = valid;
+    fix.fix_type = valid ? 3U : 0U;
+
+    vertirta::gnss_denied::VioStateEstimate vio{};
+    vio.stamp_ns = stamp_ns;
+    vio.pos_ned = {vio_pos_ned[0], vio_pos_ned[1], vio_pos_ned[2]};
+    vio.vel_ned = {vio_vel_ned[0], vio_vel_ned[1], vio_vel_ned[2]};
+    vio.water_fraction = water_fraction;
+    vio.metric_scale_locked = true;
+    vio.valid = true;
+
+    vertirta::gnss_denied::GnssSpoofGuardStatus st{};
+    {
+      nb::gil_scoped_release release;
+      st = guard_.step_10hz(fix, vio);
+    }
+
+    const char* hyp = "H0_NOMINAL";
+    if (st.hypothesis == vertirta::gnss_denied::GnssHypothesis::kH1RfJamming) {
+      hyp = "H1_RF_JAMMING";
+    } else if (st.hypothesis == vertirta::gnss_denied::GnssHypothesis::kH2StepMeaconing) {
+      hyp = "H2_STEP_MEACONING";
+    } else if (st.hypothesis == vertirta::gnss_denied::GnssHypothesis::kH3SlowRampSpoof) {
+      hyp = "H3_SLOW_RAMP_SPOOF";
+    }
+
+    nb::dict out;
+    out["hypothesis"] = std::string(hyp);
+    out["gnss_fused_allowed"] = st.gnss_fused_allowed;
+    out["latched"] = st.latched;
+    out["rollback_executed"] = st.rollback_executed;
+    out["mcusum_norm_mps"] = st.mcusum_norm_mps;
+    out["active_k_d_mps"] = st.active_k_d_mps;
+    out["active_h_t_mps"] = st.active_h_t_mps;
+    out["sigma_init_m"] = st.sigma_init_m;
+    out["rollback_pos_ned"] = std::array<double, 3>{
+        st.rollback_pos_ned.x, st.rollback_pos_ned.y, st.rollback_pos_ned.z};
+    return out;
+  }
+
+  nb::dict propagate_and_evaluate_ctr(
+      double dt_s,
+      double horiz_speed_mps,
+      std::array<double, 3> own_pos_ned,
+      double alt_amsl_m = 57.0) {
+    std::array<vertirta::rta::HazardPoint, 2> hz{};
+    vertirta::gnss_denied::CtrInflationStatus st{};
+    {
+      nb::gil_scoped_release release;
+      ctr_.propagate_open_loop(dt_s, horiz_speed_mps);
+      st = ctr_.evaluate_and_build_hazards(
+          dt_s, {own_pos_ned[0], own_pos_ned[1], own_pos_ned[2]}, alt_amsl_m, hz);
+    }
+
+    const char* nav = "BOUNDED_GNSS_DENIED_CRUISE";
+    if (st.nav_state == vertirta::gnss_denied::GnssDeniedNavState::kDegradedCaution) {
+      nav = "DEGRADED_CAUTION";
+    } else if (st.nav_state ==
+               vertirta::gnss_denied::GnssDeniedNavState::kDeterministicVisualSlzAbort) {
+      nav = "DETERMINISTIC_VISUAL_SLZ_ABORT";
+    }
+
+    nb::dict out;
+    out["nav_state"] = std::string(nav);
+    out["sigma_pos_m"] = st.sigma_pos_m;
+    out["three_sigma_pos_m"] = st.three_sigma_pos_m;
+    out["nominal_3sigma_met"] = st.nominal_3sigma_met;
+    out["visual_slz_abort_latched"] = st.visual_slz_abort_latched;
+    out["westward_bias_active"] = st.westward_bias_active;
+    out["v_max_cap_mps"] = st.v_max_cap_mps;
+    out["ltfj_inflated_margin_m"] = st.ltfj_inflated_margin_m;
+    out["ltbx_inflated_margin_m"] = st.ltbx_inflated_margin_m;
+    out["ltfj_delta_r_m"] = st.ltfj_delta_r_m;
+    out["ltfj_r_dot_infl_mps"] = st.ltfj_r_dot_infl_mps;
+    out["emitted_ctr_hazards"] = st.emitted_ctr_hazards;
+    return out;
+  }
+
+ private:
+  vertirta::gnss_denied::GnssSpoofGuard guard_;
+  vertirta::gnss_denied::CtrInflationFsm ctr_;
+};
+
+class NativeMondrianVoiceGate {
+ public:
+  NativeMondrianVoiceGate() : gate_(vertirta::voice::make_default_mondrian_config()) {}
+
+  nb::dict evaluate(
+      float snr_db,
+      const std::string& lang,
+      const std::vector<std::tuple<std::string, float, bool>>& candidates,
+      float soc_pct = 50.0f,
+      float soc_reserve_floor_pct = 12.0f,
+      float mayday_acoustic_weight = 0.0f,
+      float nospeech_prob = 0.0f) const {
+    vertirta::voice::VoiceTurnSignals sig{};
+    sig.snr_db = snr_db;
+    sig.lang = (lang == "EN") ? vertirta::voice::VoiceLang::EN
+                              : (lang == "MIX" ? vertirta::voice::VoiceLang::MIX
+                                               : vertirta::voice::VoiceLang::TR);
+    sig.mayday_acoustic_weight = mayday_acoustic_weight;
+    sig.nospeech_prob = nospeech_prob;
+
+    std::vector<vertirta::voice::VoiceCandidateScore> cands{};
+    cands.reserve(candidates.size());
+    for (const auto& tup : candidates) {
+      cands.push_back(vertirta::voice::VoiceCandidateScore{
+          std::get<0>(tup), std::get<1>(tup), std::get<2>(tup)});
+    }
+
+    vertirta::voice::VoiceRtaLivenessState rta{};
+    rta.soc_pct = soc_pct;
+    rta.soc_reserve_floor_pct = soc_reserve_floor_pct;
+
+    const auto dec = gate_.evaluate(sig, cands, rta);
+    const char* act = "ABSTAIN_HOLD_SAFE";
+    switch (dec.decision) {
+      case vertirta::voice::VoiceGateAction::EXECUTE_SINGLE:
+        act = "EXECUTE_SINGLE";
+        break;
+      case vertirta::voice::VoiceGateAction::REQUEST_CLARIFICATION:
+        act = "REQUEST_CLARIFICATION";
+        break;
+      case vertirta::voice::VoiceGateAction::ABSTAIN_HOLD_SAFE:
+        act = "ABSTAIN_HOLD_SAFE";
+        break;
+      case vertirta::voice::VoiceGateAction::LIVENESS_EMERGENCY_COMMIT:
+        act = "LIVENESS_EMERGENCY_COMMIT";
+        break;
+      case vertirta::voice::VoiceGateAction::EMERGENCY_PREEMPT:
+        act = "EMERGENCY_PREEMPT";
+        break;
+    }
+
+    nb::dict out;
+    out["decision"] = std::string(act);
+    out["stratum"] = std::string(vertirta::voice::snr_stratum_name(dec.stratum));
+    out["lang"] = std::string(vertirta::voice::voice_lang_name(dec.lang));
+    out["effective_q_hat"] = dec.effective_q_hat;
+    out["p_min_threshold"] = dec.p_min_threshold;
+    out["conformal_set_size"] = dec.conformal_set_size;
+    out["selected_action_id"] = dec.selected_action_id;
+    out["clarify_reason"] = dec.clarify_reason;
+    return out;
+  }
+
+ private:
+  vertirta::voice::MondrianVoiceConformalGate gate_;
+};
+
+class NativeForensicsEngine {
+ public:
+  nb::dict score_ercs(
+      const std::string& trigger,
+      const std::string& fault_domain,
+      const std::string& key_risk_area,
+      uint32_t occupant_capacity = 1U,
+      std::array<uint8_t, 8> barriers = {1U, 2U, 2U, 1U, 2U, 1U, 1U, 3U},
+      uint8_t stopping_barrier_idx = 0U) const {
+    vertirta::forensics::ErcsInput in{};
+    in.occupant_capacity = occupant_capacity;
+    in.barriers = barriers;
+    in.stopping_barrier_idx = stopping_barrier_idx;
+
+    if (trigger == "FATO_INCURSION") {
+      in.trigger = vertirta::forensics::Cir2026Trigger::FATO_INCURSION;
+    } else if (trigger == "USPACE_AIRBORNE_ENCOUNTER") {
+      in.trigger = vertirta::forensics::Cir2026Trigger::USPACE_AIRBORNE_ENCOUNTER;
+    } else if (trigger == "PART_IS_INFOSEC_ANOMALY") {
+      in.trigger = vertirta::forensics::Cir2026Trigger::PART_IS_INFOSEC_ANOMALY;
+    } else if (trigger == "UAS_CMU_TECHNICAL_FAULT") {
+      in.trigger = vertirta::forensics::Cir2026Trigger::UAS_CMU_TECHNICAL_FAULT;
+    } else {
+      in.trigger = vertirta::forensics::Cir2026Trigger::CRITICAL_ENERGY_OR_ENVELOPE_PROT;
+    }
+
+    if (fault_domain == "FLIGHT_CONTROL_OR_SOFTWARE") {
+      in.fault_domain = vertirta::forensics::FaultDomain::FLIGHT_CONTROL_OR_SOFTWARE;
+    } else if (fault_domain == "DATALINK_OR_USPACE_CMU") {
+      in.fault_domain = vertirta::forensics::FaultDomain::DATALINK_OR_USPACE_CMU;
+    } else if (fault_domain == "NAVIGATION_GNSS_VIO") {
+      in.fault_domain = vertirta::forensics::FaultDomain::NAVIGATION_GNSS_VIO;
+    } else {
+      in.fault_domain = vertirta::forensics::FaultDomain::ROTOR_ACTUATOR_OR_INVERTER;
+    }
+
+    if (key_risk_area == "MAC_HIGH_ENERGY") {
+      in.key_risk_area = vertirta::forensics::KeyRiskArea::MAC_HIGH_ENERGY;
+    } else if (key_risk_area == "CFIT_HIGH_ENERGY") {
+      in.key_risk_area = vertirta::forensics::KeyRiskArea::CFIT_HIGH_ENERGY;
+    } else if (key_risk_area == "GROUND_DAMAGE_LOW_ENERGY") {
+      in.key_risk_area = vertirta::forensics::KeyRiskArea::GROUND_DAMAGE_LOW_ENERGY;
+    } else {
+      in.key_risk_area = vertirta::forensics::KeyRiskArea::LOC_I_HIGH_ENERGY;
+    }
+
+    const auto r = vertirta::forensics::score_ercs_cdr_2020_2034(in);
+    nb::dict out;
+    out["cictt_category"] = r.cictt_category;
+    out["severity_letter"] = std::string(1U, r.severity_letter);
+    out["probability_index"] = r.probability_index;
+    out["ercs_matrix_code"] = r.ercs_matrix_code;
+    out["effective_barrier_sum"] = r.effective_barrier_sum;
+    out["effective_barrier8_score"] = r.effective_barrier8_score;
+    out["occurrence_class_id_431"] =
+        (r.occurrence_class_id_431 == vertirta::forensics::OccurrenceClassDraft::DRAFT_INCIDENT_ONLY)
+            ? std::string("DRAFT_INCIDENT_ONLY")
+            : std::string("DRAFT_NOT_DETERMINED");
+    out["auto_classified_accident_or_serious_incident"] =
+        r.auto_classified_accident_or_serious_incident;
+    out["reporting_status"] = r.reporting_status;
+    out["ata_jasc_chapter"] = r.ata_jasc_chapter;
+    return out;
+  }
+
+  nb::dict export_e5x_from_vrta(
+      const std::string& vrta_path,
+      const std::string& out_e5x_xml_path,
+      const std::string& out_audit_json_path,
+      const std::string& sidecar_path = "",
+      const std::string& sidecar_public_key_hex = "",
+      const std::string& file_number = "VRT-2026-0001",
+      const std::string& raw_headline = "Envelope protection event along Istanbul coastal corridor",
+      uint32_t occupant_capacity = 1U) const {
+    vertirta::forensics::ForensicsPipelineRequest req{};
+    req.vrta_path = std::filesystem::path(vrta_path);
+    req.out_e5x_xml_path = std::filesystem::path(out_e5x_xml_path);
+    req.out_audit_json_path = std::filesystem::path(out_audit_json_path);
+    if (!sidecar_path.empty()) {
+      req.sidecar_path = std::filesystem::path(sidecar_path);
+      req.sidecar_public_key_hex = sidecar_public_key_hex;
+    } else {
+      // Auto-emit a cryptographically chained ED-155A sidecar anchored to the first VRTA0001 frame.
+      uint64_t first_seq = 0ULL;
+      uint64_t first_t_sim_us = 0ULL;
+      std::ifstream vf(req.vrta_path, std::ios::binary);
+      if (vf.is_open()) {
+        vf.seekg(static_cast<std::streamoff>(sizeof(VrtaFileHeader)), std::ios::beg);
+        VrtaFrame100Hz first_frame{};
+        if (vf.read(reinterpret_cast<char*>(&first_frame), sizeof(first_frame))) {
+          first_seq = first_frame.seq;
+          first_t_sim_us = first_frame.t_sim_us;
+        }
+      }
+      const std::filesystem::path auto_sidecar =
+          req.out_e5x_xml_path.parent_path() /
+          (req.out_e5x_xml_path.stem().string() + ".vrta_events.jsonl");
+      std::error_code ec;
+      std::filesystem::remove(auto_sidecar, ec);
+      vertirta::forensics::VrtaEventsSidecarWriter writer{};
+      vertirta::forensics::SidecarEvent ev{};
+      ev.seq = first_seq;
+      ev.t_sim_us = first_t_sim_us;
+      ev.kind = vertirta::forensics::SidecarEventKind::RTA_ENVELOPE_PROTECTION;
+      ev.snr_stratum = "S1_Cruise";
+      ev.conformal_set_size = 1U;
+      ev.asr_transcript_utf8 = "Kartal coastal corridor RTA envelope protection event";
+      ev.audio_sha256_hex = vertirta::forensics::sha256_hex_string(ev.asr_transcript_utf8);
+      ev.z3_smt2_sha256_hex = vertirta::forensics::sha256_hex_string("(check-sat)");
+      ev.gsn_node_id = "G1.1-INDI-WLS";
+      (void)writer.append_to_file(auto_sidecar, ev, false);
+      req.sidecar_path = auto_sidecar;
+      req.sidecar_public_key_hex = writer.public_key_hex();
+    }
+    req.file_number = file_number;
+    req.raw_headline = raw_headline;
+    req.ercs_input.occupant_capacity = occupant_capacity;
+    req.ercs_input.barriers = {1U, 2U, 2U, 1U, 2U, 1U, 1U, 3U};
+
+    vertirta::forensics::ForensicsPipelineResult res{};
+    {
+      nb::gil_scoped_release release;
+      res = vertirta::forensics::run_forensics_pipeline(req);
+    }
+
+    nb::dict out;
+    out["ok"] = res.ok;
+    out["frames_verified"] = res.frames_verified;
+    out["sidecar_events_joined"] = res.sidecar_events_joined;
+    out["vrta_sha256_hex"] = res.vrta_sha256_hex;
+    out["cictt_category"] = res.ercs.cictt_category;
+    out["ercs_matrix_code"] = res.ercs.ercs_matrix_code;
+    out["effective_barrier8_score"] = res.ercs.effective_barrier8_score;
+    out["occurrence_class_id_431"] =
+        (res.ercs.occurrence_class_id_431 ==
+         vertirta::forensics::OccurrenceClassDraft::DRAFT_INCIDENT_ONLY)
+            ? std::string("DRAFT_INCIDENT_ONLY")
+            : std::string("DRAFT_NOT_DETERMINED");
+    out["auto_classified_accident_or_serious_incident"] =
+        res.ercs.auto_classified_accident_or_serious_incident;
+    out["error_message"] = res.error_message;
+    return out;
+  }
+};
+#endif
+
 }  // namespace
 
 NB_MODULE(_vertirta_native, m) {
@@ -732,5 +1162,72 @@ NB_MODULE(_vertirta_native, m) {
            nb::arg("v_airspeed_mps"), nb::arg("failed_lift_rotor") = 0U);
 #else
   m.attr("HAS_M2_BINDINGS") = false;
+#endif
+
+#if defined(VERTIRTA_SDK_HAS_M3) && VERTIRTA_SDK_HAS_M3
+  m.attr("HAS_M3_BINDINGS") = true;
+
+  nb::class_<NativeForwardHazardFusion>(m, "NativeForwardHazardFusion")
+      .def(nb::init<>())
+      .def("reset", &NativeForwardHazardFusion::reset)
+      .def("push_pose_200hz", &NativeForwardHazardFusion::push_pose_200hz,
+           nb::arg("stamp_ns"), nb::arg("pos_ned"), nb::arg("vel_ned"))
+      .def("step", &NativeForwardHazardFusion::step,
+           nb::arg("frame_stamp_ns"),
+           nb::arg("radar_healthy") = true,
+           nb::arg("wire_lines") = std::vector<std::array<double, 5>>{},
+           nb::arg("radar_points") = std::vector<std::array<double, 5>>{},
+           nb::arg("intruder_boxes") = std::vector<std::array<double, 5>>{});
+
+  nb::class_<NativeGnssDeniedSuite>(m, "NativeGnssDeniedSuite")
+      .def(nb::init<>())
+      .def("reset", &NativeGnssDeniedSuite::reset, nb::arg("sigma_init_m") = 2.0)
+      .def("step_spoof_guard_10hz", &NativeGnssDeniedSuite::step_spoof_guard_10hz,
+           nb::arg("stamp_ns"),
+           nb::arg("gnss_pos_ned"),
+           nb::arg("gnss_vel_ned"),
+           nb::arg("vio_pos_ned"),
+           nb::arg("vio_vel_ned"),
+           nb::arg("water_fraction") = 0.05,
+           nb::arg("cn0_dbhz") = 40.0,
+           nb::arg("hdop") = 0.9,
+           nb::arg("valid") = true)
+      .def("propagate_and_evaluate_ctr", &NativeGnssDeniedSuite::propagate_and_evaluate_ctr,
+           nb::arg("dt_s"),
+           nb::arg("horiz_speed_mps"),
+           nb::arg("own_pos_ned"),
+           nb::arg("alt_amsl_m") = 57.0);
+
+  nb::class_<NativeMondrianVoiceGate>(m, "NativeMondrianVoiceGate")
+      .def(nb::init<>())
+      .def("evaluate", &NativeMondrianVoiceGate::evaluate,
+           nb::arg("snr_db"),
+           nb::arg("lang"),
+           nb::arg("candidates"),
+           nb::arg("soc_pct") = 50.0f,
+           nb::arg("soc_reserve_floor_pct") = 12.0f,
+           nb::arg("mayday_acoustic_weight") = 0.0f,
+           nb::arg("nospeech_prob") = 0.0f);
+
+  nb::class_<NativeForensicsEngine>(m, "NativeForensicsEngine")
+      .def(nb::init<>())
+      .def("score_ercs", &NativeForensicsEngine::score_ercs,
+           nb::arg("trigger") = "CRITICAL_ENERGY_OR_ENVELOPE_PROT",
+           nb::arg("fault_domain") = "ROTOR_ACTUATOR_OR_INVERTER",
+           nb::arg("key_risk_area") = "LOC_I_HIGH_ENERGY",
+           nb::arg("occupant_capacity") = 1U,
+           nb::arg("barriers") = std::array<uint8_t, 8>{1U, 2U, 2U, 1U, 2U, 1U, 1U, 3U},
+           nb::arg("stopping_barrier_idx") = 0U)
+      .def("export_e5x_from_vrta", &NativeForensicsEngine::export_e5x_from_vrta,
+           nb::arg("vrta_path"),
+           nb::arg("out_e5x_xml_path"),
+           nb::arg("out_audit_json_path"),
+           nb::arg("sidecar_path") = "",
+           nb::arg("sidecar_public_key_hex") = "",
+           nb::arg("file_number") = "VRT-2026-0001",
+           nb::arg("raw_headline") = "Envelope protection event along Istanbul coastal corridor",
+           nb::arg("occupant_capacity") = 1U);
+#else
+  m.attr("HAS_M3_BINDINGS") = false;
 #endif
 }

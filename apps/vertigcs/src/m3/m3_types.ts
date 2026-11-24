@@ -103,11 +103,23 @@ export type M3ScenarioId =
   | "wire_grazing"
   | "slow_ramp_spoof"
   | "water_drift"
-  | "voice_mayday";
+  | "voice_mayday"
+  | "compound_apex";
+
+export interface CompoundFaultFlags {
+  active: boolean;
+  rotor3Csfl: boolean;
+  canyonWind12Mps: boolean;
+  gnssSlowRampSpoof: boolean;
+  grazingWire15MpsCap: boolean;
+  partIsUsspQuarantine: boolean;
+  voiceHoverMaydayTr: boolean;
+}
 
 export interface M3Snapshot {
   scenario: M3ScenarioId;
   simTimeS: number;
+  compoundFaults: CompoundFaultFlags;
   forwardHazard: ForwardHazardTelemetry;
   gnssDenied: GnssDeniedTelemetry;
   voiceAtc: VoiceAtcTelemetry;

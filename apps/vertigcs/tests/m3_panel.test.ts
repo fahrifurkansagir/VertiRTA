@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildM3CtrInflationData, buildM3DeckLayers } from "../src/m3/m3_deck_layer";
+import {
+  buildE5xDownloadDescriptor,
+  buildSampleSignedSidecarJsonl,
+  verifyVrtaEventsJsonlChain,
+} from "../src/m3/m3_forensics_inspector";
 import { renderM3PanelDom, type M3PanelElements } from "../src/m3/m3_panel";
 import { M3SimReplay } from "../src/m3/m3_sim_replay";
 import { VERIFIED_LTBX_ARP } from "../src/m3/m3_types";
@@ -98,5 +103,47 @@ describe("VertiGCS M3 Mission Control panel, Deck.gl layers & .e5x draft contrac
     const css = readFileSync(resolve(__dirname, "../src/styles/vertigcs.css"), "utf-8");
     expect(css).toContain("#m3-e5x-xml-preview");
     expect(css).toContain("overflow-wrap: anywhere");
+    expect(css).toContain(".sidecar-timeline");
+  });
+
+  it("drives 6-fault compound_apex scenario, builds XSD-compliant .e5x download, and verifies WebCrypto SHA-256 .vrta_events.jsonl chain", async () => {
+    const replay = new M3SimReplay();
+    const cmp = replay.activateScenario("compound_apex");
+    expect(cmp.compoundFaults.active).toBe(true);
+    expect(cmp.compoundFaults.rotor3Csfl).toBe(true);
+    expect(cmp.compoundFaults.canyonWind12Mps).toBe(true);
+    expect(cmp.compoundFaults.gnssSlowRampSpoof).toBe(true);
+    expect(cmp.compoundFaults.grazingWire15MpsCap).toBe(true);
+    expect(cmp.compoundFaults.partIsUsspQuarantine).toBe(true);
+    expect(cmp.compoundFaults.voiceHoverMaydayTr).toBe(true);
+    expect(cmp.forwardHazard.vMaxCapMps).toBeLessThanOrEqual(15.0);
+    expect(cmp.gnssDenied.hypothesis).toBe("H3_SLOW_RAMP_SPOOF");
+    expect(cmp.voiceAtc.snrStratum).toBe("S2_Hover");
+    expect(cmp.voiceAtc.maydayPreempted).toBe(true);
+
+    // 1-click .e5x.xml download payload matches eccairs2_e5x_minimal.xsd structure
+    const dl = buildE5xDownloadDescriptor(cmp);
+    expect(dl.filename).toMatch(/^vertirta_draft_seq\d+\.e5x\.xml$/);
+    expect(dl.xml).toContain('schemaVersion="1.0"');
+    expect(dl.xml).toContain('reportingStatus="DRAFT_INTERNAL_PRE_SUBMISSION"');
+    expect(dl.xml).toContain('<Attribute id="431" name="OccurrenceClass">DRAFT_INCIDENT_ONLY</Attribute>');
+    expect(dl.xml).toContain('<Attribute id="659" name="CicttCategory">SCF-NP</Attribute>');
+    expect(dl.xml).toContain('<Narrative entityId="22" language="en">');
+    expect(dl.xml).toContain('<Narrative entityId="22" language="tr">');
+
+    // WebCrypto SHA-256 sidecar chain verifier passes signed chain & catches 1-byte tamper
+    const signedJsonl = await buildSampleSignedSidecarJsonl();
+    const ok = await verifyVrtaEventsJsonlChain(signedJsonl);
+    expect(ok.valid).toBe(true);
+    expect(ok.events).toHaveLength(3);
+    expect(ok.events[0].kind).toBe("MOTOR_FDI_FAULT");
+    expect(ok.events[1].kind).toBe("GNSS_SPOOF_ALERT");
+    expect(ok.events[2].kind).toBe("VOICE_CONFORMAL_TURN");
+
+    const tampered = signedJsonl.replace("1340", "1349");
+    const bad = await verifyVrtaEventsJsonlChain(tampered);
+    expect(bad.valid).toBe(false);
+    expect(bad.failedLineIndex).toBe(1);
+    expect(bad.errorMessage).toContain("SHA-256 digest mismatch");
   });
 });

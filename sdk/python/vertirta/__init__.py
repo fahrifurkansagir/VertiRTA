@@ -20,6 +20,12 @@ def get_backend_name() -> str:
 
 from .env import VertiRtaCoaxialX8Env, register_vertirta_envs  # noqa: E402
 from .m2 import VertiFleetSim, VertiLiftCruiseSim  # noqa: E402
+from .m3 import (  # noqa: E402
+    VertiForensicsEngine,
+    VertiForwardHazard,
+    VertiGnssDenied,
+    VertiMondrianVoiceGate,
+)
 from .vec_env import VertiVecEnv  # noqa: E402
 
 register_vertirta_envs()
@@ -27,7 +33,11 @@ register_vertirta_envs()
 __all__ = [
     "HAS_NATIVE_BACKEND",
     "VertiFleetSim",
+    "VertiForensicsEngine",
+    "VertiForwardHazard",
+    "VertiGnssDenied",
     "VertiLiftCruiseSim",
+    "VertiMondrianVoiceGate",
     "VertiRtaCoaxialX8Env",
     "VertiVecEnv",
     "__version__",

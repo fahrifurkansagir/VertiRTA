@@ -22,6 +22,12 @@ from .env import (
     make_vrta_header_bytes,
     verify_vrta_frame_bytes,
 )
+from .m3 import (
+    VertiForensicsEngine,
+    VertiForwardHazard,
+    VertiGnssDenied,
+    VertiMondrianVoiceGate,
+)
 from .vec_env import VertiVecEnv
 
 FORBIDDEN_PORTS: frozenset[int] = frozenset({4173, 4174, 8765, 9222, 9223})
@@ -340,6 +346,146 @@ def cmd_gcs(
                 "url": url,
                 "dry_run": dry_run,
             }
+        )
+    )
+
+
+@app.command("forensics-export")
+def cmd_forensics_export(
+    vrta_file: Path = typer.Argument(..., exists=True, readable=True, help="Input VRTA0001 .vrta flight log."),
+    out_e5x: Path = typer.Option(Path("occurrence_draft.e5x.xml"), help="Output draft ECCAIRS2 .e5x XML path."),
+    out_audit: Optional[Path] = typer.Option(None, help="Output forensics audit JSON path."),
+    sidecar: Optional[Path] = typer.Option(None, help="Optional .vrta_events.jsonl sidecar path."),
+    capacity: int = typer.Option(1, min=1, max=6, help="Occupant capacity (1=X8-240, 4..6=Lift+Cruise)."),
+) -> None:
+    """Export deterministic CIR (EU) 2026/1821 + CDR 2020/2034 draft/Incident ID 431 .e5x XML."""
+    audit_path = out_audit if out_audit is not None else out_e5x.with_suffix(".audit.json")
+    eng = VertiForensicsEngine()
+    res = eng.export_e5x_from_vrta(
+        vrta_path=vrta_file,
+        out_e5x_xml_path=out_e5x,
+        out_audit_json_path=audit_path,
+        sidecar_path=sidecar or "",
+        occupant_capacity=capacity,
+    )
+    payload = {
+        "command": "forensics-export",
+        "backend": eng.backend,
+        "out_e5x": str(out_e5x),
+        "out_audit": str(audit_path),
+        **res,
+    }
+    typer.echo(json.dumps(payload, indent=2))
+    if not res.get("ok"):
+        raise typer.Exit(code=1)
+
+
+@app.command("gnss-spoof-sim")
+def cmd_gnss_spoof_sim(
+    ramp_mps: float = typer.Option(1.5, min=0.2, max=10.0, help="Slow-ramp GNSS spoof velocity [m/s]."),
+    water_fraction: float = typer.Option(0.05, min=0.0, max=1.0, help="Nadir water fraction [0..1]."),
+    duration_s: float = typer.Option(22.0, min=16.0, max=120.0, help="Total 10 Hz simulation horizon [s]."),
+) -> None:
+    """Run deterministic H0..H3 MCUSUM GNSS spoof guard + 3-sigma dh/dt CTR inflation audit."""
+    suite = VertiGnssDenied()
+    suite.reset(2.0)
+    dt_s = 0.1
+    n_steps = int(round(duration_s / dt_s))
+    warmup_steps = 160
+    pos_n, pos_e = 200.0, -500.0
+    spoof_e = 0.0
+    ttd_s: float | None = None
+    last_guard: dict[str, object] = {}
+
+    for step_idx in range(n_steps):
+        stamp_ns = (step_idx + 1) * 100_000_000
+        pos_e += 12.0 * dt_s
+        v_spoof = ramp_mps if step_idx >= warmup_steps else 0.0
+        spoof_e += v_spoof * dt_s
+        last_guard = suite.step_spoof_guard_10hz(
+            stamp_ns=stamp_ns,
+            gnss_pos_ned=(pos_n, pos_e + spoof_e, -45.0),
+            gnss_vel_ned=(0.0, 12.0 + v_spoof, 0.0),
+            vio_pos_ned=(pos_n, pos_e, -45.0),
+            vio_vel_ned=(0.0, 12.0, 0.0),
+            water_fraction=water_fraction,
+        )
+        if last_guard["latched"] and ttd_s is None and step_idx >= warmup_steps:
+            ttd_s = round((step_idx - warmup_steps + 1) * dt_s, 3)
+
+    ctr = suite.propagate_and_evaluate_ctr(10.0, 12.0, (pos_n, pos_e, -45.0), 57.0)
+    typer.echo(
+        json.dumps(
+            {
+                "command": "gnss-spoof-sim",
+                "backend": suite.backend,
+                "ramp_mps": ramp_mps,
+                "water_fraction": water_fraction,
+                "ttd_s": ttd_s,
+                "guard": last_guard,
+                "ctr_inflation": ctr,
+            },
+            indent=2,
+        )
+    )
+
+
+@app.command("m3-demo")
+def cmd_m3_demo(
+    out_dir: Path = typer.Option(Path("m3_demo_out"), help="Directory for demo .vrta and .e5x outputs."),
+) -> None:
+    """Run end-to-end M3 demo: forward grazing wire, GNSS spoof guard, S3 MAYDAY voice & .e5x export."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    vrta_path = out_dir / "m3_demo.vrta"
+    e5x_path = out_dir / "m3_demo.e5x.xml"
+    audit_path = out_dir / "m3_demo.audit.json"
+
+    # 1. Generate valid 25-frame VRTA0001 flight clip over Kartal
+    env = VertiRtaCoaxialX8Env(fault_mode="same_arm_dual", substeps_400hz=4, max_steps=60)
+    env.reset(seed=42, options={"inject_immediately": True})
+    zero_act = np.zeros((4,), dtype=np.float32)
+    with vrta_path.open("wb") as fh:
+        fh.write(make_vrta_header_bytes(*KARTAL_DATUM))
+        for _ in range(25):
+            env.step(zero_act)
+            fh.write(env.latest_vrta_frame_bytes())
+
+    # 2. Forward hazard grazing wire fallback (<= 15 m/s)
+    fh_eng = VertiForwardHazard()
+    fh_eng.push_pose_200hz(1_000_000_000, (0.0, 0.0, -45.0), (12.0, 0.0, 0.0))
+    fh_out = fh_eng.step(
+        1_050_000_000,
+        radar_healthy=False,
+        wire_lines=[(200.0, 180.0, 1080.0, 185.0, 0.92)],
+    )
+
+    # 3. Voice Mondrian S3_Garbled MAYDAY preemption
+    voice = VertiMondrianVoiceGate()
+    voice_out = voice.evaluate(
+        snr_db=-3.5,
+        lang="TR",
+        candidates=[
+            ("DIVERT_SLZ:Kartal_Sahil", 0.45, True),
+            ("HOLD_LOITER", 0.35, True),
+        ],
+        mayday_acoustic_weight=0.22,
+    )
+
+    # 4. Regulatory forensics .e5x export
+    forensics = VertiForensicsEngine()
+    e5x_out = forensics.export_e5x_from_vrta(vrta_path, e5x_path, audit_path)
+
+    typer.echo(
+        json.dumps(
+            {
+                "command": "m3-demo",
+                "backend": forensics.backend,
+                "forward_hazard": fh_out,
+                "voice_mayday": voice_out,
+                "forensics_e5x": e5x_out,
+                "files": {"vrta": str(vrta_path), "e5x": str(e5x_path), "audit": str(audit_path)},
+            },
+            indent=2,
         )
     )
 

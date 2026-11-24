@@ -116,6 +116,9 @@
               <dt>Voice ATC Mondrian</dt><dd id="m3-voice-status">S1_Cruise &bull; |C|=1 &bull; sherpa-onnx 154 ms</dd>
             </dl>
             <div class="btn-grid" style="margin-top: 8px">
+              <button type="button" id="btn-m3-compound" class="danger">
+                Trigger 6-Fault Compound Apex (E1 Istanbul Mission)
+              </button>
               <button type="button" id="btn-m3-wire">Simulate Forward Wire + Grazing Cliff (15 m/s)</button>
               <button type="button" id="btn-m3-spoof" class="danger">
                 Inject 1.0 m/s Slow-Ramp GNSS Spoof (H3 MCUSUM)
@@ -127,10 +130,25 @@
                 Voice ATC MAYDAY in S3_Garbled (Preempt + Readback)
               </button>
               <button type="button" id="btn-m3-e5x-preview">
-                1-Click .e5x Draft Incident Preview (ID 431 / SCF-NP)
+                Preview .e5x Draft Incident (ID 431 / SCF-NP)
+              </button>
+              <button type="button" id="btn-m3-e5x-download">
+                1-Click Download .e5x.xml Draft (W3C XSD Valid)
+              </button>
+              <button type="button" id="btn-m3-sample-sidecar">
+                Verify Sample .vrta_events.jsonl Chain (WebCrypto SHA-256)
               </button>
               <button type="button" id="btn-m3-reset" class="secondary">Reset M3 Nominal</button>
             </div>
+            <label class="dropzone" for="m3-sidecar-file-input" id="m3-sidecar-dropzone" style="margin-top: 8px">
+              Drop <code>.vrta_events.jsonl</code> sidecar or click to verify SHA-256 chain
+              <input id="m3-sidecar-file-input" type="file" accept=".jsonl,.json,.txt" hidden />
+            </label>
+            <details id="m3-sidecar-details" class="fleet-details">
+              <summary>ED-155A Sidecar Chain Verifier &amp; Event Timeline</summary>
+              <p id="m3-sidecar-status" class="sidecar-status">Awaiting .vrta_events.jsonl drop or sample click.</p>
+              <ul id="m3-sidecar-timeline" class="sidecar-timeline"></ul>
+            </details>
             <details id="m3-e5x-details" class="fleet-details">
               <summary>ECCAIRS2 .e5x Draft Incident Preview (CIR 2026/1821 &bull; ID 431 Draft Only)</summary>
               <pre id="m3-e5x-xml-preview">Click 1-Click .e5x Draft Incident Preview to inspect grounded XML.</pre>
