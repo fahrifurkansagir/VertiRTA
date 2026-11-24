@@ -46,11 +46,25 @@ from scripts.colab.g4_jobs.common import sha256_file, write_canonical_json  # no
 from scripts.colab.remote_g4_driver import build_wave_commands  # noqa: E402
 
 G4_ESTIMATED_CU_PER_HOUR = 10.05
+STRICT_ALLOWED_GPU = "G4"
 DEFAULT_SESSION_NAME = "vertirta-m3-g4-thunder"
 DEFAULT_MAX_WALL_MINUTES = 150.0
+
+
+def validate_strict_g4_gpu(gpu: str) -> str:
+    """Enforce 100% strict G4-only lock; fail immediately at 0.00 CU for any other GPU."""
+    normalized = str(gpu).strip().upper()
+    if normalized != STRICT_ALLOWED_GPU:
+        raise ValueError(
+            f"Strict G4-only lock violated: requested GPU {gpu!r} is forbidden "
+            f"(only {STRICT_ALLOWED_GPU!r} is permitted; zero fallback, 0.00 CU spent)."
+        )
+    return STRICT_ALLOWED_GPU
 TARBALL_EXCLUDED_TOPLEVEL: frozenset[str] = frozenset(
     {
         ".git",
+        ".agents",
+        "apps",
         "build",
         "artifacts",
         ".pytest_cache",
@@ -58,6 +72,7 @@ TARBALL_EXCLUDED_TOPLEVEL: frozenset[str] = frozenset(
         "node_modules",
         "__pycache__",
         "docs",
+        "viz",
     }
 )
 
@@ -182,9 +197,13 @@ def build_minimal_source_tarball(repo_root: Path, out_tar_gz: Path) -> Path:
         parts = Path(ti.name).parts
         if not parts:
             return ti
-        if parts[0] in TARBALL_EXCLUDED_TOPLEVEL:
+        if parts[0] in TARBALL_EXCLUDED_TOPLEVEL or parts[0].startswith(".venv"):
             return None
-        if "__pycache__" in parts or ".pytest_cache" in parts or ".git" in parts:
+        if any(
+            x in ("__pycache__", ".pytest_cache", ".git", "node_modules", ".venv", ".agents", "dist")
+            or x.startswith(".venv")
+            for x in parts
+        ):
             return None
         if ti.isfile() and ti.size > 2 * 1024 * 1024:
             return None
@@ -192,7 +211,7 @@ def build_minimal_source_tarball(repo_root: Path, out_tar_gz: Path) -> Path:
 
     with tarfile.open(out_tar_gz, "w:gz") as tf:
         for child in sorted(repo_root.iterdir()):
-            if child.name in TARBALL_EXCLUDED_TOPLEVEL:
+            if child.name in TARBALL_EXCLUDED_TOPLEVEL or child.name.startswith(".venv"):
                 continue
             tf.add(child, arcname=child.name, filter=_filter)
     return out_tar_gz
@@ -235,10 +254,12 @@ class LiveColabCliBackend:
         )
         return set(json.loads(out))
 
-    def open_g4_session(self, session_name: str) -> None:
+    def open_g4_session(self, session_name: str, *, gpu: str = STRICT_ALLOWED_GPU) -> None:
+        target_gpu = validate_strict_g4_gpu(gpu)
         if not self.colab_bin:
             raise RuntimeError("`colab` CLI not found on PATH.")
-        self._runner([self.colab_bin, "new", "--gpu", "G4", "-s", session_name], check=True)
+        # Strictly G4-only: single provisioning attempt; any failure (including HTTP 503) exits cleanly with zero fallback.
+        self._runner([self.colab_bin, "new", "--gpu", target_gpu, "-s", session_name], check=True)
 
     def upload_and_run_remote(
         self,
@@ -403,8 +424,10 @@ def execute_single_shot_lifecycle(
     max_wall_minutes: float = DEFAULT_MAX_WALL_MINUTES,
     jobs: str | None = None,
     vertibench_v2_dir: str | None = None,
+    gpu: str = STRICT_ALLOWED_GPU,
 ) -> dict[str, Any]:
     """Single-open / single-close G4 lifecycle preserving pre-existing external sessions."""
+    target_gpu = validate_strict_g4_gpu(gpu)
     t_open = time.perf_counter()
     blob_dir.mkdir(parents=True, exist_ok=True)
     out_artifacts.mkdir(parents=True, exist_ok=True)
@@ -489,10 +512,16 @@ def execute_single_shot_lifecycle(
         if lockfile.is_file() and owned_released:
             lockfile.unlink()
 
+        actual_gpu_name = remote_manifest.get("actual_gpu_name") or heartbeat_final.get("actual_gpu_name")
+        actual_gpu_total_mib = remote_manifest.get("actual_gpu_total_mib") or heartbeat_final.get("actual_gpu_total_mib")
+
         summary = {
             "schema_version": "vertirta.g4_thunder_run_manifest/v4.0.0",
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "session_name": session_name,
+            "requested_gpu": target_gpu,
+            "actual_gpu_name": actual_gpu_name,
+            "actual_gpu_total_mib": actual_gpu_total_mib,
             "owned_endpoint": owned_endpoint,
             "pre_existing_endpoints_preserved": sorted(pre_existing & remaining_final),
             "remaining_active_assignments": len(remaining_final),
@@ -540,12 +569,23 @@ def main() -> int:
     parser.add_argument("--vertibench-v2-dir", type=Path, default=None)
     parser.add_argument("--jobs", type=str, default=None, help="Optional comma-separated job filter.")
     parser.add_argument(
+        "--gpu",
+        type=str,
+        default=STRICT_ALLOWED_GPU,
+        help="Target Colab GPU (strictly locked to G4; any other value fails immediately at 0.00 CU).",
+    )
+    parser.add_argument(
         "--max-wall-minutes",
         type=float,
         default=DEFAULT_MAX_WALL_MINUTES,
         help=f"Hard wall-clock watchdog ceiling in minutes (default: {DEFAULT_MAX_WALL_MINUTES}).",
     )
     args = parser.parse_args()
+
+    try:
+        target_gpu = validate_strict_g4_gpu(args.gpu)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     if args.dry_run:
         waves = build_wave_commands(
@@ -604,6 +644,7 @@ def main() -> int:
         max_wall_minutes=args.max_wall_minutes,
         jobs=args.jobs,
         vertibench_v2_dir=str(args.vertibench_v2_dir) if args.vertibench_v2_dir else None,
+        gpu=target_gpu,
     )
     return 0
 

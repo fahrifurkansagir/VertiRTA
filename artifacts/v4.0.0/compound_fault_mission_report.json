@@ -1,0 +1,393 @@
+{
+  "schema_version": "vertirta.compound_fault_mission_report/v4.0.0",
+  "timestamp_utc": "2026-11-24T12:58:34Z",
+  "airspace_datum": {
+    "kartal_lat_deg": 40.8860,
+    "kartal_lon_deg": 29.1880,
+    "ltfj_western_wall_lon_deg": 29.1895,
+    "ltbx_arp_lat_deg": 40.990556,
+    "ltbx_arp_lon_deg": 29.216111,
+    "kartal_hospital_lat_deg": 40.91639,
+    "kartal_hospital_lon_deg": 29.17417,
+    "kartal_hospital_note": "8960.6 m from LTBX ARP (inside LTBX 9260 m CTR); receptor 0 for acoustic telemetry",
+    "coastal_hospital_active_challenge_name": "Cevizli_Dragos_Coastal_Medical_Helipad",
+    "coastal_hospital_active_challenge_lat_deg": 40.90800,
+    "coastal_hospital_active_challenge_lon_deg": 29.15800,
+    "coastal_hospital_active_challenge_ltbx_dist_m": 10389.0,
+    "kartal_hospital_cylinder_radius_m": 160.0
+  },
+  "part_is_backend": "SIM_HMAC_SHA256_BACKEND",
+  "forensics_signer_backend": "SIM_SHA256_TEST_SIGNER",
+  "all_passed": true,
+  "scenarios_passed": 5,
+  "scenarios_total": 5,
+  "total_wall_ms": 545.6759,
+  "scenarios": [
+    {
+      "scenario_id": 1,
+      "scenario_name": "Compound Apex: Rotor#3 + 12m/s Wind + GNSS Spoof + Grazing Wire + Part-IS + S2 MAYDAY",
+      "airframe": "VertiRTA-X8-240",
+      "passed": true,
+      "failure_reason": "",
+      "duration_s": 10.0000,
+      "ticks_100hz": 1000,
+      "wall_ms": 44.2480,
+      "flight": {
+        "min_agl_m": 54.9458,
+        "max_tilt_deg": 32.9534,
+        "max_speed_mps": 12.2314,
+        "final_soc_pct": 71.6649,
+        "min_v_term_v": 408.9523,
+        "fault_mask_hex": "0x08",
+        "cel_latched": false,
+        "oei_trim_feasible": true,
+        "oei_peak_thrust_ratio": 0.0000
+      },
+      "airspace_wind_acoustics": {
+        "min_ltfj_margin_m": 1174.9685,
+        "min_ltbx_margin_m": 2535.4522,
+        "ltfj_ltbx_breaches": 0,
+        "peak_wind_mps": 14.2028,
+        "wind_lut_sha256_verified": true,
+        "min_hospital_horiz_dist_m": 0.0000,
+        "hospital_cylinder_breaches": 0,
+        "max_kartal_hospital_dba": 35.8542
+      },
+      "forward_hazard": {
+        "wire_grazing_rcs_dbsm": -51.5000,
+        "wire_standoff_emitted": true,
+        "wire_recommended_v_max_mps": 15.0000,
+        "active_wire_capsules": 4,
+        "min_wire_clearance_m": 30.1217
+      },
+      "gnss_denied": {
+        "gnss_hypothesis": "H3_SLOW_RAMP_SPOOF",
+        "gnss_spoof_ttd_s": 0.1000,
+        "gnss_water_glint_false_alarms": 0,
+        "gnss_rollback_executed": true,
+        "gnss_jam_discriminated": false,
+        "reloc_accepted_count": 0,
+        "reloc_sentinel2_rejected_count": 0,
+        "final_3sigma_m": 10.7170,
+        "nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "security_and_fleet": {
+        "part_is_spoof_rejected": true,
+        "part_is_cyber_state": "SEC_USSP_QUARANTINE",
+        "fleet_agents": 0,
+        "fleet_preemption_escape_ms": 0.0000,
+        "fleet_airspace_breaches": 0
+      },
+      "voice_atc": {
+        "snr_stratum": "S2_Hover",
+        "action": "EMERGENCY_PREEMPT",
+        "asr_tier": "WHISPER_LARGE_V3_TURBO_Q8_0",
+        "tts_ttfa_ms": 0.2368,
+        "audio_sha256_prefix": "dae889200c589152"
+      },
+      "forensics": {
+        "vrta_frames_verified": 1000,
+        "sidecar_events_joined": 4,
+        "ercs_cictt": "SCF-NP",
+        "ercs_matrix_code": "I5",
+        "ercs_barrier8_score": 0,
+        "ercs_draft_incident_only": true,
+        "e5x_xml_generated": true,
+        "narrative_hallucinated_numbers": 0
+      }
+    },
+    {
+      "scenario_id": 2,
+      "scenario_name": "Same-Arm 2M CEL + 20-Agent Fleet P0 Preemption + ED-155A/E5X Chain",
+      "airframe": "VertiRTA-X8-240",
+      "passed": true,
+      "failure_reason": "",
+      "duration_s": 3.0000,
+      "ticks_100hz": 300,
+      "wall_ms": 47.8501,
+      "flight": {
+        "min_agl_m": 54.0442,
+        "max_tilt_deg": 22.1653,
+        "max_speed_mps": 9.9991,
+        "final_soc_pct": 63.8680,
+        "min_v_term_v": 408.6076,
+        "fault_mask_hex": "0x11",
+        "cel_latched": true,
+        "oei_trim_feasible": true,
+        "oei_peak_thrust_ratio": 0.0000
+      },
+      "airspace_wind_acoustics": {
+        "min_ltfj_margin_m": 1184.5828,
+        "min_ltbx_margin_m": 2560.7835,
+        "ltfj_ltbx_breaches": 0,
+        "peak_wind_mps": 0.0000,
+        "wind_lut_sha256_verified": false,
+        "min_hospital_horiz_dist_m": 0.0000,
+        "hospital_cylinder_breaches": 0,
+        "max_kartal_hospital_dba": 0.0000
+      },
+      "forward_hazard": {
+        "wire_grazing_rcs_dbsm": 0.0000,
+        "wire_standoff_emitted": false,
+        "wire_recommended_v_max_mps": 22.0000,
+        "active_wire_capsules": 0,
+        "min_wire_clearance_m": 0.0000
+      },
+      "gnss_denied": {
+        "gnss_hypothesis": "H0_NOMINAL",
+        "gnss_spoof_ttd_s": -1.0000,
+        "gnss_water_glint_false_alarms": 0,
+        "gnss_rollback_executed": false,
+        "gnss_jam_discriminated": false,
+        "reloc_accepted_count": 0,
+        "reloc_sentinel2_rejected_count": 0,
+        "final_3sigma_m": 0.0000,
+        "nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "security_and_fleet": {
+        "part_is_spoof_rejected": false,
+        "part_is_cyber_state": "SEC_NOMINAL",
+        "fleet_agents": 20,
+        "fleet_preemption_escape_ms": 210.0000,
+        "fleet_airspace_breaches": 0
+      },
+      "voice_atc": {
+        "snr_stratum": "N/A",
+        "action": "N/A",
+        "asr_tier": "N/A",
+        "tts_ttfa_ms": 0.0000,
+        "audio_sha256_prefix": ""
+      },
+      "forensics": {
+        "vrta_frames_verified": 300,
+        "sidecar_events_joined": 3,
+        "ercs_cictt": "SCF-NP",
+        "ercs_matrix_code": "I5",
+        "ercs_barrier8_score": 0,
+        "ercs_draft_incident_only": true,
+        "e5x_xml_generated": true,
+        "narrative_hallucinated_numbers": 0
+      }
+    },
+    {
+      "scenario_id": 3,
+      "scenario_name": "Marmara Wave Glint + Spoof-vs-Jam Discrimination + Visual Reloc Recovery",
+      "airframe": "VertiRTA-X8-240",
+      "passed": true,
+      "failure_reason": "",
+      "duration_s": 20.0000,
+      "ticks_100hz": 2000,
+      "wall_ms": 18.2963,
+      "flight": {
+        "min_agl_m": 49.6347,
+        "max_tilt_deg": 0.7729,
+        "max_speed_mps": 11.9990,
+        "final_soc_pct": 77.3324,
+        "min_v_term_v": 431.0029,
+        "fault_mask_hex": "0x00",
+        "cel_latched": false,
+        "oei_trim_feasible": true,
+        "oei_peak_thrust_ratio": 0.0000
+      },
+      "airspace_wind_acoustics": {
+        "min_ltfj_margin_m": 1231.9621,
+        "min_ltbx_margin_m": 2403.6203,
+        "ltfj_ltbx_breaches": 0,
+        "peak_wind_mps": 0.0000,
+        "wind_lut_sha256_verified": false,
+        "min_hospital_horiz_dist_m": 0.0000,
+        "hospital_cylinder_breaches": 0,
+        "max_kartal_hospital_dba": 0.0000
+      },
+      "forward_hazard": {
+        "wire_grazing_rcs_dbsm": 0.0000,
+        "wire_standoff_emitted": false,
+        "wire_recommended_v_max_mps": 22.0000,
+        "active_wire_capsules": 0,
+        "min_wire_clearance_m": 0.0000
+      },
+      "gnss_denied": {
+        "gnss_hypothesis": "H3_SLOW_RAMP_SPOOF",
+        "gnss_spoof_ttd_s": 0.1000,
+        "gnss_water_glint_false_alarms": 0,
+        "gnss_rollback_executed": true,
+        "gnss_jam_discriminated": true,
+        "reloc_accepted_count": 6,
+        "reloc_sentinel2_rejected_count": 6,
+        "final_3sigma_m": 2.6126,
+        "nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "security_and_fleet": {
+        "part_is_spoof_rejected": false,
+        "part_is_cyber_state": "SEC_NOMINAL",
+        "fleet_agents": 0,
+        "fleet_preemption_escape_ms": 0.0000,
+        "fleet_airspace_breaches": 0
+      },
+      "voice_atc": {
+        "snr_stratum": "N/A",
+        "action": "N/A",
+        "asr_tier": "N/A",
+        "tts_ttfa_ms": 0.0000,
+        "audio_sha256_prefix": ""
+      },
+      "forensics": {
+        "vrta_frames_verified": 0,
+        "sidecar_events_joined": 0,
+        "ercs_cictt": "N/A",
+        "ercs_matrix_code": "N/A",
+        "ercs_barrier8_score": 0,
+        "ercs_draft_incident_only": false,
+        "e5x_xml_generated": false,
+        "narrative_hallucinated_numbers": 0
+      }
+    },
+    {
+      "scenario_id": 4,
+      "scenario_name": "Low-SoC (4.2% < 5.0%) LIVENESS_EMERGENCY_COMMIT + S3 Garbled + Wire <=15 m/s Cap",
+      "airframe": "VertiRTA-X8-240",
+      "passed": true,
+      "failure_reason": "",
+      "duration_s": 8.0000,
+      "ticks_100hz": 800,
+      "wall_ms": 11.6583,
+      "flight": {
+        "min_agl_m": 32.0187,
+        "max_tilt_deg": 17.0378,
+        "max_speed_mps": 14.9208,
+        "final_soc_pct": 16.0005,
+        "min_v_term_v": 363.6068,
+        "fault_mask_hex": "0x00",
+        "cel_latched": false,
+        "oei_trim_feasible": true,
+        "oei_peak_thrust_ratio": 0.0000
+      },
+      "airspace_wind_acoustics": {
+        "min_ltfj_margin_m": 1185.9768,
+        "min_ltbx_margin_m": 2504.9738,
+        "ltfj_ltbx_breaches": 0,
+        "peak_wind_mps": 0.0000,
+        "wind_lut_sha256_verified": false,
+        "min_hospital_horiz_dist_m": 0.0000,
+        "hospital_cylinder_breaches": 0,
+        "max_kartal_hospital_dba": 0.0000
+      },
+      "forward_hazard": {
+        "wire_grazing_rcs_dbsm": -51.5000,
+        "wire_standoff_emitted": true,
+        "wire_recommended_v_max_mps": 15.0000,
+        "active_wire_capsules": 8,
+        "min_wire_clearance_m": 15.2407
+      },
+      "gnss_denied": {
+        "gnss_hypothesis": "H0_NOMINAL",
+        "gnss_spoof_ttd_s": -1.0000,
+        "gnss_water_glint_false_alarms": 0,
+        "gnss_rollback_executed": false,
+        "gnss_jam_discriminated": false,
+        "reloc_accepted_count": 0,
+        "reloc_sentinel2_rejected_count": 0,
+        "final_3sigma_m": 0.0000,
+        "nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "security_and_fleet": {
+        "part_is_spoof_rejected": false,
+        "part_is_cyber_state": "SEC_NOMINAL",
+        "fleet_agents": 0,
+        "fleet_preemption_escape_ms": 0.0000,
+        "fleet_airspace_breaches": 0
+      },
+      "voice_atc": {
+        "snr_stratum": "S3_Garbled",
+        "action": "LIVENESS_EMERGENCY_COMMIT",
+        "asr_tier": "WHISPER_LARGE_V3_TURBO_Q8_0",
+        "tts_ttfa_ms": 0.1857,
+        "audio_sha256_prefix": "7348d1583e158023"
+      },
+      "forensics": {
+        "vrta_frames_verified": 0,
+        "sidecar_events_joined": 0,
+        "ercs_cictt": "N/A",
+        "ercs_matrix_code": "N/A",
+        "ercs_barrier8_score": 0,
+        "ercs_draft_incident_only": false,
+        "e5x_xml_generated": false,
+        "narrative_hallucinated_numbers": 0
+      }
+    },
+    {
+      "scenario_id": 5,
+      "scenario_name": "Lift+Cruise 8+1 Hover-OEI + Transition Gust + Kartal Hospital Cylinder Avoidance",
+      "airframe": "VertiRTA-LC-240-8p1",
+      "passed": true,
+      "failure_reason": "",
+      "duration_s": 42.0000,
+      "ticks_100hz": 4200,
+      "wall_ms": 422.2929,
+      "flight": {
+        "min_agl_m": 84.7457,
+        "max_tilt_deg": 20.0991,
+        "max_speed_mps": 29.9868,
+        "final_soc_pct": 78.0777,
+        "min_v_term_v": 418.9844,
+        "fault_mask_hex": "0x0001",
+        "cel_latched": false,
+        "oei_trim_feasible": true,
+        "oei_peak_thrust_ratio": 0.7907
+      },
+      "airspace_wind_acoustics": {
+        "min_ltfj_margin_m": 1254.4388,
+        "min_ltbx_margin_m": 1166.2897,
+        "ltfj_ltbx_breaches": 0,
+        "peak_wind_mps": 7.2714,
+        "wind_lut_sha256_verified": true,
+        "min_hospital_horiz_dist_m": 188.5906,
+        "hospital_cylinder_breaches": 0,
+        "max_kartal_hospital_dba": 48.4557
+      },
+      "forward_hazard": {
+        "wire_grazing_rcs_dbsm": 0.0000,
+        "wire_standoff_emitted": false,
+        "wire_recommended_v_max_mps": 22.0000,
+        "active_wire_capsules": 0,
+        "min_wire_clearance_m": 0.0000
+      },
+      "gnss_denied": {
+        "gnss_hypothesis": "H0_NOMINAL",
+        "gnss_spoof_ttd_s": -1.0000,
+        "gnss_water_glint_false_alarms": 0,
+        "gnss_rollback_executed": false,
+        "gnss_jam_discriminated": false,
+        "reloc_accepted_count": 0,
+        "reloc_sentinel2_rejected_count": 0,
+        "final_3sigma_m": 0.0000,
+        "nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "security_and_fleet": {
+        "part_is_spoof_rejected": false,
+        "part_is_cyber_state": "SEC_NOMINAL",
+        "fleet_agents": 0,
+        "fleet_preemption_escape_ms": 0.0000,
+        "fleet_airspace_breaches": 0
+      },
+      "voice_atc": {
+        "snr_stratum": "N/A",
+        "action": "N/A",
+        "asr_tier": "N/A",
+        "tts_ttfa_ms": 0.0000,
+        "audio_sha256_prefix": ""
+      },
+      "forensics": {
+        "vrta_frames_verified": 0,
+        "sidecar_events_joined": 0,
+        "ercs_cictt": "N/A",
+        "ercs_matrix_code": "N/A",
+        "ercs_barrier8_score": 0,
+        "ercs_draft_incident_only": false,
+        "e5x_xml_generated": false,
+        "narrative_hallucinated_numbers": 0
+      }
+    }
+  ],
+  "report_sha256": "dccc44ca9e0bcfbd980f8e2cdd262f48effcb7ed0ccff7b776e01f970729bd4d"
+}

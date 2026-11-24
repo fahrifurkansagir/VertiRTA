@@ -20,22 +20,66 @@ on:
       - "ros2_ws/src/vertirta_voice_node/**"
       - "apps/vertigcs/**"
       - "benchmarks/vertibench_v2/**"
+      - "benchmarks/compound_fault_suite/**"
       - "ml/voice/**"
       - "ml/copilot/calibrate_conformal.py"
       - "docs/paper_corl/**"
       - "scripts/colab/**"
       - "scripts/bench_gtx1650s_m3_timesliced.py"
+      - "scripts/bench_local_voice_atc_live.py"
       - "scripts/ci/check_zero_gpl_symbols.py"
+      - "artifacts/v4.0.0/compound_fault_mission_report.json"
+      - "artifacts/v4.0.0/local_voice_atc_live_proof.json"
       - "tests/forward_hazard/**"
       - "tests/gnss_denied/**"
       - "tests/voice/**"
       - "tests/forensics/**"
       - "tests/vertibench_v2/**"
       - "tests/colab/**"
+      - "tests/integration/CMakeLists.txt"
+      - "tests/integration/test_compound_fault_istanbul_mission.cpp"
       - "tests/integration/test_m3_voice_node_contracts.py"
       - "tests/ci/test_m3_workflow_contracts.py"
       - ".github/workflows/m3_perception_voice_forensics.yml"
   pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "config/forward_hazard_and_gnss_denied.yaml"
+      - "config/voice_atc.yaml"
+      - "config/forensics_eccairs2.yaml"
+      - "config/eccairs2_nodigit.gbnf"
+      - "core/forward_hazard/**"
+      - "core/gnss_denied/**"
+      - "core/voice/**"
+      - "core/forensics/**"
+      - "sim/gazebo_plugins/mmwave_77ghz/**"
+      - "ros2_ws/src/vertirta_forward_hazard_node/**"
+      - "ros2_ws/src/vertirta_gnss_denied_node/**"
+      - "ros2_ws/src/vertirta_voice_node/**"
+      - "apps/vertigcs/**"
+      - "benchmarks/vertibench_v2/**"
+      - "benchmarks/compound_fault_suite/**"
+      - "ml/voice/**"
+      - "ml/copilot/calibrate_conformal.py"
+      - "docs/paper_corl/**"
+      - "scripts/colab/**"
+      - "scripts/bench_gtx1650s_m3_timesliced.py"
+      - "scripts/bench_local_voice_atc_live.py"
+      - "scripts/ci/check_zero_gpl_symbols.py"
+      - "artifacts/v4.0.0/compound_fault_mission_report.json"
+      - "artifacts/v4.0.0/local_voice_atc_live_proof.json"
+      - "tests/forward_hazard/**"
+      - "tests/gnss_denied/**"
+      - "tests/voice/**"
+      - "tests/forensics/**"
+      - "tests/vertibench_v2/**"
+      - "tests/colab/**"
+      - "tests/integration/CMakeLists.txt"
+      - "tests/integration/test_compound_fault_istanbul_mission.cpp"
+      - "tests/integration/test_m3_voice_node_contracts.py"
+      - "tests/ci/test_m3_workflow_contracts.py"
+      - ".github/workflows/m3_perception_voice_forensics.yml"
   workflow_dispatch:
 
 permissions:
@@ -188,9 +232,11 @@ jobs:
             test_voice_pipeline \
             test_mondrian_voice_gate \
             test_forensics_sidecar_ercs_e5x \
+            test_compound_fault_istanbul_mission \
+            vertirta_compound_fault_cli \
             vertirta_forensics_cli -j
           ctest --test-dir build-m3-asan \
-            -R "^(test_forward_hazard_fusion|test_mmwave_77ghz_sensor|test_gnss_spoof_mcusum_vio|test_visual_reloc_and_ctr_inflation|test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x)$" \
+            -R "^(test_forward_hazard_fusion|test_mmwave_77ghz_sensor|test_gnss_spoof_mcusum_vio|test_visual_reloc_and_ctr_inflation|test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x|test_compound_fault_istanbul_mission)$" \
             --output-on-failure -j4
 
       - name: Build & Run TSan on M3 Voice & Forensics Suites (Targeted libz3 Suppression)
@@ -260,12 +306,16 @@ jobs:
               build-m3-asan/tests/voice/test_voice_pipeline \
               build-m3-asan/tests/voice/test_mondrian_voice_gate \
               build-m3-asan/tests/forensics/test_forensics_sidecar_ercs_e5x \
+              build-m3-asan/benchmarks/compound_fault_suite/libvertirta_compound_fault_suite.a \
+              build-m3-asan/benchmarks/compound_fault_suite/vertirta_compound_fault_cli \
+              build-m3-asan/tests/integration/test_compound_fault_istanbul_mission \
             --source-roots \
               core/forward_hazard \
               core/gnss_denied \
               sim/gazebo_plugins/mmwave_77ghz \
               core/voice \
               core/forensics \
+              benchmarks/compound_fault_suite \
               ros2_ws/src/vertirta_forward_hazard_node \
               ros2_ws/src/vertirta_gnss_denied_node \
               ros2_ws/src/vertirta_voice_node \

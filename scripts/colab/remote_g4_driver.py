@@ -341,11 +341,18 @@ def run_driver(
         write_canonical_json(artifacts_dir / "remote_bundle_manifest.json", manifest)
         return manifest
 
-    # Emit initial STARTING heartbeat with driver PID BEFORE Wave 1 launches (#329 fix)
+    # Detect actual GPU hardware honestly from nvidia-smi (strict G4-only wave execution)
+    gpu_init = query_nvidia_smi_snapshot() if mode == "live_g4" else {"available": False, "name": "CPU_SMOKE", "memory_total_mib": 0.0}
+    actual_gpu_name = str(gpu_init.get("name", "UNAVAILABLE"))
+    actual_gpu_total_mib = float(gpu_init.get("memory_total_mib", 0.0))
+
+    # Emit initial STARTING heartbeat with driver PID & exact GPU identity BEFORE Wave 1 launches
     _write_heartbeat(
         heartbeat_path,
         "STARTING",
         {
+            "actual_gpu_name": actual_gpu_name,
+            "actual_gpu_total_mib": actual_gpu_total_mib,
             "wave1_jobs": [j["job_key"] for j in waves["wave1"]],
             "wave2_jobs": [j["job_key"] for j in waves["wave2"]],
         },
@@ -377,6 +384,8 @@ def run_driver(
     finally:
         samples = sampler.stop()
         telemetry = summarize_telemetry(samples)
+        telemetry["actual_gpu_name"] = actual_gpu_name
+        telemetry["actual_gpu_total_mib"] = actual_gpu_total_mib
         write_canonical_json(artifacts_dir / "g4_thunder_telemetry.json", telemetry)
         json_files, blob_files = _collect_artifact_digests(artifacts_dir, blob_dir)
         failed = [r for r in all_results if r["returncode"] != 0]
@@ -385,6 +394,8 @@ def run_driver(
             heartbeat_path,
             state,
             {
+                "actual_gpu_name": actual_gpu_name,
+                "actual_gpu_total_mib": actual_gpu_total_mib,
                 "failed_jobs": [f["job_key"] for f in failed],
                 "error": driver_error,
             },
@@ -395,6 +406,8 @@ def run_driver(
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "state": state,
             "error": driver_error,
+            "actual_gpu_name": actual_gpu_name,
+            "actual_gpu_total_mib": actual_gpu_total_mib,
             "wave_budgets": WAVE_BUDGETS,
             "drain_barrier": barrier_info,
             "job_results": all_results,

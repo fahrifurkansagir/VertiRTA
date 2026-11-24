@@ -38,7 +38,8 @@ if(VERTIRTA_BUILD_COMPANION)
       core/voice
       core/forensics
       tools/cli
-      sim/colab_egl)
+      sim/colab_egl
+      benchmarks/compound_fault_suite)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_vertirta_opt_dir}/CMakeLists.txt")
       add_subdirectory(${_vertirta_opt_dir})
     endif()
@@ -60,7 +61,8 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/voice/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/forensics/CMakeLists.txt"
      OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/core/slz_bayes/tests/CMakeLists.txt"
-     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt"
+     OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/CMakeLists.txt")
     FetchContent_Declare(
       Catch2
       GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -112,6 +114,9 @@ if(VERTIRTA_BUILD_TESTS AND BUILD_TESTING)
   endif()
   if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/colab_egl/tests/CMakeLists.txt")
     add_subdirectory(sim/colab_egl/tests)
+  endif()
+  if(VERTIRTA_BUILD_COMPANION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/CMakeLists.txt")
+    add_subdirectory(tests/integration)
   endif()
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/CMakeLists.txt")
     add_subdirectory(tests/determinism)

@@ -39,10 +39,12 @@ from scripts.colab.g4_jobs.job_pidnet_v21_xfeat import (
 from scripts.colab.remote_g4_driver import run_driver, wait_for_gpu_drain_barrier
 from scripts.colab.run_g4_m3_thunder_run import (
     LiveColabCliBackend,
+    build_minimal_source_tarball,
     build_remote_bootstrap_script,
     build_remote_poll_script,
     execute_single_shot_lifecycle,
     resolve_colab_cli_python,
+    validate_strict_g4_gpu,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -568,3 +570,149 @@ def test_end_to_end_smoke_cpu_pipeline_and_tu116_timesliced_sha256_gate(tmp_path
     )
     assert tamper_res.returncode != 0
     assert "SHA-256 mismatch" in (tamper_res.stderr + tamper_res.stdout)
+
+
+@pytest.mark.parametrize("forbidden_gpu", ["AUTO", "H100", "A100", "L4", "T4", "V100", "auto", "h100"])
+def test_strict_g4_only_lock_rejects_any_non_g4_gpu_at_zero_cu(forbidden_gpu: str, tmp_path: Path) -> None:
+    """Strict G4-only lock must fail immediately at 0.00 CU before any Colab provisioning call."""
+    with pytest.raises(ValueError, match="Strict G4-only lock violated"):
+        validate_strict_g4_gpu(forbidden_gpu)
+
+    called_cmds: list[list[str]] = []
+
+    def _forbid_runner(cmd: list[str], **kwargs: Any) -> Any:
+        called_cmds.append(list(cmd))
+        raise AssertionError(f"Colab CLI must never be called for forbidden GPU {forbidden_gpu!r}: {cmd}")
+
+    backend = LiveColabCliBackend(runner=_forbid_runner)
+    backend.colab_bin = "colab"
+    backend.colab_py = Path("/usr/bin/python3")
+
+    with pytest.raises(ValueError, match="Strict G4-only lock violated"):
+        backend.open_g4_session("sess-forbidden", gpu=forbidden_gpu)
+    assert called_cmds == []
+
+    fake_tar = tmp_path / "src.tar.gz"
+    fake_tar.write_bytes(b"tar")
+    with pytest.raises(ValueError, match="Strict G4-only lock violated"):
+        execute_single_shot_lifecycle(
+            backend,
+            session_name="sess-forbidden",
+            out_artifacts=tmp_path / "artifacts",
+            blob_dir=tmp_path / "blobs",
+            tarball_path=fake_tar,
+            gpu=forbidden_gpu,
+        )
+    assert called_cmds == []
+
+    r_cli = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/colab/run_g4_m3_thunder_run.py"),
+            "--live-g4",
+            "--confirm-single-shot-g4",
+            "--gpu",
+            forbidden_gpu,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert r_cli.returncode != 0
+    assert "Strict G4-only lock violated" in (r_cli.stderr + r_cli.stdout)
+    assert "0.00 CU" in (r_cli.stderr + r_cli.stdout)
+
+
+def test_strict_g4_only_http_503_exits_cleanly_without_gpu_fallback(tmp_path: Path) -> None:
+    """G4 HTTP 503 capacity error must exit cleanly without attempting H100/A100/L4/T4/AUTO."""
+    new_cmds: list[list[str]] = []
+    unassigned: list[str] = []
+
+    def _runner_503(cmd: list[str], **kwargs: Any) -> Any:
+        if len(cmd) >= 3 and cmd[1] == "-c":
+            code = cmd[2]
+            if "list_assignments" in code:
+                return subprocess.CompletedProcess(cmd, 0, stdout='["gpu-external-preexisting-001"]\n', stderr="")
+            if "unassign" in code:
+                unassigned.append(code)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if len(cmd) >= 2 and cmd[1] == "new":
+            new_cmds.append(list(cmd))
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=cmd,
+                output="",
+                stderr="HTTP 503 Service Unavailable: G4 capacity currently exhausted",
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    backend = LiveColabCliBackend(runner=_runner_503)
+    backend.colab_bin = "colab"
+    backend.colab_py = Path("/usr/bin/python3")
+
+    out_art = tmp_path / "artifacts"
+    blob_dir = tmp_path / "blobs"
+    fake_tar = tmp_path / "src.tar.gz"
+    fake_tar.write_bytes(b"tar")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        execute_single_shot_lifecycle(
+            backend,
+            session_name="vertirta-test-503",
+            out_artifacts=out_art,
+            blob_dir=blob_dir,
+            tarball_path=fake_tar,
+        )
+
+    assert new_cmds == [["colab", "new", "--gpu", "G4", "-s", "vertirta-test-503"]]
+    assert unassigned == []
+
+    manifest = json.loads((out_art / "g4_thunder_run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["requested_gpu"] == "G4"
+    assert manifest["owned_endpoint"] is None
+    assert manifest["owned_endpoint_released"] is True
+    assert manifest["teardown_verified"] is True
+    assert manifest["pre_existing_endpoints_preserved"] == ["gpu-external-preexisting-001"]
+    assert "CalledProcessError" in str(manifest["run_error"])
+
+    # AST audit: neither G4 orchestrator nor remote driver may contain fallback GPU literals
+    forbidden_gpu_literals = {"AUTO", "H100", "A100", "L4", "T4"}
+    for rel in ("scripts/colab/run_g4_m3_thunder_run.py", "scripts/colab/remote_g4_driver.py"):
+        src = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        tree = ast.parse(src, filename=rel)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                assert node.value.strip().upper() not in forbidden_gpu_literals, (
+                    f"Forbidden fallback GPU literal {node.value!r} in {rel}"
+                )
+
+
+def test_minimal_source_tarball_preserves_fast_exclusions(tmp_path: Path) -> None:
+    """Preserve fast tarball exclusions (.agents, apps, build, .venv*, node_modules, dist, __pycache__)."""
+    import tarfile
+
+    fake_repo = tmp_path / "repo"
+    (fake_repo / "scripts" / "colab").mkdir(parents=True)
+    (fake_repo / "scripts" / "colab" / "remote_g4_driver.py").write_text("# ok\n", encoding="utf-8")
+    (fake_repo / "scripts" / "colab" / "__pycache__").mkdir()
+    (fake_repo / "scripts" / "colab" / "__pycache__" / "x.pyc").write_bytes(b"pyc")
+    for excluded_rel in (
+        ".agents/secret.md",
+        "apps/vertigcs/node_modules/pkg/index.js",
+        "build/out.bin",
+        ".venv/lib/a.py",
+        ".venv-geo/lib/b.py",
+        "scripts/dist/bundle.js",
+        "docs/big.md",
+        "viz/out.png",
+    ):
+        p = fake_repo / excluded_rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("excluded\n", encoding="utf-8")
+
+    out_tar = tmp_path / "bundle.tar.gz"
+    build_minimal_source_tarball(fake_repo, out_tar)
+    with tarfile.open(out_tar, "r:gz") as tf:
+        names = set(tf.getnames())
+    assert "scripts/colab/remote_g4_driver.py" in names
+    for bad_part in (".agents", "apps", "build", ".venv", ".venv-geo", "node_modules", "dist", "__pycache__", "docs", "viz"):
+        assert not any(bad_part in Path(n).parts for n in names), f"Excluded dir {bad_part!r} leaked into tarball: {names}"
