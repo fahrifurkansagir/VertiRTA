@@ -1,0 +1,36 @@
+name: "Engineering Proposal"
+description: "Propose a scoped enhancement, benchmark, or interface improvement before opening a PR."
+title: "[Proposal]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please discuss architectural changes here **before** submitting a large pull request.
+        All runtime code and weights must strictly follow the **Apache-2.0 / Zero-GPL / Zero-NC / Zero-SA** firewall in `CONTRIBUTING.md`.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Engineering Problem & Motivation"
+      description: "What concrete technical gap or benchmark does this address?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: "Proposed Design & Verification Plan"
+      description: "Which module is affected, and how will determinism/safety be tested?"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: "Architecture & License Checklist"
+      options:
+        - label: "Does NOT introduce GPL/LGPL/AGPL, CC BY-NC, or CC BY-SA runtime dependencies or training data."
+          required: true
+        - label: "Preserves core/flight_core/ freestanding zero-heap bare-metal constraints (or does not touch core/flight_core/)."
+          required: true

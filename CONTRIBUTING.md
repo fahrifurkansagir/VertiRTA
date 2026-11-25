@@ -8,9 +8,10 @@ Thank you for contributing to **VertiRTA**! All contributions are licensed under
 
 ## 1. Governance: DCO 1.1 (No Corporate CLA), Permanent Apache-2.0 Core & License/CVE Firewall
 
-1. **DCO 1.1 Sign-Off (No Corporate CLA):** VertiRTA is governed strictly under **Developer Certificate of Origin (`DCO 1.1`)** (`inbound = outbound` under `Apache-2.0`) with **No Corporate CLA** and no copyright assignment friction. Every commit MUST include a `Signed-off-by:` trailer (`git commit -s`).
-2. **Permanent Apache-2.0 Commitment:** `libvertirta_flight_core`, `libvertirta_rta_companion`, the append-only 256-byte `.vrta` (`VRTA0001`) binary flight-recorder specification/parsers, `VertiRTA-SDK` (`pip install vertirta`), and single-operator `VertiGCS` (including the static GitHub Pages WASM sandbox) remain **Permanent Apache-2.0**.
-3. **Zero-ShareAlike / Zero-NC License & CVE Firewall (`DR-01..DR-13` Hard Gate):**
+1. **DCO 1.1 Sign-Off (No Corporate CLA):** VertiRTA is created and maintained by **Fahri Furkan Sagir** (`@fahrifurkansagir`) and governed strictly under **Developer Certificate of Origin (`DCO 1.1`)** (`inbound = outbound` under `Apache-2.0`) with **No Corporate CLA** and no copyright assignment friction. Every commit MUST include a `Signed-off-by:` trailer (`git commit -s`), and all redistributions or forks MUST retain the root [`NOTICE`](NOTICE) attribution file per Apache-2.0 Section 4(d).
+2. **Contribution Hygiene & Anti-Spam Policy:** Open an issue or engineering proposal before submitting large changes. Unsolicited bulk rewrites, unverified AI-generated spam PRs, and live-flight / non-reproducible hardware troubleshooting issues will be closed to protect maintainer focus and code determinism.
+3. **Permanent Apache-2.0 Commitment:** `libvertirta_flight_core`, `libvertirta_rta_companion`, the append-only 256-byte `.vrta` (`VRTA0001`) binary flight-recorder specification/parsers, `VertiRTA-SDK` (`pip install vertirta`), and single-operator `VertiGCS` (including the static GitHub Pages WASM sandbox) remain **Permanent Apache-2.0**.
+4. **Zero-ShareAlike / Zero-NC License & CVE Firewall (`DR-01..DR-13` Hard Gate):**
    - Training datasets, pretrained teacher/student weights, and runtime libraries MUST be permissive (`Apache-2.0`, `MIT`, `BSD`, `ISC`, `etalab-2.0`, `CDLA-Permissive-1.0`, `CC BY 4.0`, `DL-DE-BY-2.0`, `CC0`, Public Domain).
    - **Hard-Banned in Runtime, Weights, or Bundled Training Sets:**
      - *Licenses:* `GPL` / `LGPL` / `AGPL`, `CC BY-SA`, `CC BY-NC*`, `ODbL` (OSM in training).

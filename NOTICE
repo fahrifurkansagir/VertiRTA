@@ -1,0 +1,35 @@
+VertiRTA — Vertical Run-Time Assurance & Fault-Tolerant Autonomy Platform
+Copyright 2026 Fahri Furkan Sagir (https://github.com/fahrifurkansagir)
+
+Original Author & Creator: Fahri Furkan Sagir
+Canonical Repository:      https://github.com/fahrifurkansagir/VertiRTA
+Live WebAssembly Demo:     https://fahrifurkansagir.github.io/VertiRTA/
+
+Licensed under the Apache License, Version 2.0 (the "License").
+You may obtain a copy of the License in the LICENSE file or at:
+    http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+ATTRIBUTION REQUIREMENT (Apache License 2.0, Section 4(d))
+--------------------------------------------------------------------------------
+Any redistribution of this software, in source or binary form, and any
+Derivative Works built from it MUST retain a readable copy of this NOTICE file
+in at least one of the locations specified in Section 4(d) of the Apache
+License 2.0, preserving original authorship attribution to Fahri Furkan Sagir.
+
+--------------------------------------------------------------------------------
+TRADEMARK & ENDORSEMENT BOUNDARY (Apache License 2.0, Section 6)
+--------------------------------------------------------------------------------
+The Apache License 2.0 does NOT grant permission to use the trade name,
+trademark, or project identity "VertiRTA" or the name "Fahri Furkan Sagir" to
+imply official endorsement, sponsorship, or certification of any fork, product,
+or derivative distribution. Modified forks must clearly state that changes
+were made relative to upstream VertiRTA.
+
+--------------------------------------------------------------------------------
+NON-CERTIFICATION & NO-WARRANTY BOUNDARY (Apache License 2.0, Sections 7 & 8)
+--------------------------------------------------------------------------------
+VertiRTA is an open-source research, simulation, and software-verification
+testbed only. It is NOT a certified airborne product and is NOT approved for
+flight on any manned or unmanned aircraft. Software is provided "AS IS",
+without warranty or liability of any kind.

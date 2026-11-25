@@ -1,0 +1,53 @@
+name: "Bug Report"
+description: "Report a reproducible build, simulation, RTA, MAVLink, or test defect."
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **VertiRTA is an open-source research & simulation testbed (NOT certified for live flight).**
+        Please provide a minimal reproducible command and log. Unreproducible or general hardware troubleshooting posts belong in GitHub Discussions.
+
+  - type: input
+    id: commit
+    attributes:
+      label: "Git Commit SHA or Release Tag"
+      placeholder: "e.g. v1.0.0 / 56deb8d"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: "OS, Compiler / Python Version & Architecture"
+      placeholder: "e.g. Ubuntu 24.04 x86_64, g++ 14.2, Python 3.11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: "Minimal Reproduction Steps"
+      description: "Exact CMake / CTest / pytest / CLI command that triggers the issue."
+      placeholder: |
+        1. cmake --preset dev-linux-x64 && cmake --build --preset dev-linux-x64
+        2. ctest --test-dir build/dev-linux-x64 -R ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Expected vs. Actual Output (Logs)"
+      render: shell
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope_confirm
+    attributes:
+      label: "Scope Confirmation"
+      options:
+        - label: "I searched existing issues/discussions and verified this is a reproducible VertiRTA code defect (not a live-flight or general PX4/ROS2 setup request)."
+          required: true

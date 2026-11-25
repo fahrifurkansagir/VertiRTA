@@ -9,7 +9,7 @@ description = "VertiRTA — Deterministic eVTOL Coaxial-X8 Run-Time Assurance (R
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
-authors = [{ name = "VertiRTA Contributors" }]
+authors = [{ name = "Fahri Furkan Sagir" }]
 keywords = ["evtol", "uam", "runtime-assurance", "control-barrier-functions", "gymnasium", "nanobind", "robotics"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -58,6 +58,7 @@ sdist.include = [
   "config/vehicle_x8_240.yaml",
   "config/istanbul_ltfj_airspace.yaml",
   "LICENSE",
+  "NOTICE",
 ]
 
 [tool.scikit-build.cmake.define]

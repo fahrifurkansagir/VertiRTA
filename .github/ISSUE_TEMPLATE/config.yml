@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Questions, Architecture & Ideas (GitHub Discussions)"
+    url: https://github.com/fahrifurkansagir/VertiRTA/discussions
+    about: "Ask usage questions, discuss GNC/RTA design, or share simulation results here instead of opening an issue."
+  - name: "Security & Safety-Filter Vulnerability Report (Private)"
+    url: https://github.com/fahrifurkansagir/VertiRTA/security/advisories/new
+    about: "Report safety-filter bypasses, memory bugs, or supply-chain issues privately per SECURITY.md."
