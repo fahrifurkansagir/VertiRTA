@@ -1,4 +1,4 @@
-# Local Antigravity / Agent rules (keep personal Obsidian paths out of public repo)
+# Local agent and editor rules
 .agents/
 
 # Build artifacts & CMake outputs

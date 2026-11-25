@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.22)
-project(vertirta_forward_hazard_node VERSION 4.0.0 LANGUAGES C CXX)
+project(vertirta_forward_hazard_node VERSION 1.0.0 LANGUAGES C CXX)
 
 find_package(Threads REQUIRED)
 find_package(ament_cmake QUIET)

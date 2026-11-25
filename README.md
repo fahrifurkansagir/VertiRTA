@@ -64,7 +64,7 @@
     <td width="50%" align="center" valign="top">
       <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="100%" alt="PIDNet-S v2.1 6-Scene Validation Grid">
       <br>
-      <sub><strong>PIDNet-S v2.1 Local Recovery (0.00 CU)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes 0.2468.</sub>
+      <sub><strong>PIDNet-S v2.1 (Local GTX 1650 SUPER)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes 0.2468.</sub>
     </td>
   </tr>
 </table>
@@ -181,7 +181,7 @@ Download verified ONNX weights and 4D `VRTALUT1` tables from the [**v1.0.0 Relea
 - **Open Hardware & SITL:** Physical STM32H753 on-silicon `DWT->CYCCNT` (`PENDING_PHYSICAL_STM32H7_HITL`) and local PX4 v1.16 + Gazebo Harmonic closed-loop SITL (`PENDING_LOCAL_PX4_GZ_SITL`) remain open.
 - **Whisper Negative Ablation:** BVI-LoRA fine-tuning degraded WER vs. Zero-Shot (13.1%–31.7% Zero-Shot retained as default).
 - **Real-Video Domain Shift:** Procedurally trained `WireSeg` triggers false positives on building roofline seams in the NASA Goddard footage (240/240 conservative 15 m/s cap), and bright oblique walls motivate a 3D normal veto (`|n_z| < 0.85`).
-- **Conformal Set Size & Edge GPU Bounds:** Qwen3-4B v3 G4 set size (`|C| = 7.80`) is root-caused in [`qwen3_v3_conformal_raps_diagnostic.json`](artifacts/v4.0.0/qwen3_v3_conformal_raps_diagnostic.json); TU116 Cruise VRAM delta (366 MiB) and WDDM p99 (13.36 ms) are logged verbatim. See [`OPTIONAL_G4_V1_1_BATCH_SPEC.md`](docs/research/OPTIONAL_G4_V1_1_BATCH_SPEC.md) for the v1.1 roadmap.
+- **Conformal Set Size & Edge GPU Bounds:** Qwen3-4B v3 conformal set size (`|C| = 7.80`) is root-caused in [`qwen3_v3_conformal_raps_diagnostic.json`](artifacts/v4.0.0/qwen3_v3_conformal_raps_diagnostic.json); TU116 Cruise VRAM delta (366 MiB) and WDDM p99 (13.36 ms) are logged verbatim. See [`OPTIONAL_G4_V1_1_BATCH_SPEC.md`](docs/research/OPTIONAL_G4_V1_1_BATCH_SPEC.md) for the v1.1 roadmap.
 - **Regulatory Boundary:** VertiRTA is open-source software provided as-is under Apache-2.0 without warranty. References to ASTM F3269, DO-178C, EASA SC-VTOL, Part-IAM, Part-IS, SORA 2.5, and SHGM SHT-İHA describe architectural alignment rather than airworthiness certification; hardware qualification (G5) and certification lifecycle (G6) remain open in [`docs/SAFETY_CASE.md`](docs/SAFETY_CASE.md).
 
 ---

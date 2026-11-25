@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(VertiRTA_Firmware_Host_Tests VERSION 3.0.0 LANGUAGES C CXX)
+project(VertiRTA_Firmware_Host_Tests VERSION 1.0.0 LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)

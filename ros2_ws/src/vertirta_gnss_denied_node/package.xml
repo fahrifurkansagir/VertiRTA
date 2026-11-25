@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vertirta_gnss_denied_node</name>
-  <version>4.0.0</version>
+  <version>1.0.0</version>
   <description>GNSS-denied Basalt VIO + H0..H3 MCUSUM spoof guard + XFeat/MegaLoc reloc + 3-sigma dh/dt CTR inflation node</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

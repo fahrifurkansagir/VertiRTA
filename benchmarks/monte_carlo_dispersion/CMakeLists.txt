@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(VertiRTAMonteCarloDispersion VERSION 4.0.0 LANGUAGES C CXX)
+  project(VertiRTAMonteCarloDispersion VERSION 1.0.0 LANGUAGES C CXX)
   option(VERTIRTA_ENABLE_STRICT_FP "Enforce IEEE-754 deterministic FP flags" ON)
   set(VERTIRTA_STRICT_FP_FLAGS
     -fno-fast-math

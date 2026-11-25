@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// VertiRTA v3.5.0 VertiGCS 20-eVTOL U-Space Fleet & Part-IS Cyber Simulator Types
+// VertiRTA v1.0.0 VertiGCS 20-eVTOL U-Space Fleet & Part-IS Cyber Simulator Types
 
 export type FleetCyberState =
   | "SEC_NOMINAL"

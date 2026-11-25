@@ -58,7 +58,7 @@ def validate_port(port: int) -> int:
     p = int(port)
     if p in FORBIDDEN_PORTS:
         raise ValueError(
-            f"Port {p} is forbidden by AEGIS-VTOL port isolation lock "
+            f"Port {p} is forbidden by VertiRTA port isolation policy "
             f"(forbidden={sorted(FORBIDDEN_PORTS)}; use {DEFAULT_CESIUM_PORT})"
         )
     if not (1024 <= p <= 65535):

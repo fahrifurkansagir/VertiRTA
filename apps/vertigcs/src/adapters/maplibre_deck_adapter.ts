@@ -48,7 +48,7 @@ export function validateLivePort(port: number): number {
   const p = Math.trunc(port);
   if (FORBIDDEN_PORTS.has(p)) {
     throw new Error(
-      `Port ${p} is forbidden by AEGIS-VTOL port isolation lock (use 5180 or 8891)`
+      `Port ${p} is forbidden by VertiRTA port isolation policy (use 5180 or 8891)`
     );
   }
   if (p < 1024 || p > 65535) {

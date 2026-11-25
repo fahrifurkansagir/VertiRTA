@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 3.25)
-  project(VertiRTAUspaceFleetTests VERSION 3.5.0 LANGUAGES C CXX)
+  project(VertiRTAUspaceFleetTests VERSION 1.0.0 LANGUAGES C CXX)
   include(CTest)
   include(FetchContent)
 

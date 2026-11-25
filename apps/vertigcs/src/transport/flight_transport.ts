@@ -36,7 +36,7 @@ export function parseLaunchMode(search: string): LaunchConfig {
   const adapter: ViewportAdapterKind =
     rawAdapter === "cesium-bridge" ? "cesium-bridge" : "maplibre-deck";
 
-  // Always enforce AEGIS-VTOL port isolation on WebSocket URLs
+  // Always enforce VertiRTA port isolation policy on WebSocket URLs
   try {
     const parsed = new URL(wsUrl);
     if (parsed.port) {

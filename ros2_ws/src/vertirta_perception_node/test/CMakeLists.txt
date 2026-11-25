@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(vertirta_perception_node_tests VERSION 2.0.0 LANGUAGES C CXX)
+project(vertirta_perception_node_tests VERSION 1.0.0 LANGUAGES C CXX)
 
 option(VERTIRTA_ENABLE_ASAN_UBSAN "Enable ASan + UBSan" OFF)
 

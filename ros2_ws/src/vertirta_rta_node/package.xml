@@ -4,7 +4,7 @@
   <name>vertirta_rta_node</name>
   <version>1.0.0</version>
   <description>4-thread lock-free SPSC/Seqlock 100 Hz HJI-CBVF-QP RTA node for VertiRTA-X8-240</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

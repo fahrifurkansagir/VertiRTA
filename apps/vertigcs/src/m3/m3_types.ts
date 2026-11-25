@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// VertiRTA M3 (v4.0.0) Browser-Side Telemetry Contracts (0 B added to flight_core or WASM)
+// VertiRTA v1.0.0 Browser-Side M3 Telemetry Contracts (0 B added to flight_core or WASM)
 
 export const VERIFIED_LTFJ_ARP = {
   latDeg: 40.898333,

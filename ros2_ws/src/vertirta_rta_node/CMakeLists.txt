@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(vertirta_rta_node VERSION 3.5.1 LANGUAGES CXX)
+project(vertirta_rta_node VERSION 1.0.0 LANGUAGES CXX)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)

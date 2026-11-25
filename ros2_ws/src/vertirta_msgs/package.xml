@@ -4,7 +4,7 @@
   <name>vertirta_msgs</name>
   <version>1.0.0</version>
   <description>ROS 2 Jazzy message, service, and action contracts for VertiRTA v1.0/v2.0</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

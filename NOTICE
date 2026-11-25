@@ -27,9 +27,9 @@ or derivative distribution. Modified forks must clearly state that changes
 were made relative to upstream VertiRTA.
 
 --------------------------------------------------------------------------------
-NON-CERTIFICATION & NO-WARRANTY BOUNDARY (Apache License 2.0, Sections 7 & 8)
+REGULATORY & NO-WARRANTY BOUNDARY (Apache License 2.0, Sections 7 & 8)
 --------------------------------------------------------------------------------
-VertiRTA is an open-source research, simulation, and software-verification
-testbed only. It is NOT a certified airborne product and is NOT approved for
-flight on any manned or unmanned aircraft. Software is provided "AS IS",
-without warranty or liability of any kind.
+VertiRTA is open-source flight-control and run-time assurance software provided
+"AS IS" under the Apache License 2.0, without warranty or liability of any kind.
+References to aviation standards describe architectural alignment and do not
+constitute airworthiness certification or operational flight approval.

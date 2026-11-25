@@ -1,6 +1,6 @@
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   cmake_minimum_required(VERSION 3.25)
-  project(VertiRTA_AirframesTests VERSION 3.5.0 LANGUAGES C CXX)
+  project(VertiRTA_AirframesTests VERSION 1.0.0 LANGUAGES C CXX)
   include(CTest)
   include(FetchContent)
   option(VERTIRTA_ENABLE_STRICT_FP "Enforce IEEE-754 deterministic FP flags" ON)

@@ -2,9 +2,9 @@
 
 ## 1. Scope & Safety-Critical Operational Disclaimer
 
-**VertiRTA** (`libvertirta_flight_core`, `libvertirta_rta_companion`, `vertirta_copilot`, `vertirta_stl_monitor`, `vertirta_slz_bayes`, and ROS 2 bridge packages) is an open-source research, simulation, and software-verification testbed. **It is NOT certified for live flight on manned or unmanned aircraft.**
+**VertiRTA** (`libvertirta_flight_core`, `libvertirta_rta_companion`, `vertirta_copilot`, `vertirta_stl_monitor`, `vertirta_slz_bayes`, `vertirta_mavlink_rta_bridge`, and ROS 2 bridge packages) is open-source flight-control and run-time assurance software (not certified for live flight).
 
-Within this software testbed, VertiRTA explicitly models aviation cybersecurity and run-time assurance boundaries informed by **`ASTM F3269-21`** and **Commission Implementing Regulation (EU) 2023/203 (`Part-IS`)** (information security risk management for aviation and U-space service providers, applicable February 22, 2026).
+Within this codebase, VertiRTA explicitly models aviation cybersecurity and run-time assurance boundaries informed by **`ASTM F3269-21`** and **Commission Implementing Regulation (EU) 2023/203 (`Part-IS`)** (information security risk management for aviation and U-space service providers, applicable February 22, 2026).
 
 ---
 
@@ -16,7 +16,7 @@ Within this software testbed, VertiRTA explicitly models aviation cybersecurity 
 | **`libvertirta_rta_companion` (C++20, 100 Hz)** | **Trusted Safety Filter (`ASTM F3269`)** | FIPS 180-4 SHA-256 verification on `mmap` LUTs (`VRTALUT1`, `VRTACEL2`) rejecting tampered payloads; Castagnoli CRC-32C framing on `.vrta` headers (`128 B`) and frames (`256 B`); hard `LTFJ`/`LTBX` CTR exclusion barriers. |
 | **Pillar 2 Co-Pilot (`vertirta_copilot`, `DAL E`)** | **Untrusted Advisory Complex Function** | Eager GBNF grammar clamping output to `<= 30` ASCII tokens; explicit rejection of `<think>` / `/think` prompt-injection payloads; fail-closed Z3 `QF_LRA` verifier (`rlimit=250000`, `12 ms` timeout); immutable `shield_active = true`; zero closed-loop actuation write path. |
 | **Pillar 3 Visual SLZ (`vertirta_slz_bayes`, `DAL E`)** | **Untrusted Advisory Perception** | Zero-ShareAlike startup license gate; Free-Energy OOD variance floor + precision cap preventing adversarial tarp/clutter false-safe collapse; hard `> 250 ms` frame staleness rejection; isolated from 100 Hz RTA via lock-free SPSC queues. |
-| **Telemetry / U-Space Surface (`Part-IS` Alignment)** | **External Network Interface** | Local visualization ports isolated (`:5180` CesiumJS, `:8891` Foxglove, `:8888` MicroXRCE); planned `v3.5+` U-Space (`ASTM F3548-21` / `F3411-22a`) and GNSS anti-spoofing (`CUSUM/GLRT`) layers treat all external network/RF inputs as untrusted until authenticated and cross-checked. |
+| **Telemetry, MAVLink v2 & U-Space (`Part-IS` Alignment)** | **External Network Interface** | Local visualization ports isolated (`:5180` CesiumJS, `:8891` Foxglove, `:8888` MicroXRCE); `Part-IS (EU) 2023/203` `40 B` `VertiRtaSecureHeader` + `ReplayWindow128` + pinned `libsodium >= 1.0.21` + `RTO <= 10 s` FSM, `ASTM F3548-21`/`F3411-22a` DRIP, `MCUSUM` GNSS anti-spoofing, and clean-room MAVLink v2 CRC-16/deadman shield treat all external network/RF inputs as untrusted until authenticated and cross-checked. |
 
 ---
 

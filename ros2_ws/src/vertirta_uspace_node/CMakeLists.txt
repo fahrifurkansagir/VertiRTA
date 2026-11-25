@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.22)
-project(vertirta_uspace_node VERSION 3.5.0 LANGUAGES CXX)
+project(vertirta_uspace_node VERSION 1.0.0 LANGUAGES CXX)
 
 find_package(Threads REQUIRED)
 find_package(ament_cmake QUIET)

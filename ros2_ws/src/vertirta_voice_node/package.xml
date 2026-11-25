@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vertirta_voice_node</name>
-  <version>4.0.0</version>
+  <version>1.0.0</version>
   <description>Asynchronous bilingual TR/EN voice ATC, 4-stratum SNR Mondrian KnowNo gate, Z3 corridor bridge, and .vrta_events.jsonl sidecar node</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

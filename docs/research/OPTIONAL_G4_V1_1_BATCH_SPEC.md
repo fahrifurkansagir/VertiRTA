@@ -1,19 +1,19 @@
-# VertiRTA Optional `v1.1` Colab G4 Batch Specification (`0.00 CU` Blueprint)
+# VertiRTA `v1.1` GPU ML Upgrade Specification
 
-**Status:** `BLUEPRINT_ONLY_ZERO_CU_SPENT` — Prepared locally at `0.00 CU` so that if/when Colab G4 (`NVIDIA RTX PRO 6000 Blackwell`, `96 GB` VRAM) capacity opens later, a single, zero-waste, license-clean batch closes all four genuine `v1.0.0` ML/data gaps in **< 45 minutes (~8–12 CU)**.  
+**Status:** `ROADMAP_SPEC` — Consolidated training and evaluation specification targeting a single high-memory GPU batch (`~35–42 min` on an `80–96 GB` workstation/cloud GPU) to close all four genuine `v1.0.0` ML/data gaps.  
 **License Policy:** **STRICT ZERO `GPL` / `CC-BY-NC` / `CC-BY-SA` IN TRAINING OR MODEL WEIGHTS.** Non-commercial or ShareAlike benchmarks are strictly quarantined to **zero-shot eval-only** (`used_in_training: false`, `used_in_calibration: false`) and never bundled in git or release tarballs.
 
 ---
 
 ## 1. Scope: Only the 4 Genuine GPU-Justified Gaps
 
-| # | Workstream | `v1.0.0` Baseline Gap | `v1.1` Target Gate | Est. G4 Time |
+| # | Workstream | `v1.0.0` Baseline Gap | `v1.1` Target Gate | Est. GPU Time |
 | --- | --- | --- | --- | --- |
 | **G4-1** | **Forward WireSeg + Obstacle Fine-Tune** | `0` real `TTPLA` frames ingested; **`240/240` (`100%`) roofline FPs** on NASA Goddard video (`586` spurious boxes) | NASA video WireSeg FP **`< 5%` (`<= 12/240` frames)**; held-out real `TTPLA` `clDice >= 0.80`; `D-FINE-N` spurious boxes `< 20` | ~12 min |
 | **G4-2** | **Qwen3-4B v3 Temp-Scaled Mondrian RAPS Finalize** | `|C| = 7.803` (Lang) / `7.601` (SNR), **`singleton_exec_pct = 0.0%`** (100% clarify) | **`|C| < 2.50`**, **`singleton_exec_pct > 50.0%`**, preserve **Mondrian coverage `>= 95.0%`** across all Lang & SNR strata | ~4 min |
 | **G4-3** | **Whisper-Large-v3-Turbo Low-LR BVI LoRA + Replay** | 3-ep LoRA (`r=32`, high LR) degraded WER (`13.14% -> 17.97%` `S0_Clean`, `31.74% -> 35.36%` `S3_Garbled`) | Beat Zero-Shot on **all 4 SNR strata** (`S0_Clean < 13.14%`, `S2_Hover < 18.0%`, `S3_Garbled < 29.0%`) | ~14 min |
 | **G4-4** | **Zero-Shot `ICG Drone` + `UAVScenes` Eval (Paper 2)** | 4 `PENDING_EVAL_ONLY_REAL_IMAGERY` cells in `docs/paper_corl/corl_metrics_manifest.json` | Populate all 4 cells (`mIoU` + `FSR`) using frozen `pidnet_slz_v21_local_gtx_opset17.onnx` (`0` retraining) | ~5 min |
-| **Total** | **Single Consolidated Wave (`v1.1` G4 Batch)** | — | All 4 gates PASS + fail-closed `ingest_g4_bundle.py` | **~35–42 min (~8–12 CU)** |
+| **Total** | **Single Consolidated `v1.1` Batch** | — | All 4 gates PASS + fail-closed `ingest_g4_bundle.py` | **~35–42 min** |
 
 ---
 
@@ -51,7 +51,7 @@ In `artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json`, `fit_mondrian_conform
 
 #### Exact Zero-Retrain Procedure
 1. **Load Existing Checkpoint:** Load `Qwen/Qwen3-4B` (BF16) + frozen `qwen3_4b_v3_seed0_lora` (`adapter_dir` from `v1.0.0` release blob — **0 training steps!**).
-2. **Save Per-Sample Branch Log-Probs:** Run teacher-forced completion-only sliced `log_softmax` (`row_batch_size=8`, `n_cal=2,000` + `n_test=1,200`, ~3.5 min on G4) and **persist** `qwen3_v3_seed0_branch_logprobs.npz` to blobs so all future conformal ablations run locally at **`0.00 CU`**.
+2. **Save Per-Sample Branch Log-Probs:** Run teacher-forced completion-only sliced `log_softmax` (`row_batch_size=8`, `n_cal=2,000` + `n_test=1,200`, ~3.5 min on GPU) and **persist** `qwen3_v3_seed0_branch_logprobs.npz` so all future conformal ablations run locally on CPU.
 3. **Apply Temperature-Scaled Mondrian RAPS (Strictly Calibration-Split Fit):**
    - On `cal` (`n=2,000`), run 5-fold CV over `(gamma in {0.5, 0.75, 1.0}, tau_opt via NLL, k_reg in {1, 2}, lam_reg in {0.01, 0.05, 0.10, 0.20})` using Regularized Adaptive Prediction Sets (RAPS):
      `s_RAPS(x, y) = sum_{j: pi_j > pi_y} pi_j + U * pi_y + lam_reg * max(0, rank(y) - k_reg)`
@@ -96,29 +96,29 @@ In `artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json`, `fit_mondrian_conform
 
 ---
 
-## 3. Single-Command G4 Runbook & Compute Budget
+## 3. Single-Command GPU Runbook & Memory Budget
 
-| Stage | Command (Inside Colab G4 Runtime) | VRAM Cap | Wall-Clock | Est. CU |
-| --- | --- | --- | --- | --- |
-| **Preflight** | `python3 scripts/colab/run_g4_v11_batch.py --dry-run --check-licenses` | `0 GB` | `10 s` | `0.00` |
-| **Wave 1A (Parallel)** | `G4-1` (WireSeg+DFINE, `0.35` VRAM) + `G4-2` (Qwen3 RAPS finalize, `0.30` VRAM) + `G4-4` (ICG+UAVScenes ONNX eval, `0.15` VRAM) | `76 GB` (`80%`) | `~14 min` | `~4.0` |
-| **Wave 1B (Serial)** | `G4-3` (Whisper-v3-turbo low-LR LoRA + clean replay + merge + 4-stratum eval, `0.45` VRAM) | `44 GB` (`45%`) | `~14 min` | `~4.0` |
-| **Pack & Hash** | Tar verified `< 1 MB` JSONs -> `vertirta_v110_artifacts.tar.gz` + ONNX/NPZ/LoRA -> `vertirta_v110_blobs.tar.gz` + `remote_bundle_manifest.json` | `0 GB` | `~2 min` | `~0.5` |
-| **Total** | **1 Single Notebook Invocation** | `<= 80%` | **`~30–40 min`** | **`~8.5–12 CU`** |
+| Stage | Command | VRAM Cap | Wall-Clock |
+| --- | --- | --- | --- |
+| **Preflight** | `python3 scripts/colab/run_g4_v11_batch.py --dry-run --check-licenses` | `0 GB` | `10 s` |
+| **Stage 1A (Parallel)** | `G4-1` (WireSeg+DFINE, `0.35` VRAM) + `G4-2` (Qwen3 RAPS finalize, `0.30` VRAM) + `G4-4` (ICG+UAVScenes ONNX eval, `0.15` VRAM) | `76 GB` (`80%`) | `~14 min` |
+| **Stage 1B (Serial)** | `G4-3` (Whisper-v3-turbo low-LR LoRA + clean replay + merge + 4-stratum eval, `0.45` VRAM) | `44 GB` (`45%`) | `~14 min` |
+| **Pack & Hash** | Tar verified `< 1 MB` JSONs -> `vertirta_v110_artifacts.tar.gz` + ONNX/NPZ/LoRA -> `vertirta_v110_blobs.tar.gz` + `remote_bundle_manifest.json` | `0 GB` | `~2 min` |
+| **Total** | **1 Single Batch Invocation** | `<= 80%` | **`~30–40 min`** |
 
 ```bash
-# Single-command Colab G4 invocation (execute ONLY when user authorizes v1.1 G4 run):
+# Single-command GPU batch invocation:
 python3 scripts/colab/run_g4_v11_batch.py \
-  --work-dir /content/vertirta_v11_run \
-  --drive-out-dir /content/drive/MyDrive/VertiRTA_v110 \
-  --v10-blobs-dir /content/drive/MyDrive/VertiRTA_v400/blobs \
-  --icg-archive /content/drive/MyDrive/VertiRTA_EvalOnly/icg_semantic_drone.zip \
+  --work-dir "$WORK_DIR" \
+  --drive-out-dir "$OUT_DIR" \
+  --v10-blobs-dir "$V10_BLOBS_DIR" \
+  --icg-archive "$ICG_ARCHIVE_ZIP" \
   --jobs g4_1_wireseg_ohem,g4_2_qwen3_raps,g4_3_whisper_lowlr,g4_4_icg_uavscenes_eval
 ```
 
 ---
 
-## 4. Fail-Closed Local Ingestion & Verification Checklist (`0.00 CU`)
+## 4. Fail-Closed Local Ingestion & Verification Checklist
 
 After downloading `vertirta_v110_artifacts.tar.gz` and `vertirta_v110_blobs.tar.gz` locally, ingest fail-closed using the existing hardened `scripts/colab/ingest_g4_bundle.py`:
 

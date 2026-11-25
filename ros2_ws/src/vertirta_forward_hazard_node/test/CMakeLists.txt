@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.22)
-project(vertirta_forward_hazard_node_tests VERSION 4.0.0 LANGUAGES C CXX)
+project(vertirta_forward_hazard_node_tests VERSION 1.0.0 LANGUAGES C CXX)
 
 option(VERTIRTA_ENABLE_ASAN_UBSAN "Enable ASan + UBSan" OFF)
 

@@ -7,7 +7,7 @@ This folder holds the double-anonymous 8-page Conference on Robot Learning (CoRL
 - **Neutral Deterministic RTA Cage:** Treats the underlying bare-metal HJI-CBVF-QP + INDI-WLS safety filter as an external deterministic verifier without revealing repository or author identity.
 - **Honest Provenance & Zero-Fabrication Contract:**
   - `VertiBench-v2` is tagged `PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_V2`.
-  - All 16 Phase-3 `phase3_g4_slots` are populated from live `artifacts/v4.0.0/*.json` artifacts (including the `0.00 CU` local `GTX 1650 SUPER` recovery alongside the honest G4 Epoch-2 selector collapse ablation and paired Whisper BVI-LoRA negative ablation).
+  - All 16 Phase-3 `phase3_g4_slots` are populated from live `artifacts/v4.0.0/*.json` artifacts (including the local `GTX 1650 SUPER` recovery alongside the honest Epoch-2 selector collapse ablation and paired Whisper BVI-LoRA negative ablation).
   - Unrun external real-imagery datasets (`ICG Drone`, `UAVScenes`) remain `PENDING_EVAL_ONLY_REAL_IMAGERY` (`\text{--}`).
   - Research and software-verification testbed ONLY; no airworthiness certification claim.
 

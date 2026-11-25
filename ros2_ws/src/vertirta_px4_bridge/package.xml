@@ -4,7 +4,7 @@
   <name>vertirta_px4_bridge</name>
   <version>1.0.0</version>
   <description>PX4 v1.16 ROS 2 Jazzy bridge via Auterion px4-ros2-interface-lib (VertiRtaMode + VertiRtaExecutor)</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

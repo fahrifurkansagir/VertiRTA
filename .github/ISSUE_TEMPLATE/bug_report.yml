@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        **VertiRTA is an open-source research & simulation testbed (NOT certified for live flight).**
-        Please provide a minimal reproducible command and log. Unreproducible or general hardware troubleshooting posts belong in GitHub Discussions.
+        **VertiRTA is open-source flight-control & RTA software (not certified for live flight).**
+        Please provide a minimal reproducible command and log. General questions belong in GitHub Discussions.
 
   - type: input
     id: commit

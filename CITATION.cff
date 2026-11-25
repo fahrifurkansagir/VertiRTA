@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If you use VertiRTA in academic research, simulation, or software verification, please cite it using the metadata below. Research testbed only; zero airworthiness certification claim."
-title: "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Formally Verified Coaxial eVTOL Control, Multi-Aircraft U-Space & Bilingual Contingency Testbed"
+message: "If you use VertiRTA in engineering, simulation, or academic work, please cite it using the metadata below."
+title: "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Coaxial eVTOL Control, Multi-Aircraft U-Space & Bilingual Autonomy Platform"
 type: software
 version: "1.0.0"
 date-released: "2026-11-25"
@@ -25,14 +25,14 @@ keywords:
   - part-is
   - embedded-cpp
 abstract: >-
-  Open-source Apache-2.0 research, simulation, and software-verification testbed
-  for a 240 kg coaxial X8 urban eVTOL (VertiRTA-X8-240) and 8+1 Lift+Cruise
-  transition platform along the Istanbul Maltepe-Dragos-Kartal coastal corridor
-  bounded by real DHMI AIP LTFJ/LTBX control zones. Combines a freestanding
-  zero-heap 400 Hz ARM Cortex-M7 C++17 flight core (28,886 B Flash, 0 B static
-  RAM, 2,960 B stack DAG), a 100 Hz GPU-solved 4D HJI-CBVF-QP safety filter,
-  live ESBMC v8.7.0 supplemental formal proofs (1,905/1,905 properties), live
-  Renode dual-FCC OpenCyphal CAN-FD SIL (12.50 ms failover), a <150 KiB
-  single-threaded WebAssembly VertiGCS console, a nanobind Python/Gymnasium SDK,
-  20-eVTOL U-Space + Part-IS (EU) 2023/203 security, and isolated advisory
+  Open-source Apache-2.0 deterministic flight-control, run-time assurance (RTA),
+  and verification platform for a 240 kg coaxial X8 urban eVTOL (VertiRTA-X8-240)
+  and 8+1 Lift+Cruise transition aircraft along the Istanbul Maltepe-Dragos-Kartal
+  coastal corridor bounded by DHMI AIP LTFJ/LTBX control zones. Combines a
+  freestanding zero-heap 400 Hz ARM Cortex-M7 C++17 flight core (28,886 B Flash,
+  0 B static RAM, 2,960 B stack DAG), a 100 Hz GPU-solved 4D HJI-CBVF-QP safety
+  filter, zero-GPL MAVLink v2 UDP offboard RTA shield, ESBMC v8.7.0 supplemental
+  formal proofs (1,905/1,905 properties), Renode dual-FCC OpenCyphal CAN-FD SIL
+  (12.50 ms failover), a 38.5 KiB WebAssembly VertiGCS console, a nanobind
+  Python/Gymnasium SDK, 20-eVTOL U-Space + Part-IS security, and isolated
   bilingual Z3 Co-Pilot and zero-ShareAlike visual SLZ stacks.

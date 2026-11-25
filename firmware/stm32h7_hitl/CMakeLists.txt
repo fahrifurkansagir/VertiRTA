@@ -9,7 +9,7 @@ set(CMAKE_C_COMPILER arm-none-eabi-gcc)
 set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
 set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
 
-project(VertiRTA_STM32H7_HITL VERSION 3.0.0 LANGUAGES C CXX ASM)
+project(VertiRTA_STM32H7_HITL VERSION 1.0.0 LANGUAGES C CXX ASM)
 
 get_filename_component(VERTIRTA_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 

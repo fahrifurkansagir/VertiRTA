@@ -4,7 +4,7 @@
 # @type Octorotor Coaxial X
 # @class Copter
 #
-# @maintainer VertiRTA Flight Controls <vertirta@aegis-vtol.local>
+# @maintainer Fahri Furkan Sagir <fahrifurkansagir@users.noreply.github.com>
 #
 # PX4 v1.16 POSIX SITL Airframe (DR-1 Erratum #3 & DR-2 CEL Locks):
 #   VERTIRTA_USE_INDI=1 (default): launches rc.vertirta_apps (400 Hz mc_indi_wls_control)

@@ -2,7 +2,7 @@
 
 Thank you for contributing to **VertiRTA**! All contributions are licensed under the **Apache License 2.0** ([LICENSE](LICENSE)).
 
-> **Non-Certification Scope:** VertiRTA is an open-source research, simulation, and software-verification testbed only. Never commit documentation or paper edits that claim DO-178C, DO-254, EASA `SC-VTOL-02`, `SORA 2.5`, or `SHGM SHT-İHA` certification or operational compliance.
+> **Regulatory Scope:** VertiRTA is open-source flight-control and run-time assurance software (not certified for live flight). Never commit documentation or paper edits that claim DO-178C, DO-254, EASA `SC-VTOL-02`, `SORA 2.5`, or `SHGM SHT-İHA` certification or operational compliance.
 
 ---
 

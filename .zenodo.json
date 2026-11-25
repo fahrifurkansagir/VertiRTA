@@ -1,10 +1,10 @@
 {
-  "title": "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Formally Verified Coaxial eVTOL Control, Multi-Aircraft U-Space, and Verified Bilingual Autonomy Testbed",
+  "title": "VertiRTA: Bare-Metal Fault-Tolerant Run-Time Assurance, Coaxial eVTOL Control, Multi-Aircraft U-Space, and Bilingual Autonomy Platform",
   "upload_type": "software",
   "version": "1.0.0",
   "license": "Apache-2.0",
   "language": "eng",
-  "description": "Open-source, 100% Apache-2.0 research and software-verification testbed for the VertiRTA-X8-240 240 kg coaxial X8 urban eVTOL and 8+1 Lift+Cruise platform along Istanbul's Maltepe-Dragos-Kartal coastal corridor bounded by official DHMI AIP LTFJ/LTBX CTRs. Integrates a freestanding zero-heap bare-metal C++17 flight core (28,886 B Cortex-M7 Flash, 0 B static RAM, 2,960 B stack DAG), STM32H753 ITCM/DTCM HITL firmware, live Renode dual-FCC OpenCyphal CAN-FD SIL (12.50 ms failover), live ESBMC v8.7.0 supplemental formal proofs (1,905/1,905 properties), 100 Hz GPU-solved 4D HJI-CBVF-QP safety filter with exact paired 30,000-sim CSFL/CEL atlas (95.98% CSFL / 100.00% CEL), <150 KiB single-threaded WebAssembly VertiGCS console, nanobind Python/Gymnasium SDK, air-gapped VRTAWND1/BVI aeroacoustics (0-GPL verified), 20-eVTOL U-Space + Part-IS (EU) 2023/203 cybersecurity + separate-context two-tier Fleet Z3, and isolated DAL E bilingual Qwen3-4B Z3-GRPO co-pilot and zero-ShareAlike PIDNet-S active visual SLZ perception. Research testbed only; zero airworthiness certification claim.",
+  "description": "Open-source Apache-2.0 deterministic flight-control, run-time assurance (RTA), and verification platform for the VertiRTA-X8-240 coaxial X8 eVTOL and 8+1 Lift+Cruise aircraft along Istanbul's Maltepe-Dragos-Kartal coastal corridor bounded by DHMI AIP LTFJ/LTBX CTRs. Integrates a freestanding zero-heap bare-metal C++17 flight core (28,886 B Cortex-M7 Flash, 0 B static RAM, 2,960 B stack DAG), STM32H753 ITCM/DTCM firmware, Renode dual-FCC OpenCyphal CAN-FD SIL (12.50 ms failover), ESBMC v8.7.0 supplemental formal proofs (1,905/1,905 properties), 102.85M-node 4D HJI-CBVF-QP safety filter, 1,000+180 C++20 Monte Carlo failure-boundary suite, zero-GPL MAVLink v2 UDP RTA shield (p50 = 18.0 us), 38.5 KiB WebAssembly VertiGCS console, nanobind Python/Gymnasium SDK, 20-eVTOL U-Space + Part-IS cybersecurity + Fleet Z3, and isolated bilingual Qwen3-4B Z3-GRPO co-pilot and zero-ShareAlike PIDNet-S visual SLZ perception.",
   "creators": [
     {
       "name": "Sagir, Fahri Furkan",
@@ -29,6 +29,6 @@
     "ROS 2 Jazzy",
     "PX4"
   ],
-  "notes": "Research, simulation, and software-verification testbed only. Does NOT claim DO-178C, DO-254, DO-330, EASA SC-VTOL, Part-IS, SORA 2.5, or SHGM SHT-IHA airworthiness certification or operational compliance.",
+  "notes": "Open-source Apache-2.0 software provided as-is without warranty. References to DO-178C, DO-254, DO-330, EASA SC-VTOL, Part-IS, SORA 2.5, and SHGM SHT-IHA describe architectural alignment rather than airworthiness certification.",
   "access_right": "open"
 }

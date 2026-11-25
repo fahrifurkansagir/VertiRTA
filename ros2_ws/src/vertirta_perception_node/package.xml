@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vertirta_perception_node</name>
-  <version>2.0.0</version>
+  <version>1.0.0</version>
   <description>20-30+ Hz Active Visual SLZ perception ROS 2 Jazzy node (PIDNet-S ORT + 1.5625 MiB Bayesian Grid)</description>
-  <maintainer email="vertirta@aegis-vtol.local">VertiRTA Autonomy</maintainer>
+  <maintainer email="fahrifurkansagir@users.noreply.github.com">Fahri Furkan Sagir</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
