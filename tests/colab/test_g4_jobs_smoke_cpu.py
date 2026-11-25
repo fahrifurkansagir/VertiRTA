@@ -98,6 +98,9 @@ def test_orchestrator_dry_run_lists_all_five_jobs_with_exact_wave_caps() -> None
 
 def test_full_five_job_remote_driver_smoke_cpu_and_tu116_edge_gate(tmp_path: Path) -> None:
     """Execute ALL 5 G4 jobs through remote_g4_driver --smoke-cpu + TU116 edge bench at 0.00 CU."""
+    pytest.importorskip("torch")
+    pytest.importorskip("onnx")
+    pytest.importorskip("onnxruntime")
     art_dir = tmp_path / "artifacts"
     blob_dir = tmp_path / "blobs"
 

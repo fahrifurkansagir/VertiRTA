@@ -1,0 +1,747 @@
+{
+  "schema_version": "vertirta.local_gtx1650s_pidnet_v21_recovery_metrics/v4.0.0",
+  "mode": "LIVE_LOCAL_GTX1650S_CUDA_FP16",
+  "weights_status": "TRAINED_LOCAL_GTX1650S_RECOVERY_V21_ZERO_CU",
+  "cu_consumed": 0.0,
+  "timestamp_utc": "2026-11-25T14:23:40.260143+00:00",
+  "hardware": {
+    "device": "cuda:0",
+    "gpu_name": "NVIDIA GeForce GTX 1650 SUPER",
+    "amp_dtype": "float16",
+    "peak_cuda_allocated_mib": 2595.97,
+    "peak_cuda_reserved_mib": 2644.0,
+    "python_version": "3.12.16",
+    "torch_version": "2.15.0+cu132",
+    "nvidia_smi": {
+      "timestamp_utc": "2026-11-25T14:23:40.264837+00:00",
+      "available": true,
+      "name": "NVIDIA GeForce GTX 1650 SUPER",
+      "driver_version": "621.24",
+      "memory_used_mib": 1835.0,
+      "memory_total_mib": 4096.0,
+      "gpu_util_pct": 34.0,
+      "mem_util_pct": 11.0,
+      "power_w": 20.12,
+      "temp_c": 49.1,
+      "compute_apps": []
+    }
+  },
+  "timing_sec": {
+    "data_prep_sec": 386.89,
+    "train_wall_sec": 1485.59,
+    "total_wall_sec": 2473.075
+  },
+  "license_audit": {
+    "job_name": "local_gtx1650s_pidnet_v21_recovery",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "FLAIR-1",
+      "OpenEarthMap_Permissive_Whitelist",
+      "FloodNet-Supervised-v1.0",
+      "SkyScenes"
+    ],
+    "eval_only_source_names": [
+      "AeroScapes",
+      "ICG_Semantic_Drone",
+      "UAVScenes"
+    ],
+    "model_names": [
+      "PIDNet-S",
+      "DINOv2-Large",
+      "Depth-Anything-V2-Small",
+      "XFeat_LighterGlue",
+      "MegaLoc"
+    ],
+    "oem_attribution_audit": {
+      "origin": "https://open-earth-map.org/attribution.html",
+      "sha256": "54d65e87141862f1ab7ccddf18c5d810d4f4fff8761977d1c57f31d02ac564f6",
+      "total_region_rows": 102,
+      "license_breakdown": {
+        "<blank>": 12,
+        "CC BY 4.0": 37,
+        "CC BY-NC-SA 4.0": 36,
+        "CC BY-SA 4.0": 6,
+        "DL-DE-BY-2.0": 6,
+        "Public domain": 5
+      }
+    },
+    "oem_permissive_region_count": 38,
+    "startup_gate_approved_train": [
+      "FLAIR-1",
+      "OpenEarthMap",
+      "FloodNet-Supervised-v1.0",
+      "SkyScenes"
+    ],
+    "quarantined_eval_entries": [
+      "AeroScapes"
+    ]
+  },
+  "skyscenes_nested_tar_filter_active": true,
+  "datasets": [
+    {
+      "source": "FLAIR-1",
+      "license": "OPEN LICENCE 2.0 (etalab-2.0)",
+      "uses_osm_odbl": false,
+      "archive_url": "https://storage.gra.cloud.ovh.net/v1/AUTH_366279ce616242ebb14161b7991a8461/defi-ia/flair_data_1/flair_1_toy_dataset.zip",
+      "reused_local_cache": true,
+      "archive_mb": 215.69,
+      "archive_sha256": "dd6075d6d10e862ab48dd0f13236c40b1a491df0ee5403f403632f1c9539d858",
+      "train_samples": 164,
+      "val_samples": 36,
+      "unique_zones": 111
+    },
+    {
+      "source": "OpenEarthMap-41",
+      "license": "CC BY 4.0 + DL-DE-BY-2.0 ONLY (strictly filtered via live attribution.html)",
+      "uses_osm_odbl": false,
+      "archive_url": "https://zenodo.org/api/records/7223446/files/OpenEarthMap.zip/content",
+      "ingestion_method": "selective_http_range_remotezip_zero_non_permissive_bytes_downloaded",
+      "total_labeled_pairs_scanned": 2687,
+      "accepted_pairs": 157,
+      "rejected_non_permissive_pairs": 1296,
+      "accepted_region_count": 23,
+      "accepted_regions": [
+        "aachen",
+        "accra",
+        "al qurnah",
+        "baybay",
+        "bielefeld",
+        "bogota",
+        "buenos aires",
+        "chiangmai",
+        "chisinau",
+        "dowa",
+        "kagera",
+        "kampala",
+        "koeln",
+        "lohur",
+        "mahe",
+        "maputo",
+        "melbourne",
+        "monrovia",
+        "muenster",
+        "tonga",
+        "ulaanbaatar",
+        "western",
+        "zanzibar"
+      ],
+      "rejected_region_count": 39,
+      "raw_mask_min": 0,
+      "raw_mask_max": 8,
+      "oem_zero_indexed": false,
+      "train_samples": 138,
+      "val_samples": 19
+    },
+    {
+      "source": "FloodNet-Supervised-v1.0",
+      "license": "CDLA-Permissive-1.0",
+      "uses_osm_odbl": false,
+      "hf_repo": "torchgeo/floodnet",
+      "ingestion_method": "selective_http_range_remotezip_labeled_only",
+      "raw_mask_min": 0,
+      "raw_mask_max": 9,
+      "train_samples": 140,
+      "val_samples": 60
+    },
+    {
+      "source": "SkyScenes",
+      "license": "MIT",
+      "uses_osm_odbl": false,
+      "hf_repo": "hoffman-lab/SkyScenes",
+      "shards": [
+        "H_35_P_45/Town01(train:68)",
+        "H_35_P_60/Town02(train:68)",
+        "H_60_P_90/Town03(train:68)",
+        "H_35_P_45/Town05(val:38)"
+      ],
+      "depth_normal_facade_filter_nz_threshold": 0.85,
+      "building_roof_kept_pixels": 6608572,
+      "building_facade_remapped_to_class2_pixels": 6007772,
+      "facade_remap_fraction_of_building": 0.47619,
+      "train_samples": 204,
+      "val_samples": 38
+    }
+  ],
+  "teachers": {
+    "enabled": false,
+    "mode": "supervised_5class_boundary_and_skyscenes_metric_normals",
+    "reason": "Fits comfortably within physical 4 GB GTX 1650 SUPER TU116 VRAM"
+  },
+  "training": {
+    "seed": 20261125,
+    "batch_size_micro": 4,
+    "grad_accum_steps": 4,
+    "effective_batch_size": 16,
+    "learning_rate_peak": 0.001,
+    "learning_rate_min": 2e-05,
+    "epochs": 18,
+    "stage2_ood_start_epoch": 13,
+    "stage2_dynamic_m_in": -6.0,
+    "stage2_dynamic_m_out": -2.5,
+    "oblique_perspective_aug_prob": 0.35,
+    "sampler_num_samples": 646,
+    "pareto_selection": {
+      "selected": {
+        "epoch": 17.0,
+        "train_loss": 0.67453,
+        "lr": 2.94e-05,
+        "val_miou": 0.481134,
+        "val_fsr": 0.046476,
+        "epoch_sec": 75.06,
+        "ood_auroc": 0.755362
+      },
+      "feasible_count": 0,
+      "fsr_gate_met": false,
+      "degenerate_rejected_count": 1,
+      "min_miou_floor": 0.25
+    },
+    "pareto_history": [
+      {
+        "epoch": 1.0,
+        "train_loss": 0.88233,
+        "lr": 0.0005,
+        "val_miou": 0.271074,
+        "val_fsr": 0.101349,
+        "epoch_sec": 95.49
+      },
+      {
+        "epoch": 2.0,
+        "train_loss": 0.71787,
+        "lr": 0.001,
+        "val_miou": 0.229516,
+        "val_fsr": 0.131299,
+        "epoch_sec": 85.33
+      },
+      {
+        "epoch": 3.0,
+        "train_loss": 0.69708,
+        "lr": 0.0009906,
+        "val_miou": 0.348787,
+        "val_fsr": 0.117254,
+        "epoch_sec": 81.76
+      },
+      {
+        "epoch": 4.0,
+        "train_loss": 0.67011,
+        "lr": 0.0009627,
+        "val_miou": 0.380072,
+        "val_fsr": 0.060046,
+        "epoch_sec": 88.81
+      },
+      {
+        "epoch": 5.0,
+        "train_loss": 0.64775,
+        "lr": 0.0009174,
+        "val_miou": 0.399027,
+        "val_fsr": 0.088887,
+        "epoch_sec": 87.39
+      },
+      {
+        "epoch": 6.0,
+        "train_loss": 0.5987,
+        "lr": 0.0008565,
+        "val_miou": 0.409689,
+        "val_fsr": 0.085569,
+        "epoch_sec": 86.22
+      },
+      {
+        "epoch": 7.0,
+        "train_loss": 0.61771,
+        "lr": 0.0007822,
+        "val_miou": 0.426205,
+        "val_fsr": 0.07692,
+        "epoch_sec": 90.98
+      },
+      {
+        "epoch": 8.0,
+        "train_loss": 0.59044,
+        "lr": 0.0006975,
+        "val_miou": 0.40202,
+        "val_fsr": 0.089676,
+        "epoch_sec": 81.23
+      },
+      {
+        "epoch": 9.0,
+        "train_loss": 0.58668,
+        "lr": 0.0006056,
+        "val_miou": 0.439891,
+        "val_fsr": 0.06416,
+        "epoch_sec": 59.39
+      },
+      {
+        "epoch": 10.0,
+        "train_loss": 0.54133,
+        "lr": 0.00051,
+        "val_miou": 0.379307,
+        "val_fsr": 0.092116,
+        "epoch_sec": 71.94
+      },
+      {
+        "epoch": 11.0,
+        "train_loss": 0.54923,
+        "lr": 0.0004144,
+        "val_miou": 0.415891,
+        "val_fsr": 0.089263,
+        "epoch_sec": 77.93
+      },
+      {
+        "epoch": 12.0,
+        "train_loss": 0.53438,
+        "lr": 0.0003225,
+        "val_miou": 0.463024,
+        "val_fsr": 0.051552,
+        "epoch_sec": 76.67
+      },
+      {
+        "epoch": 13.0,
+        "train_loss": 0.84161,
+        "lr": 0.0002378,
+        "val_miou": 0.447744,
+        "val_fsr": 0.063579,
+        "epoch_sec": 87.59,
+        "ood_auroc": 0.663652
+      },
+      {
+        "epoch": 14.0,
+        "train_loss": 0.76747,
+        "lr": 0.0001635,
+        "val_miou": 0.448318,
+        "val_fsr": 0.096151,
+        "epoch_sec": 80.0,
+        "ood_auroc": 0.664754
+      },
+      {
+        "epoch": 15.0,
+        "train_loss": 0.72247,
+        "lr": 0.0001026,
+        "val_miou": 0.473151,
+        "val_fsr": 0.059129,
+        "epoch_sec": 84.08,
+        "ood_auroc": 0.724153
+      },
+      {
+        "epoch": 16.0,
+        "train_loss": 0.69459,
+        "lr": 5.73e-05,
+        "val_miou": 0.471288,
+        "val_fsr": 0.049988,
+        "epoch_sec": 80.86,
+        "ood_auroc": 0.748853
+      },
+      {
+        "epoch": 17.0,
+        "train_loss": 0.67453,
+        "lr": 2.94e-05,
+        "val_miou": 0.481134,
+        "val_fsr": 0.046476,
+        "epoch_sec": 75.06,
+        "ood_auroc": 0.755362
+      },
+      {
+        "epoch": 18.0,
+        "train_loss": 0.69507,
+        "lr": 2e-05,
+        "val_miou": 0.47954,
+        "val_fsr": 0.043189,
+        "epoch_sec": 92.8,
+        "ood_auroc": 0.764501
+      }
+    ]
+  },
+  "permissive_val_metrics_raw": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.593085,
+      "Safe_Flat_Roof": 0.399036,
+      "Hazard_Obstacle_Structure": 0.397539,
+      "Hazard_Dynamic_Human_Vehicle": 0.135497,
+      "Hazard_Water_Vegetation": 0.880515
+    },
+    "miou_present_classes": 0.481134,
+    "num_present_classes": 5,
+    "pixel_accuracy": 0.846524,
+    "false_safe_rate_fsr": 0.046476,
+    "safe_precision": 0.890041,
+    "total_eval_pixels": 37392751,
+    "true_hazard_pixels": 25491031,
+    "false_safe_pixels": 1184729,
+    "confusion_matrix_5x5": [
+      [
+        6170006,
+        926119,
+        444542,
+        38004,
+        1309635
+      ],
+      [
+        752768,
+        1740634,
+        75636,
+        1474,
+        442902
+      ],
+      [
+        158779,
+        146140,
+        905659,
+        15689,
+        325917
+      ],
+      [
+        55740,
+        6656,
+        21601,
+        24269,
+        11735
+      ],
+      [
+        547643,
+        269771,
+        184201,
+        3943,
+        22813288
+      ]
+    ],
+    "surface_normal_mean_cosine_sim": 0.747419,
+    "surface_normal_mean_angle_deg": 41.633
+  },
+  "permissive_val_metrics_bias_calibrated": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.553737,
+      "Safe_Flat_Roof": 0.377856,
+      "Hazard_Obstacle_Structure": 0.397661,
+      "Hazard_Dynamic_Human_Vehicle": 0.13874,
+      "Hazard_Water_Vegetation": 0.866498
+    },
+    "miou_present_classes": 0.466898,
+    "num_present_classes": 5,
+    "pixel_accuracy": 0.835867,
+    "false_safe_rate_fsr": 0.028099,
+    "safe_precision": 0.923054,
+    "total_eval_pixels": 37392751,
+    "true_hazard_pixels": 25491031,
+    "false_safe_pixels": 716268,
+    "confusion_matrix_5x5": [
+      [
+        5545168,
+        842822,
+        613940,
+        65470,
+        1820906
+      ],
+      [
+        654730,
+        1549759,
+        101968,
+        1992,
+        704965
+      ],
+      [
+        115914,
+        77955,
+        993278,
+        21392,
+        343645
+      ],
+      [
+        44067,
+        5397,
+        26948,
+        29775,
+        13814
+      ],
+      [
+        311064,
+        161871,
+        202762,
+        5755,
+        23137394
+      ]
+    ],
+    "surface_normal_mean_cosine_sim": 0.747419,
+    "surface_normal_mean_angle_deg": 41.633
+  },
+  "ood_metrics": {
+    "eval_protocol": "heldout_permissive_val_anomalymix_p0.5_stride4",
+    "id_pixels_evaluated": 1993865,
+    "ood_pixels_evaluated": 35411,
+    "raw_energy_auroc": 0.742277,
+    "raw_energy_fpr95": 0.731723,
+    "boundary_compensated_auroc": 0.755362,
+    "boundary_compensated_fpr95": 0.736988,
+    "mean_id_energy": -3.961,
+    "mean_ood_energy": -3.2877,
+    "empirical_clean_id_tpr_at_tau_ood": 0.949999
+  },
+  "ood_calibration": {
+    "T_ood": 1.0,
+    "T_prob": 0.5000056921157366,
+    "kappa_b": 1.5,
+    "tau_ood": -3.181581497192383,
+    "id_tpr_target": 0.95,
+    "n_id_samples": 603669,
+    "nll_before": 0.4774479568004608,
+    "nll_after": 0.3972119092941284,
+    "safe_logit_bias_delta": -0.271367,
+    "safe_logit_bias_calibration": {
+      "safe_logit_bias_delta": -0.271367,
+      "safe_classes": [
+        0,
+        1
+      ],
+      "target_max_fsr": 0.03,
+      "val_fsr_before": 0.04892,
+      "val_fsr_after": 0.029992,
+      "val_miou_before": 0.489943,
+      "val_miou_after": 0.476581,
+      "applied": true,
+      "fsr_gate_met": true,
+      "n_valid_pixels": 603669,
+      "n_hazard_pixels": 402779
+    },
+    "file": "ood_calibration_v21_local_gtx.json",
+    "path": "/var/tmp/vertirta_v400_blobs/ood_calibration_v21_local_gtx.json",
+    "sha256": "59f9a262b4f3eba691b9348811e2d10511339373521912ac8d65feb07d34c832"
+  },
+  "quarantined_zero_shot_aeroscapes_raw": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.294857,
+      "Safe_Flat_Roof": null,
+      "Hazard_Obstacle_Structure": 0.005538,
+      "Hazard_Dynamic_Human_Vehicle": 0.074401,
+      "Hazard_Water_Vegetation": 0.709338
+    },
+    "miou_present_classes": 0.271033,
+    "num_present_classes": 4,
+    "pixel_accuracy": 0.693624,
+    "false_safe_rate_fsr": 0.053931,
+    "safe_precision": 0.725488,
+    "total_eval_pixels": 66313961,
+    "true_hazard_pixels": 48155889,
+    "false_safe_pixels": 2597089,
+    "confusion_matrix_5x5": [
+      [
+        5586086,
+        1277579,
+        21524,
+        7945,
+        11264938
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        645765,
+        1420913,
+        38106,
+        1903,
+        4733358
+      ],
+      [
+        100583,
+        306581,
+        18098,
+        66589,
+        392733
+      ],
+      [
+        40633,
+        82614,
+        1241,
+        575,
+        40306197
+      ]
+    ],
+    "dataset": "AeroScapes",
+    "hf_repo": "dronefreak/Aeroscapes",
+    "license": "CC BY-SA 4.0 (QUARANTINED_ZERO_SHOT_EVAL_ONLY)",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "evaluated_images": 350
+  },
+  "quarantined_zero_shot_aeroscapes_bias_calibrated": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.21089,
+      "Safe_Flat_Roof": null,
+      "Hazard_Obstacle_Structure": 0.008356,
+      "Hazard_Dynamic_Human_Vehicle": 0.092146,
+      "Hazard_Water_Vegetation": 0.675853
+    },
+    "miou_present_classes": 0.246811,
+    "num_present_classes": 4,
+    "pixel_accuracy": 0.670113,
+    "false_safe_rate_fsr": 0.034324,
+    "safe_precision": 0.741147,
+    "total_eval_pixels": 66313961,
+    "true_hazard_pixels": 48155889,
+    "false_safe_pixels": 1652903,
+    "confusion_matrix_5x5": [
+      [
+        3917826,
+        814760,
+        46199,
+        14865,
+        13364422
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        346293,
+        1008956,
+        57792,
+        2923,
+        5424081
+      ],
+      [
+        55230,
+        192224,
+        28440,
+        83223,
+        525467
+      ],
+      [
+        18022,
+        32178,
+        1253,
+        794,
+        40379013
+      ]
+    ],
+    "dataset": "AeroScapes",
+    "hf_repo": "dronefreak/Aeroscapes",
+    "license": "CC BY-SA 4.0 (QUARANTINED_ZERO_SHOT_EVAL_ONLY)",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "evaluated_images": 350,
+    "safe_logit_bias_delta_applied_from_permissive_id_val": -0.271367
+  },
+  "head_to_head_comparison": {
+    "l4_v2_distilled": {
+      "available": true,
+      "source_artifact": "artifacts/v3.5.1/l4_pidnet_v2_distill_metrics.json",
+      "hardware": "NVIDIA L4",
+      "cu_cost_category": "COLAB_L4",
+      "teachers_enabled": true,
+      "selected_epoch": 4,
+      "val_miou": 0.484763,
+      "val_fsr": 0.040273,
+      "val_safe_precision": 0.903018,
+      "ood_auroc_comp": 0.648709,
+      "aeroscapes_miou": 0.238733,
+      "aeroscapes_fsr": 0.019488,
+      "safe_logit_bias_delta": 0.0,
+      "status": "HEALTHY_REFERENCE_L4_DISTILLED"
+    },
+    "g4_v21_collapsed_epoch2": {
+      "available": true,
+      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json",
+      "hardware": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "cu_cost_category": "COLAB_G4_HISTORICAL_ABLATION_UNTOUCHED",
+      "teachers_enabled": true,
+      "selected_epoch": 2,
+      "val_miou": 0.16961,
+      "val_fsr": 0.009049,
+      "val_safe_precision": 0.932657,
+      "ood_auroc_comp": 0.447997,
+      "aeroscapes_miou": 0.16157,
+      "aeroscapes_fsr": 0.004469,
+      "safe_logit_bias_delta": 0.0,
+      "unselected_peak_epoch_miou": 0.450117,
+      "status": "COLLAPSED_EPOCH2_ALL_HAZARD_SELECTOR_BUG"
+    },
+    "local_gtx1650s_v21_recovery_raw": {
+      "hardware": "NVIDIA GeForce GTX 1650 SUPER (4 GB, TU116)",
+      "cu_cost_category": "LOCAL_0_00_CU",
+      "teachers_enabled": false,
+      "val_miou": 0.481134,
+      "val_fsr": 0.046476,
+      "val_safe_precision": 0.890041,
+      "ood_auroc_comp": 0.755362,
+      "aeroscapes_miou": 0.271033,
+      "aeroscapes_fsr": 0.053931,
+      "safe_logit_bias_delta": 0.0
+    },
+    "local_gtx1650s_v21_recovery_bias_calibrated": {
+      "hardware": "NVIDIA GeForce GTX 1650 SUPER (4 GB, TU116)",
+      "cu_cost_category": "LOCAL_0_00_CU",
+      "teachers_enabled": false,
+      "val_miou": 0.466898,
+      "val_fsr": 0.028099,
+      "val_safe_precision": 0.923054,
+      "ood_auroc_comp": 0.755362,
+      "aeroscapes_miou": 0.246811,
+      "aeroscapes_fsr": 0.034324,
+      "safe_logit_bias_delta": -0.271367
+    },
+    "delta_local_vs_g4_collapsed": {
+      "val_miou_raw_gain": 0.311524,
+      "val_miou_cal_gain": 0.297288,
+      "aeroscapes_miou_raw_gain": 0.109463,
+      "aeroscapes_miou_cal_gain": 0.085241,
+      "ood_auroc_gain": 0.307365
+    }
+  },
+  "onnx_export": {
+    "filename": "pidnet_slz_v21_local_gtx_opset17.onnx",
+    "path": "/var/tmp/vertirta_v400_blobs/pidnet_slz_v21_local_gtx_opset17.onnx",
+    "size_bytes": 32069725,
+    "sha256": "a0b0b99b3f68288b5366245b3b3a711ed569479d4c26dfc44eb638e6f65679ff",
+    "opset_version": 17,
+    "deploy_parameters": 8003817,
+    "input_names": [
+      "rgb_nchw"
+    ],
+    "output_names": [
+      "seg_logits",
+      "surf_normals",
+      "bdry_prob"
+    ],
+    "input_shape": [
+      1,
+      3,
+      512,
+      512
+    ],
+    "onnx_checker_passed": true
+  },
+  "hud_preview_summary": {
+    "scenes_rendered": 36,
+    "sources_represented": [
+      "FLAIR-1",
+      "FloodNet-Supervised-v1.0",
+      "OpenEarthMap-41",
+      "SkyScenes"
+    ],
+    "ort_providers_active": [
+      "CPUExecutionProvider"
+    ],
+    "mean_inference_ms": 289.35,
+    "p50_inference_ms": 287.9,
+    "predicted_class_distribution_pct": {
+      "Safe_Flat_Ground": 20.73,
+      "Safe_Flat_Roof": 11.079,
+      "Hazard_Obstacle_Structure": 6.776,
+      "Hazard_Dynamic_Human_Vehicle": 0.318,
+      "Hazard_Water_Vegetation": 61.098
+    },
+    "non_collapsed_multiclass_verified": true,
+    "video_codec": "h264_yuv420p_faststart",
+    "ffmpeg_binary": "ffmpeg.exe",
+    "mp4_filename": "local_gtx_pidnet_v21_hud_h264.mp4",
+    "mp4_size_bytes": 6378579,
+    "mp4_sha256": "858b3ab3491d25a4d40305094df08fe3535b91929e315cbaeec129a8c27cdf22",
+    "grid_filename": "local_gtx_pidnet_v21_preview_grid.png",
+    "grid_sha256": "aeb73eef85bc72e7c3b4d685a60bc2b12d59bc5da0854905e489016df0867138"
+  },
+  "wall_clock_s": 2473.088,
+  "report_sha256": "32e3f787f42d89ee902616241f90c0f3aeddaad67109996a194e1042d581e093"
+}

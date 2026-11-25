@@ -25,17 +25,19 @@ on:
       - "ml/copilot/calibrate_conformal.py"
       - "docs/paper_corl/**"
       - "scripts/colab/**"
+      - "scripts/realworld/**"
       - "scripts/bench_gtx1650s_m3_timesliced.py"
       - "scripts/bench_local_voice_atc_live.py"
+      - "scripts/train_local_gtx1650s_pidnet_v21_recovery.py"
       - "scripts/ci/check_zero_gpl_symbols.py"
-      - "artifacts/v4.0.0/compound_fault_mission_report.json"
-      - "artifacts/v4.0.0/local_voice_atc_live_proof.json"
+      - "artifacts/v4.0.0/**"
       - "tests/forward_hazard/**"
       - "tests/gnss_denied/**"
       - "tests/voice/**"
       - "tests/forensics/**"
       - "tests/vertibench_v2/**"
       - "tests/colab/**"
+      - "tests/realworld/**"
       - "tests/integration/CMakeLists.txt"
       - "tests/integration/test_compound_fault_istanbul_mission.cpp"
       - "tests/integration/test_m3_voice_node_contracts.py"
@@ -64,17 +66,19 @@ on:
       - "ml/copilot/calibrate_conformal.py"
       - "docs/paper_corl/**"
       - "scripts/colab/**"
+      - "scripts/realworld/**"
       - "scripts/bench_gtx1650s_m3_timesliced.py"
       - "scripts/bench_local_voice_atc_live.py"
+      - "scripts/train_local_gtx1650s_pidnet_v21_recovery.py"
       - "scripts/ci/check_zero_gpl_symbols.py"
-      - "artifacts/v4.0.0/compound_fault_mission_report.json"
-      - "artifacts/v4.0.0/local_voice_atc_live_proof.json"
+      - "artifacts/v4.0.0/**"
       - "tests/forward_hazard/**"
       - "tests/gnss_denied/**"
       - "tests/voice/**"
       - "tests/forensics/**"
       - "tests/vertibench_v2/**"
       - "tests/colab/**"
+      - "tests/realworld/**"
       - "tests/integration/CMakeLists.txt"
       - "tests/integration/test_compound_fault_istanbul_mission.cpp"
       - "tests/integration/test_m3_voice_node_contracts.py"
@@ -348,6 +352,7 @@ jobs:
               docs/paper_corl/tests/test_paper_corl_contracts.py \
               tests/colab/test_g4_thunder_contracts.py \
               tests/colab/test_ingest_g4_bundle.py \
+              tests/colab/test_local_gtx_pidnet_recovery.py \
               tests/ci/test_m3_workflow_contracts.py \
               tests/wind_acoustics/test_zero_gpl_gate.py \
               tests/realworld/ -v
