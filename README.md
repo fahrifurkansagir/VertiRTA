@@ -20,6 +20,14 @@
 [**Cross-Stack Audit**](docs/research/CROSS_BENCHMARK_AUDIT_v1.md) ·
 [**Citation**](#citation)
 
+<br>
+
+<a href="https://fahrifurkansagir.github.io/VertiRTA/">
+  <img src="docs/assets/vertirta_vertigcs_hero.gif" width="840" alt="VertiRTA Live 3D WebAssembly Flight Core, 20-eVTOL U-Space & Part-IS Cyber Sandbox">
+</a>
+
+<sub>Live 3D WebAssembly sandbox (38.5 KiB <code>.wasm</code>) running the frozen C++17 flight core over the Istanbul LTFJ/LTBX corridor — click to launch in browser, zero install.</sub>
+
 </div>
 
 ---
@@ -32,8 +40,6 @@
 - **Coupled eVTOL Fault Physics:** Models coaxial interference (0.85 thrust efficiency), asymmetric BLDC spool-up/coast-down inertia, and a 112S12P 1-RC Thevenin battery pack across **VertiRTA-X8-240** and **Lift+Cruise 8+1**, backed by a **102.85M-node** 4D HJI-CBVF PDE and a **1,000 + 180** seeded C++20 Monte Carlo failure-boundary campaign.
 - **Zero-GPL MAVLink v2 Offboard Shield:** Clean-room Apache-2.0 C++20 MAVLink v2 UDP bridge (`0xFD`, X.25 CRC-16/MCRF4XX, 8 official `common.xml` `CRC_EXTRA` messages) clamping unsafe setpoints, denying airborne disarm/flight-termination, and enforcing 500 ms deadman hover at **p50 = 18.0 us** with **0** unsafe leaks across 2,500 live kernel UDP packets.
 - **Real-World Evidence Without Cherry-Picking:** Verified on moving **NASA Goddard drone video** (-56.25% SLZ flicker on a 4 GB GTX 1650 SUPER), ETH Zurich **EuRoC MAV** (7/7), **PX4 ULog → W3C XSD E5X** forensics, live Istanbul METAR/Open-Meteo/ADS-B feeds, and zero-GPL **sherpa-onnx** voice ATC — with every negative ablation and open hardware gap published verbatim.
-
-> **Interactive Demo & Video Walkthrough:** Launch the zero-install [**Live VertiGCS WebAssembly Console**](https://fahrifurkansagir.github.io/VertiRTA/) (38.5 KiB `.wasm`, no API tokens) or download the [**81-second HD Engineering Walkthrough MP4**](https://github.com/fahrifurkansagir/VertiRTA/releases/download/v1.0.0/vertirta_v1_walkthrough.mp4) from the `v1.0.0` release.
 
 ---
 
@@ -53,24 +59,12 @@
   <p><sub><strong>0 / 1,000</strong> airspace breaches (95% CP ≤ 0.30%). <strong>Lift+Cruise 8+1:</strong> 500/500 safe (CEP50 0.80 m, CEP95 1.97 m). <strong>X8-240:</strong> 429/500 safe — honestly exposing ±5 cm CG-shift tipping under collinear 2-arm CEL spin (29/100) vs nominal-CG Tier-1 (1,500/1,500). Physical thrust wall begins at +14% overload @ 10 m/s and saturates at ≥ +21%.</sub></p>
 </div>
 
-### 3. Live 3D WebAssembly Flight Console & Local GTX 1650S SLZ Recovery
+### 3. Zero-ShareAlike SLZ Perception Recovery (PIDNet-S v2.1 on Local GTX 1650 SUPER)
 
-<table width="100%">
-  <tr>
-    <td width="50%" align="center" valign="top">
-      <a href="https://fahrifurkansagir.github.io/VertiRTA/">
-        <img src="docs/assets/vertirta_vertigcs_live_3d.png" width="100%" alt="Live VertiGCS 3D WebAssembly Console">
-      </a>
-      <br>
-      <sub><strong>VertiGCS 3D WASM Console (38.5 KiB)</strong> — Istanbul LTFJ/LTBX corridor, live 1M/2M/CEL fault injection, 20-eVTOL fleet & Part-IS cyber-attack replay.</sub>
-    </td>
-    <td width="50%" align="center" valign="top">
-      <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="100%" alt="PIDNet-S v2.1 6-Scene Validation Grid">
-      <br>
-      <sub><strong>PIDNet-S v2.1 Local Recovery (0.00 CU)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes 0.2468.</sub>
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="840" alt="PIDNet-S v2.1 6-Scene Permissive Validation Grid">
+  <p><sub>Local FP16 recovery (0.00 CU): Val mIoU <strong>0.4669</strong> (0.4811 raw), False-Safe Rate <strong>2.81%</strong> (≤ 3.0% gate), OOD AUROC <strong>0.7554</strong>, quarantined zero-shot AeroScapes mIoU 0.2468 (FSR 3.43%).</sub></p>
+</div>
 
 ---
 
