@@ -1,0 +1,368 @@
+{
+  "schema_version": "vertirta.g4_qwen3_v3_eval/v1.0.0",
+  "job_name": "job_qwen3_v3_vertibench_v2",
+  "mode": "LIVE_G4_CUDA",
+  "phase": "grpo-seed",
+  "seed_index": 1,
+  "timestamp_utc": "2026-11-25T11:12:57.310477+00:00",
+  "eval_split_provenance": "PROGRAMMATIC_PARAPHRASE_HELDOUT_LOW_JACCARD_PENDING_HUMAN_NATIVE_V2",
+  "license_audit": {
+    "job_name": "job_qwen3_v3_vertibench_v2",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "VertiBench-v2-TrackA-TR-EN"
+    ],
+    "eval_only_source_names": [
+      "VertiBench-v2-Heldout-Cal-Test"
+    ],
+    "model_names": [
+      "Qwen/Qwen3-4B"
+    ]
+  },
+  "vram_guard": {
+    "requested_vram_fraction": 0.29,
+    "pytorch_cuda_alloc_conf": "expandable_segments:True,max_split_size_mb:512",
+    "cuda_available": true,
+    "applied_on_device": 0,
+    "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "vram_total_mib": 97250.06,
+    "vram_cap_mib": 28202.52
+  },
+  "nvidia_smi_end": {
+    "timestamp_utc": "2026-11-25T11:12:57.310504+00:00",
+    "available": true,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "driver_version": "580.82.07",
+    "memory_used_mib": 9473.0,
+    "memory_total_mib": 97887.0,
+    "gpu_util_pct": 13.0,
+    "mem_util_pct": 4.0,
+    "power_w": 86.36,
+    "temp_c": 36.0,
+    "compute_apps": [
+      {
+        "pid": 10323,
+        "process_name": "/usr/bin/python3",
+        "used_gpu_memory_mib": 9464.0
+      }
+    ]
+  },
+  "oom_guard_config": {
+    "vram_fraction": 0.29,
+    "phase": "grpo-seed",
+    "seed_index": 1,
+    "sft_epochs": 3,
+    "grpo_steps": 100,
+    "sft_micro_batch_size": 16,
+    "sft_grad_accum": 2,
+    "sft_effective_batch_size": 32,
+    "sft_gradient_checkpointing": false,
+    "prompts_per_microbatch": 2,
+    "grpo_group_size_G": 16,
+    "per_device_train_batch_size": 32,
+    "gradient_accumulation_steps": 4,
+    "effective_completions_per_step": 128,
+    "parallel_grpo_seeds": 3,
+    "z3_workers_per_seed": 4,
+    "gradient_checkpointing": true,
+    "completion_only_sliced_log_softmax": true,
+    "z3_pool_start_method": "spawn",
+    "uses_trl_grpo_trainer": true,
+    "sft_prompt_tokens_masked_minus_100": true,
+    "qwen3_empty_think_suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "language_matched_candidate_branches": true,
+    "shared_sft_checkpoints": 1,
+    "grpo_seeds": [
+      20261124,
+      20261125,
+      20261126
+    ],
+    "dr_grpo_beta": 0.04,
+    "dr_grpo_eps": [
+      0.2,
+      0.28
+    ],
+    "eval_batch_size": 64,
+    "conformal_row_batch_size": 8
+  },
+  "seed_report": {
+    "schema_version": "vertirta.g4_qwen3_v3_seed_report/v1.0.0",
+    "seed_index": 1,
+    "seed": 20261125,
+    "grpo_steps": 100,
+    "grpo_per_device_train_batch_size_used": 32,
+    "grpo_grad_accum_used": 4,
+    "grpo_oom_fallback_triggered": false,
+    "eval_batch_size_used": 64,
+    "grpo_train_loss": 0.00012,
+    "grpo_mean_reward_first10": 0.9988,
+    "grpo_mean_reward_last10": 1.0,
+    "grpo_reward_batches": 100,
+    "adapter_dir": "/content/vertirta_m3_run/blobs/qwen3_4b_v3_seed1_lora",
+    "unconstrained_eval": {
+      "overall": {
+        "model_id": "Qwen/Qwen3-4B",
+        "stage": "seed1_unconstrained",
+        "n_cases": 1200,
+        "grammar_validity_pct": 76.92,
+        "ast_stl_accuracy_pct": 67.42,
+        "unsafe_rejection_pct": 72.64,
+        "conformal_coverage_pct": null,
+        "clarification_precision": 1.0,
+        "clarification_recall": 0.5811,
+        "clarification_f1": 0.735,
+        "noise_abstention_pct": null,
+        "latency_p50_ms": 144.2,
+        "latency_p99_ms": 150.84
+      },
+      "by_lang": {
+        "TR": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 500,
+          "grammar_validity_pct": 61.6,
+          "ast_stl_accuracy_pct": 55.8,
+          "unsafe_rejection_pct": 76.61,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 150.25,
+          "latency_p99_ms": 150.84
+        },
+        "EN": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 500,
+          "grammar_validity_pct": 88.0,
+          "ast_stl_accuracy_pct": 73.4,
+          "unsafe_rejection_pct": 66.13,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 141.69,
+          "latency_p99_ms": 150.48
+        },
+        "MIX": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 200,
+          "grammar_validity_pct": 87.5,
+          "ast_stl_accuracy_pct": 81.5,
+          "unsafe_rejection_pct": 79.17,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 139.18,
+          "latency_p99_ms": 144.69
+        }
+      },
+      "by_bucket": {
+        "NOMINAL": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 308,
+          "grammar_validity_pct": 94.48,
+          "ast_stl_accuracy_pct": 94.48,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 144.2,
+          "latency_p99_ms": 150.84
+        },
+        "FAULT": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 300,
+          "grammar_validity_pct": 91.0,
+          "ast_stl_accuracy_pct": 80.67,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 144.2,
+          "latency_p99_ms": 150.84
+        },
+        "ADVERSARIAL": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 296,
+          "grammar_validity_pct": 63.18,
+          "ast_stl_accuracy_pct": 35.14,
+          "unsafe_rejection_pct": 72.64,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 144.2,
+          "latency_p99_ms": 150.84
+        },
+        "AMBIGUOUS_ASR": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_unconstrained",
+          "n_cases": 296,
+          "grammar_validity_pct": 58.11,
+          "ast_stl_accuracy_pct": 58.11,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 0.5811,
+          "clarification_f1": 0.735,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 144.2,
+          "latency_p99_ms": 150.84
+        }
+      }
+    },
+    "gbnf_z3_gated_eval": {
+      "overall": {
+        "model_id": "Qwen/Qwen3-4B",
+        "stage": "seed1_gbnf_z3_gated",
+        "n_cases": 1200,
+        "grammar_validity_pct": 100.0,
+        "ast_stl_accuracy_pct": 82.17,
+        "unsafe_rejection_pct": 45.27,
+        "conformal_coverage_pct": null,
+        "clarification_precision": 1.0,
+        "clarification_recall": 1.0,
+        "clarification_f1": 1.0,
+        "noise_abstention_pct": null,
+        "latency_p50_ms": 164.05,
+        "latency_p99_ms": 192.64
+      },
+      "by_lang": {
+        "TR": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 500,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 83.4,
+          "unsafe_rejection_pct": 50.0,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 172.06,
+          "latency_p99_ms": 193.1
+        },
+        "EN": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 500,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 79.8,
+          "unsafe_rejection_pct": 43.55,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 162.86,
+          "latency_p99_ms": 178.9
+        },
+        "MIX": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 200,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 85.0,
+          "unsafe_rejection_pct": 37.5,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 144.68,
+          "latency_p99_ms": 176.58
+        }
+      },
+      "by_bucket": {
+        "NOMINAL": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 308,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 98.7,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 155.44,
+          "latency_p99_ms": 172.27
+        },
+        "FAULT": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 300,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 84.0,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 155.41,
+          "latency_p99_ms": 172.32
+        },
+        "ADVERSARIAL": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 296,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 45.27,
+          "unsafe_rejection_pct": 45.27,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 0.0,
+          "clarification_recall": 0.0,
+          "clarification_f1": 0.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 167.56,
+          "latency_p99_ms": 185.01
+        },
+        "AMBIGUOUS_ASR": {
+          "model_id": "Qwen/Qwen3-4B",
+          "stage": "seed1_gbnf_z3_gated",
+          "n_cases": 296,
+          "grammar_validity_pct": 100.0,
+          "ast_stl_accuracy_pct": 100.0,
+          "unsafe_rejection_pct": null,
+          "conformal_coverage_pct": null,
+          "clarification_precision": 1.0,
+          "clarification_recall": 1.0,
+          "clarification_f1": 1.0,
+          "noise_abstention_pct": null,
+          "latency_p50_ms": 175.86,
+          "latency_p99_ms": 193.12
+        }
+      }
+    },
+    "z3_fail_closed_gate_stats": {
+      "n_cases": 1200,
+      "raw_z3_constraint_satisfaction_pct": 99.42,
+      "gated_z3_constraint_satisfaction_pct": 100.0,
+      "z3_fail_closed_interventions": 7,
+      "bucket3_n_cases": 296,
+      "bucket3_raw_explicit_reject_with_sat_fb_pct": 57.43,
+      "bucket3_gated_safe_reject_pct": 59.8
+    },
+    "peak_torch_allocated_mib": 17874.19
+  },
+  "elapsed_s": 4520.9255,
+  "report_sha256": "1597d1ab1d802ca1632d0a1bea36d8d9cfc58f45007404d9bcd71dd0348cf1c9"
+}

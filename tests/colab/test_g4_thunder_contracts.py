@@ -41,12 +41,14 @@ from scripts.colab.g4_jobs.job_pidnet_v21_xfeat import (
     _train_pidnet_attempt,
     apply_oblique_perspective_aug,
     build_argparser as build_pidnet_argparser,
+    calibrate_safe_logit_bias_for_fsr,
     is_valid_skyscenes_image_member,
     select_pareto_checkpoint,
     select_pidnet_learning_rate,
 )
 from scripts.colab.remote_g4_driver import run_driver, wait_for_gpu_drain_barrier
 from scripts.colab.run_g4_m3_thunder_run import (
+    REMOTE_BOOTSTRAP_PACKAGES,
     LiveColabCliBackend,
     build_minimal_source_tarball,
     build_remote_bootstrap_script,
@@ -847,3 +849,100 @@ def test_wave2_pidnet_work_dir_isolation_and_dataloader_shutdown() -> None:
     attempt_src = inspect.getsource(_train_pidnet_attempt)
     assert "_shutdown_loader(train_loader)" in attempt_src
     assert "_shutdown_loader(val_loader)" in attempt_src
+
+
+def test_pareto_selector_rejects_degenerate_epoch2_and_calibrates_safe_logit_bias() -> None:
+    """Bug 1: Reject collapsed all-hazard Epoch 2 (mIoU<0.25) & calibrate safe-logit bias for FSR<=0.03."""
+    import inspect
+
+    # Exact live G4 failure trace: collapsed Epoch 2 vs healthy high-mIoU Epoch 18
+    live_history = [
+        {"epoch": 1.0, "val_miou": 0.1420, "val_fsr": 0.0040},
+        {"epoch": 2.0, "val_miou": 0.1696, "val_fsr": 0.0090},
+        {"epoch": 10.0, "val_miou": 0.3912, "val_fsr": 0.0620},
+        {"epoch": 18.0, "val_miou": 0.4501, "val_fsr": 0.0789},
+    ]
+    res = select_pareto_checkpoint(live_history, max_fsr=0.030)
+    assert res["selected"]["epoch"] == 18.0
+    assert res["selected"]["val_miou"] == pytest.approx(0.4501)
+    assert res["fsr_gate_met"] is False
+    assert res["feasible_count"] == 0
+    assert res["degenerate_rejected_count"] == 2
+    assert res["min_miou_floor"] == pytest.approx(0.25)
+
+    # Mixed history with a non-degenerate feasible epoch picks non-degenerate feasible over degenerate & infeasible
+    mixed_history = [
+        {"epoch": 2.0, "val_miou": 0.1696, "val_fsr": 0.0090},
+        {"epoch": 12.0, "val_miou": 0.4150, "val_fsr": 0.0275},
+        {"epoch": 18.0, "val_miou": 0.4501, "val_fsr": 0.0789},
+    ]
+    res_mixed = select_pareto_checkpoint(mixed_history, max_fsr=0.030)
+    assert res_mixed["selected"]["epoch"] == 12.0
+    assert res_mixed["fsr_gate_met"] is True
+    assert res_mixed["feasible_count"] == 1
+    assert res_mixed["degenerate_rejected_count"] == 1
+    assert res_mixed["min_miou_floor"] == pytest.approx(0.25)
+
+    # All-degenerate fallback still avoids collapsing to lowest-mIoU all-hazard epoch
+    all_degen = [
+        {"epoch": 1.0, "val_miou": 0.10, "val_fsr": 0.001},
+        {"epoch": 2.0, "val_miou": 0.18, "val_fsr": 0.015},
+    ]
+    res_degen = select_pareto_checkpoint(all_degen, max_fsr=0.030, min_miou=0.25)
+    assert res_degen["selected"]["epoch"] == 2.0
+    assert res_degen["fsr_gate_met"] is False
+    assert res_degen["degenerate_rejected_count"] == 2
+
+    # Post-hoc safe-logit bias calibration on synthetic Epoch-18-like 5-class permissive val logits
+    rng = np.random.default_rng(20261125)
+    n_per_class = 500
+    labels = np.repeat(np.arange(5, dtype=np.int64), n_per_class)
+    logits = np.full((5 * n_per_class, 5), -2.0, dtype=np.float32)
+    for c in range(5):
+        mask = labels == c
+        logits[mask, c] = 2.5 + rng.normal(0.0, 0.3, size=int(mask.sum())).astype(np.float32)
+    # Inject ~8% false-safe hazard pixels (true classes {2,3,4} with safe class 0/1 beating hazard)
+    hazard_indices = np.where(labels >= 2)[0]
+    false_safe_subset = hazard_indices[:120]  # 120 / 1500 = 0.080 FSR
+    logits[false_safe_subset, 0] = logits[false_safe_subset, labels[false_safe_subset]] + np.linspace(
+        0.05, 1.40, len(false_safe_subset), dtype=np.float32
+    )
+
+    cal = calibrate_safe_logit_bias_for_fsr(logits, labels, target_max_fsr=0.030)
+    assert cal["val_fsr_before"] == pytest.approx(0.08, abs=1e-4)
+    assert cal["safe_logit_bias_delta"] < 0.0
+    assert cal["applied"] is True
+    assert cal["fsr_gate_met"] is True
+    assert cal["val_fsr_after"] <= 0.030
+    assert cal["val_miou_after"] >= 0.70
+
+    # Applying delta directly to safe classes {0, 1} must reproduce val_fsr <= 0.030 deterministically
+    shifted = logits.copy()
+    shifted[:, [0, 1]] += np.float32(cal["safe_logit_bias_delta"])
+    preds_after = np.argmax(shifted, axis=1)
+    haz_mask = labels >= 2
+    recomputed_fsr = float(np.mean(preds_after[haz_mask] <= 1))
+    assert recomputed_fsr <= 0.030
+    assert recomputed_fsr == pytest.approx(cal["val_fsr_after"], abs=1e-6)
+
+    # Already-feasible logits require zero adjustment (delta == 0.0)
+    cal_already_ok = calibrate_safe_logit_bias_for_fsr(shifted, labels, target_max_fsr=0.030)
+    assert cal_already_ok["safe_logit_bias_delta"] == 0.0
+    assert cal_already_ok["applied"] is False
+    assert cal_already_ok["fsr_gate_met"] is True
+
+    # Live path & attempt loop wiring contract
+    attempt_src = inspect.getsource(_train_pidnet_attempt)
+    live_src = inspect.getsource(_run_live_g4_pidnet_v21)
+    assert "_pareto_checkpoint_sort_key(" in attempt_src
+    assert "calibrate_safe_logit_bias_for_fsr(" in live_src
+    assert '"safe_logit_bias_delta"' in live_src
+
+
+def test_remote_bootstrap_locks_imagecodecs_for_flair1_lzw_tif() -> None:
+    """Bug 2: REMOTE_BOOTSTRAP_PACKAGES & bootstrap import check must include imagecodecs alongside tifffile."""
+    assert "tifffile" in REMOTE_BOOTSTRAP_PACKAGES
+    assert "imagecodecs" in REMOTE_BOOTSTRAP_PACKAGES
+    script = build_remote_bootstrap_script("/content/vertirta_v400_g4")
+    assert '"imagecodecs"' in script
+    assert "tifffile, imagecodecs" in script

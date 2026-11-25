@@ -19,7 +19,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.colab.ingest_g4_bundle import (  # noqa: E402
     REQUIRED_G4_JOB_JSONS,
+    build_argparser,
     ingest_g4_bundles,
+    main as ingest_main,
     safe_extract_tar_gz,
 )
 
@@ -40,6 +42,8 @@ def _build_synthetic_g4_archives(
     include_whisper_in_manifest: bool = False,
     include_whisper_file: bool = True,
     tamper_onnx_blob: bool = False,
+    tamper_blob_relpath: str | None = None,
+    omit_blob_relpaths: tuple[str, ...] = (),
     tamper_manifest_json: bool = False,
     inject_nan_json: bool = False,
     inject_secret_leak: bool = False,
@@ -52,7 +56,12 @@ def _build_synthetic_g4_archives(
         "dfine_n_640_opset17.onnx": b"ONNX_DFINE_N_BYTES_0123456789",
         "xfeat_512_opset17.onnx": b"ONNX_XFEAT_512_BYTES_0123456789",
         "ood_calibration_v21.json": b'{"schema_version":"v21","temp":1.1}\n',
+        "cbvf_4d_x8_240_v4_from_101x71.vrta_lut": b"VRTALUT1_X8_240_BYTES",
+        "cbvf_4d_x8_240_hires_101x71.vrta_lut_hires": b"VRTALUT2_X8_HIRES_BYTES",
+        "cel_2d_x8_240.vrta_cel2d": b"VRTACEL2D_X8_BYTES",
         "qwen3_4b_v3_lora/adapter_config.json": b'{"r":32}\n',
+        "whisper_small_bvi_lora/adapter_config.json": b'{"r":32,"task":"asr"}\n',
+        "whisper_small_bvi_lora/adapter_model.safetensors": b"WHISPER_LORA_WEIGHTS_012345",
     }
 
     onnx_sha = {k: _sha256_bytes(v) for k, v in blobs_payloads.items()}
@@ -157,10 +166,17 @@ def _build_synthetic_g4_archives(
         _add_bytes_to_tar(tf, "artifacts/heartbeat.json", b'{"state":"DONE"}\n')
         _add_bytes_to_tar(tf, "artifacts/logs/qwen3_v3_sft.log", b"raw log line\n")
 
+    omit_set = set(omit_blob_relpaths)
     blobs_tar = root / "vertirta_v400_blobs.tar.gz"
     with tarfile.open(blobs_tar, "w:gz") as tf:
         for rel, data in sorted(blobs_payloads.items()):
-            out_data = b"CORRUPTED_ONNX_BYTES" if (tamper_onnx_blob and rel == "pidnet_slz_v21_opset17.onnx") else data
+            if rel in omit_set:
+                continue
+            out_data = data
+            if tamper_onnx_blob and rel == "pidnet_slz_v21_opset17.onnx":
+                out_data = b"CORRUPTED_ONNX_BYTES"
+            elif tamper_blob_relpath is not None and rel == tamper_blob_relpath:
+                out_data = data + b"_TAMPERED"
             _add_bytes_to_tar(tf, f"blobs/{rel}", out_data)
         # Scratch _work dir MUST be skipped
         _add_bytes_to_tar(tf, "blobs/_work_sft_tmp/temp.pt", b"scratch")
@@ -315,4 +331,102 @@ def test_ingest_rejects_nan_secret_leak_oversized_json_and_missing_required_job(
             dest_artifacts_dir=tmp_path / "art_missing",
             dest_blobs_dir=tmp_path / "blob_missing",
             allow_partial=False,
+        )
+
+
+def test_ingest_missing_non_onnx_blobs_fail_closed_by_default_and_opt_in_guards_core(tmp_path: Path) -> None:
+    """Bug 3: Fail-closed by default; --allow-missing-non-onnx-blobs permits ONLY missing optional blobs."""
+    # Verify CLI flag defaults to False (fail-closed)
+    default_args = build_argparser().parse_args(["--artifacts-tar", "a.tar.gz", "--blobs-tar", "b.tar.gz"])
+    assert default_args.allow_missing_non_onnx_blobs is False
+
+    missing_lora = (
+        "whisper_small_bvi_lora/adapter_config.json",
+        "whisper_small_bvi_lora/adapter_model.safetensors",
+    )
+    src_lora = tmp_path / "missing_whisper_lora"
+    src_lora.mkdir()
+    art_tar, blobs_tar, _ = _build_synthetic_g4_archives(
+        src_lora,
+        omit_blob_relpaths=missing_lora,
+        include_realworld_tar=False,
+    )
+
+    # 1) Default (fail-closed) MUST reject missing optional LoRA blobs
+    dest_fail_art = tmp_path / "fail_art"
+    dest_fail_blobs = tmp_path / "fail_blobs"
+    with pytest.raises(FileNotFoundError, match="whisper_small_bvi_lora"):
+        ingest_g4_bundles(
+            artifacts_tar=art_tar,
+            blobs_tar=blobs_tar,
+            dest_artifacts_dir=dest_fail_art,
+            dest_blobs_dir=dest_fail_blobs,
+        )
+    assert not dest_fail_art.exists()
+    assert not dest_fail_blobs.exists()
+
+    # 2) Explicit CLI --allow-missing-non-onnx-blobs succeeds & transparently records missing optional blobs
+    dest_ok_art = tmp_path / "ok_art"
+    dest_ok_blobs = tmp_path / "ok_blobs"
+    rc = ingest_main(
+        [
+            "--artifacts-tar",
+            str(art_tar),
+            "--blobs-tar",
+            str(blobs_tar),
+            "--dest-artifacts-dir",
+            str(dest_ok_art),
+            "--dest-blobs-dir",
+            str(dest_ok_blobs),
+            "--allow-missing-non-onnx-blobs",
+        ]
+    )
+    assert rc == 0
+    receipt = json.loads((dest_ok_blobs / "g4_ingestion_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["all_gates_passed"] is True
+    assert receipt["allow_missing_non_onnx_blobs"] is True
+    assert receipt["partial_blob_sync_detected"] is True
+    assert receipt["missing_optional_blobs"] == sorted(missing_lora)
+    assert receipt["onnx_parity_verified"] is True
+
+    # 3) Even WITH --allow-missing-non-onnx-blobs, missing ANY core ONNX/calibration/LUT/CEL2D MUST fail closed
+    for core_rel in (
+        "xfeat_512_opset17.onnx",
+        "ood_calibration_v21.json",
+        "cbvf_4d_x8_240_v4_from_101x71.vrta_lut",
+        "cbvf_4d_x8_240_hires_101x71.vrta_lut_hires",
+        "cel_2d_x8_240.vrta_cel2d",
+    ):
+        case_dir = tmp_path / f"missing_core_{core_rel.replace('.', '_')}"
+        case_dir.mkdir()
+        art_c, blob_c, _ = _build_synthetic_g4_archives(
+            case_dir,
+            omit_blob_relpaths=(core_rel,),
+            include_realworld_tar=False,
+        )
+        with pytest.raises(FileNotFoundError, match="core required blob"):
+            ingest_g4_bundles(
+                artifacts_tar=art_c,
+                blobs_tar=blob_c,
+                dest_artifacts_dir=tmp_path / f"out_art_{core_rel}",
+                dest_blobs_dir=tmp_path / f"out_blob_{core_rel}",
+                allow_missing_non_onnx_blobs=True,
+            )
+
+    # 4) Even WITH --allow-missing-non-onnx-blobs, SHA-256 mismatch on any present optional blob MUST fail closed
+    tamper_dir = tmp_path / "tamper_present_lora"
+    tamper_dir.mkdir()
+    art_t, blob_t, _ = _build_synthetic_g4_archives(
+        tamper_dir,
+        omit_blob_relpaths=missing_lora,
+        tamper_blob_relpath="qwen3_4b_v3_lora/adapter_config.json",
+        include_realworld_tar=False,
+    )
+    with pytest.raises(ValueError, match="SHA-256"):
+        ingest_g4_bundles(
+            artifacts_tar=art_t,
+            blobs_tar=blob_t,
+            dest_artifacts_dir=tmp_path / "out_art_tamper",
+            dest_blobs_dir=tmp_path / "out_blob_tamper",
+            allow_missing_non_onnx_blobs=True,
         )

@@ -1,0 +1,283 @@
+{
+  "schema_version": "vertirta.g4_jax_4d_hires_and_lc_manifest/v4.0.0",
+  "mode": "LIVE_G4_JAX_CUDA_FP32",
+  "execution_mode": "true_jax_vmap_batch2",
+  "timestamp_utc": "2026-11-25T11:34:22.431705+00:00",
+  "xla_mem_fraction": 0.58,
+  "vmap_batch_size": 2,
+  "hires_grid_shape": [
+    101,
+    71,
+    101,
+    71
+  ],
+  "hires_nodes_per_regime": 51423241,
+  "export_grid_shape": [
+    41,
+    29,
+    41,
+    29
+  ],
+  "lift_cruise_cd_r": 0.0004244,
+  "hardware": {
+    "timestamp_utc": "2026-11-25T11:34:22.431724+00:00",
+    "available": true,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "driver_version": "580.82.07",
+    "memory_used_mib": 57003.0,
+    "memory_total_mib": 97887.0,
+    "gpu_util_pct": 0.0,
+    "mem_util_pct": 0.0,
+    "power_w": 92.49,
+    "temp_c": 53.0,
+    "compute_apps": [
+      {
+        "pid": 54659,
+        "process_name": "/usr/bin/python3",
+        "used_gpu_memory_mib": 56992.0
+      }
+    ]
+  },
+  "license_audit": {
+    "job_name": "job_jax_4d_hires_and_lc",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "VertiRTA_Analytical_6DOF_Physics"
+    ],
+    "eval_only_source_names": [],
+    "model_names": [
+      "JAX_HJ_Reachability_v0.7.0"
+    ]
+  },
+  "x8_240_solve": {
+    "execution_mode": "true_jax_vmap_batch2",
+    "vmap_batch_size": 2,
+    "vmap_chunks_succeeded": 2,
+    "vmap_fallback_reason": null,
+    "jax_peak_vram_mib": 10762.27,
+    "regimes": [
+      {
+        "regime_index": 0,
+        "regime_name": "Nominal",
+        "tw_ratio": 2.5,
+        "tilt_max_deg": 35.0,
+        "solve_wall_s": 85.637,
+        "eps_grid_m": 1.023341,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 1,
+        "regime_name": "1M",
+        "tw_ratio": 2.1,
+        "tilt_max_deg": 28.0,
+        "solve_wall_s": 85.637,
+        "eps_grid_m": 0.97951,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 2,
+        "regime_name": "2M-Cross",
+        "tw_ratio": 1.8,
+        "tilt_max_deg": 22.0,
+        "solve_wall_s": 28.96,
+        "eps_grid_m": 0.905636,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 3,
+        "regime_name": "Low-Vbat",
+        "tw_ratio": 1.85,
+        "tilt_max_deg": 22.0,
+        "solve_wall_s": 28.96,
+        "eps_grid_m": 0.882392,
+        "solved_via_jax_vmap": true
+      }
+    ]
+  },
+  "lift_cruise_8p1_solve": {
+    "execution_mode": "true_jax_vmap_batch2",
+    "vmap_batch_size": 2,
+    "vmap_chunks_succeeded": 2,
+    "vmap_fallback_reason": null,
+    "jax_peak_vram_mib": 10762.27,
+    "regimes": [
+      {
+        "regime_index": 0,
+        "regime_name": "LC-Hover-Nominal",
+        "tw_ratio": 1.8501,
+        "tilt_max_deg": 25.0,
+        "solve_wall_s": 75.071,
+        "eps_grid_m": 1.108861,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 1,
+        "regime_name": "LC-Hover-OEI-8p1",
+        "tw_ratio": 1.46,
+        "tilt_max_deg": 18.0,
+        "solve_wall_s": 75.071,
+        "eps_grid_m": 1.821541,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 2,
+        "regime_name": "LC-Transition-Corridor",
+        "tw_ratio": 1.65,
+        "tilt_max_deg": 22.0,
+        "solve_wall_s": 24.65,
+        "eps_grid_m": 1.334031,
+        "solved_via_jax_vmap": true
+      },
+      {
+        "regime_index": 3,
+        "regime_name": "LC-Cruise-FW-Degraded",
+        "tw_ratio": 1.55,
+        "tilt_max_deg": 28.0,
+        "solve_wall_s": 24.65,
+        "eps_grid_m": 1.822941,
+        "solved_via_jax_vmap": true
+      }
+    ]
+  },
+  "artifacts": {
+    "x8_240_vrtalut1": {
+      "filename": "cbvf_4d_x8_240_v4_from_101x71.vrta_lut",
+      "path": "/content/vertirta_m3_run/blobs/cbvf_4d_x8_240_v4_from_101x71.vrta_lut",
+      "magic": "VRTALUT1",
+      "dims": [
+        41,
+        29,
+        41,
+        29
+      ],
+      "size_bytes": 11313864,
+      "file_sha256": "aea138c82958c014f4d4714baf5b02cf0afa7bafd0366853d1682cfdcfac9795",
+      "payload_sha256": "2dbd2fd72d4a23be5a097ecbc9ad097781efc89a1e2fafa120f8e6d0771c38c1",
+      "eps_grid_m": [
+        1.023341,
+        0.97951,
+        0.905636,
+        0.882392
+      ],
+      "v_cap_f_mps": [
+        22.0,
+        19.1742,
+        12.9229,
+        12.9229
+      ]
+    },
+    "x8_240_vrtalut2_hires": {
+      "filename": "cbvf_4d_x8_240_hires_101x71.vrta_lut_hires",
+      "path": "/content/vertirta_m3_run/blobs/cbvf_4d_x8_240_hires_101x71.vrta_lut_hires",
+      "magic": "VRTALUT2",
+      "dims": [
+        101,
+        71,
+        101,
+        71
+      ],
+      "size_bytes": 411390024,
+      "file_sha256": "161e9103276c0022bb239c8d845afa53ab3932d5580f5d6bea528334501fd784",
+      "payload_sha256": "ef5833987db1c768de7a1e6cf9f8643df48c1d4e4b847711aba3d6e1289409f6",
+      "eps_grid_m": [
+        1.023341,
+        0.97951,
+        0.905636,
+        0.882392
+      ],
+      "v_cap_f_mps": [
+        22.0,
+        19.1742,
+        12.9229,
+        12.9229
+      ]
+    },
+    "x8_240_cel2d": {
+      "filename": "cel_2d_x8_240.vrta_cel2d",
+      "size_bytes": 11230,
+      "file_sha256": "1f308c0bf047c67cb7ea2a4f2f3744ee7bae2cf00992ff80a899ab6cd6115d05"
+    },
+    "lift_cruise_8p1_vrtalut1": {
+      "filename": "cbvf_4d_lc_8p1_41x29.vrta_lut",
+      "path": "/content/vertirta_m3_run/blobs/cbvf_4d_lc_8p1_41x29.vrta_lut",
+      "magic": "VRTALUT1",
+      "dims": [
+        41,
+        29,
+        41,
+        29
+      ],
+      "size_bytes": 11313864,
+      "file_sha256": "a73a98e6b4ee3f5e919dd7a39839c671cd762a73ee7aa3ab7c39c350e7c2ba7b",
+      "payload_sha256": "ae3b07680b7d460c46fae961f14996259dea4463513d11e27c153800815b452b",
+      "eps_grid_m": [
+        1.108861,
+        1.821541,
+        1.334031,
+        1.822941
+      ],
+      "v_cap_f_mps": [
+        22.0,
+        16.0,
+        28.0,
+        38.0
+      ]
+    },
+    "lift_cruise_8p1_vrtalut2_hires": {
+      "filename": "cbvf_4d_lc_8p1_hires_101x71.vrta_lut_hires",
+      "path": "/content/vertirta_m3_run/blobs/cbvf_4d_lc_8p1_hires_101x71.vrta_lut_hires",
+      "magic": "VRTALUT2",
+      "dims": [
+        101,
+        71,
+        101,
+        71
+      ],
+      "size_bytes": 411390024,
+      "file_sha256": "87ec988eab9b7041c87292cd510e211bd059100f35f91040b5672c1967d7f64a",
+      "payload_sha256": "ef6a89a8b970e91ee988655b07b7b69ab8a507739ead98e6380a83d9938d5d27",
+      "eps_grid_m": [
+        1.108861,
+        1.821541,
+        1.334031,
+        1.822941
+      ],
+      "v_cap_f_mps": [
+        22.0,
+        16.0,
+        28.0,
+        38.0
+      ]
+    }
+  },
+  "x8_soundness_passed": true,
+  "lc_soundness": {
+    "passed": true,
+    "failures": [],
+    "size_bytes": 11313864,
+    "lo": [
+      -2.0,
+      -48.0,
+      -5.0,
+      -12.0
+    ],
+    "hi": [
+      118.0,
+      20.0,
+      55.0,
+      8.0
+    ],
+    "eps_grid_m": [
+      1.108861,
+      1.821541,
+      1.334031,
+      1.822941
+    ],
+    "hover_nom_ge_oei_max_viol_m": 0.0
+  },
+  "lc_soundness_passed": true,
+  "soundness_passed": true,
+  "wall_clock_s": 435.73,
+  "report_sha256": "588701555dd528bad4b22da3efb303031b4b127113a6df6b804b6ca0f0a2466c"
+}

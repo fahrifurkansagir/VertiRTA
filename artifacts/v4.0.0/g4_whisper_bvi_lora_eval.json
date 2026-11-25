@@ -1,0 +1,384 @@
+{
+  "schema_version": "vertirta.g4_whisper_bvi_eval/v1.0.0",
+  "job_name": "job_whisper_bvi_lora",
+  "mode": "LIVE_G4_CUDA",
+  "timestamp_utc": "2026-11-25T12:41:05.357390+00:00",
+  "license_audit": {
+    "job_name": "job_whisper_bvi_lora",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "FLEURS-CC-BY-4.0",
+      "VertiRTA-BVI-DSP-Apache2"
+    ],
+    "eval_only_source_names": [
+      "FLEURS-CC-BY-4.0"
+    ],
+    "model_names": [
+      "openai/whisper-large-v3-turbo",
+      "openai/whisper-small"
+    ],
+    "ml_voice_audio_firewall_passed": true,
+    "approved_audio_and_models_count": 4
+  },
+  "vram_guard": {
+    "requested_vram_fraction": 0.65,
+    "pytorch_cuda_alloc_conf": "expandable_segments:True,max_split_size_mb:512",
+    "cuda_available": true,
+    "applied_on_device": 0,
+    "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "vram_total_mib": 97250.06,
+    "vram_cap_mib": 63212.54
+  },
+  "nvidia_smi_end": {
+    "timestamp_utc": "2026-11-25T12:41:05.357410+00:00",
+    "available": true,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "driver_version": "580.82.07",
+    "memory_used_mib": 799.0,
+    "memory_total_mib": 97887.0,
+    "gpu_util_pct": 53.0,
+    "mem_util_pct": 17.0,
+    "power_w": 92.62,
+    "temp_c": 41.0,
+    "compute_apps": [
+      {
+        "pid": 72966,
+        "process_name": "/usr/bin/python3",
+        "used_gpu_memory_mib": 790.0
+      }
+    ]
+  },
+  "whisper_inference_locks": {
+    "task": "transcribe",
+    "translate": false,
+    "no_context": true,
+    "carry_initial_prompt": true,
+    "min_audio_ctx": 256,
+    "max_audio_ctx": 384,
+    "nbest_k": 4,
+    "initial_prompt": "Kartal Sahil, Dragos Plaza, Maltepe Park, Cevizli Helipad, LTFJ, LTBX, MAYDAY, PAN-PAN, TC-VRT01, FATO-1, irtifa, divert"
+  },
+  "coaxial_bvi_dsp_audit": {
+    "vehicle_config_ref": "config/vehicle_x8_240.yaml",
+    "blades_per_rotor": 3,
+    "rotor_radius_m": 0.75,
+    "rpm_min": 1100.0,
+    "rpm_hover": 1449.58,
+    "rpm_max": 2291.83,
+    "expected_max_rpm_bpf_hz": 114.59,
+    "max_rpm_bpf_hz": 115.0,
+    "max_snr_error_db": 0.0,
+    "fsd50k_filter_self_test": {
+      "kept": 2,
+      "stripped": {
+        "cc_by_nc": 1,
+        "sampling_plus": 1,
+        "other_rejected": 0
+      }
+    }
+  },
+  "snr_strata_metrics": {
+    "S0_Clean": {
+      "target_snr_db": 18.0,
+      "measured_snr_db": 18.0,
+      "snr_error_db": 0.0,
+      "rpm_simulated": 1350.0,
+      "waveform_rms": 0.19387
+    },
+    "S1_Cruise": {
+      "target_snr_db": 11.5,
+      "measured_snr_db": 11.5,
+      "snr_error_db": 0.0,
+      "rpm_simulated": 1650.0,
+      "waveform_rms": 0.19905
+    },
+    "S2_Hover": {
+      "target_snr_db": 5.0,
+      "measured_snr_db": 5.0,
+      "snr_error_db": 0.0,
+      "rpm_simulated": 1950.0,
+      "waveform_rms": 0.22159
+    },
+    "S3_Garbled": {
+      "target_snr_db": 0.5,
+      "measured_snr_db": 0.5,
+      "snr_error_db": 0.0,
+      "rpm_simulated": 2250.0,
+      "waveform_rms": 0.26097
+    }
+  },
+  "real_speech_ingestion": {
+    "corpus": "google/fleurs",
+    "license": "CC-BY-4.0",
+    "train_tr_utterances": 1000,
+    "train_en_utterances": 1000,
+    "eval_tr_utterances": 128,
+    "eval_en_utterances": 128
+  },
+  "models_trained": {
+    "whisper_large_v3_turbo_bvi_lora": {
+      "model_id": "openai/whisper-large-v3-turbo",
+      "epochs": 3,
+      "requested_batch_size": 32,
+      "batch_size": 16,
+      "oom_fallback_triggered": true,
+      "optimizer_steps": 375,
+      "initial_loss": 2.1875,
+      "final_loss": 0.3516,
+      "zero_shot_eval": {
+        "by_snr_stratum": {
+          "S0_Clean": {
+            "n_eval": 256,
+            "wer": 0.1314,
+            "cer": 0.0818,
+            "wer_tr": 0.1836,
+            "cer_tr": 0.1044,
+            "wer_en": 0.0892,
+            "cer_en": 0.0594,
+            "mean_latency_ms": 14.88
+          },
+          "S1_Cruise": {
+            "n_eval": 256,
+            "wer": 0.1446,
+            "cer": 0.0877,
+            "wer_tr": 0.2108,
+            "cer_tr": 0.1163,
+            "wer_en": 0.0911,
+            "cer_en": 0.0592,
+            "mean_latency_ms": 13.81
+          },
+          "S2_Hover": {
+            "n_eval": 256,
+            "wer": 0.196,
+            "cer": 0.1112,
+            "wer_tr": 0.2871,
+            "cer_tr": 0.1452,
+            "wer_en": 0.1223,
+            "cer_en": 0.0773,
+            "mean_latency_ms": 13.84
+          },
+          "S3_Garbled": {
+            "n_eval": 256,
+            "wer": 0.3174,
+            "cer": 0.1913,
+            "wer_tr": 0.4039,
+            "cer_tr": 0.2148,
+            "wer_en": 0.2475,
+            "cer_en": 0.1679,
+            "mean_latency_ms": 14.23
+          }
+        },
+        "by_lang": {
+          "TR": {
+            "n_eval": 512,
+            "wer": 0.2714,
+            "cer": 0.1452
+          },
+          "EN": {
+            "n_eval": 512,
+            "wer": 0.1375,
+            "cer": 0.0909
+          }
+        }
+      },
+      "bvi_lora_eval": {
+        "by_snr_stratum": {
+          "S0_Clean": {
+            "n_eval": 256,
+            "wer": 0.1797,
+            "cer": 0.108,
+            "wer_tr": 0.2708,
+            "cer_tr": 0.1544,
+            "wer_en": 0.1061,
+            "cer_en": 0.0617,
+            "mean_latency_ms": 28.58
+          },
+          "S1_Cruise": {
+            "n_eval": 256,
+            "wer": 0.2025,
+            "cer": 0.1201,
+            "wer_tr": 0.3217,
+            "cer_tr": 0.1774,
+            "wer_en": 0.1061,
+            "cer_en": 0.0629,
+            "mean_latency_ms": 27.98
+          },
+          "S2_Hover": {
+            "n_eval": 256,
+            "wer": 0.2155,
+            "cer": 0.1315,
+            "wer_tr": 0.2976,
+            "cer_tr": 0.1533,
+            "wer_en": 0.1491,
+            "cer_en": 0.1097,
+            "mean_latency_ms": 27.98
+          },
+          "S3_Garbled": {
+            "n_eval": 256,
+            "wer": 0.3536,
+            "cer": 0.2108,
+            "wer_tr": 0.4321,
+            "cer_tr": 0.2121,
+            "wer_en": 0.2901,
+            "cer_en": 0.2095,
+            "mean_latency_ms": 29.42
+          }
+        },
+        "by_lang": {
+          "TR": {
+            "n_eval": 512,
+            "wer": 0.3305,
+            "cer": 0.1743
+          },
+          "EN": {
+            "n_eval": 512,
+            "wer": 0.1629,
+            "cer": 0.1109
+          }
+        }
+      },
+      "audio_ctx_latency_benchmark": {
+        "encoder_ms_audio_ctx_1500": 13.294,
+        "encoder_ms_audio_ctx_256": 4.823,
+        "speedup_factor": 2.76,
+        "measured_real_sliced_encoder": true
+      },
+      "adapter_dir": "/content/vertirta_m3_run/blobs/whisper_large_v3_turbo_bvi_lora",
+      "ggml_q8_0_export_ready": true
+    },
+    "whisper_small_bvi_lora": {
+      "model_id": "openai/whisper-small",
+      "epochs": 3,
+      "requested_batch_size": 32,
+      "batch_size": 32,
+      "oom_fallback_triggered": false,
+      "optimizer_steps": 189,
+      "initial_loss": 2.8594,
+      "final_loss": 0.7578,
+      "zero_shot_eval": {
+        "by_snr_stratum": {
+          "S0_Clean": {
+            "n_eval": 256,
+            "wer": 0.1929,
+            "cer": 0.1051,
+            "wer_tr": 0.2985,
+            "cer_tr": 0.1463,
+            "wer_en": 0.1076,
+            "cer_en": 0.064,
+            "mean_latency_ms": 9.0
+          },
+          "S1_Cruise": {
+            "n_eval": 256,
+            "wer": 0.2472,
+            "cer": 0.1319,
+            "wer_tr": 0.4062,
+            "cer_tr": 0.1922,
+            "wer_en": 0.1186,
+            "cer_en": 0.0717,
+            "mean_latency_ms": 9.72
+          },
+          "S2_Hover": {
+            "n_eval": 256,
+            "wer": 0.3351,
+            "cer": 0.1809,
+            "wer_tr": 0.5234,
+            "cer_tr": 0.2535,
+            "wer_en": 0.1829,
+            "cer_en": 0.1086,
+            "mean_latency_ms": 9.49
+          },
+          "S3_Garbled": {
+            "n_eval": 256,
+            "wer": 0.524,
+            "cer": 0.3151,
+            "wer_tr": 0.701,
+            "cer_tr": 0.3959,
+            "wer_en": 0.3808,
+            "cer_en": 0.2346,
+            "mean_latency_ms": 11.82
+          }
+        },
+        "by_lang": {
+          "TR": {
+            "n_eval": 512,
+            "wer": 0.4823,
+            "cer": 0.247
+          },
+          "EN": {
+            "n_eval": 512,
+            "wer": 0.1975,
+            "cer": 0.1197
+          }
+        }
+      },
+      "bvi_lora_eval": {
+        "by_snr_stratum": {
+          "S0_Clean": {
+            "n_eval": 256,
+            "wer": 0.2876,
+            "cer": 0.1626,
+            "wer_tr": 0.4993,
+            "cer_tr": 0.2625,
+            "wer_en": 0.1164,
+            "cer_en": 0.063,
+            "mean_latency_ms": 19.34
+          },
+          "S1_Cruise": {
+            "n_eval": 256,
+            "wer": 0.367,
+            "cer": 0.2058,
+            "wer_tr": 0.6111,
+            "cer_tr": 0.3122,
+            "wer_en": 0.1697,
+            "cer_en": 0.0998,
+            "mean_latency_ms": 20.71
+          },
+          "S2_Hover": {
+            "n_eval": 256,
+            "wer": 0.3989,
+            "cer": 0.2197,
+            "wer_tr": 0.6679,
+            "cer_tr": 0.3369,
+            "wer_en": 0.1814,
+            "cer_en": 0.1029,
+            "mean_latency_ms": 19.61
+          },
+          "S3_Garbled": {
+            "n_eval": 256,
+            "wer": 0.5774,
+            "cer": 0.3283,
+            "wer_tr": 0.8582,
+            "cer_tr": 0.4494,
+            "wer_en": 0.3503,
+            "cer_en": 0.2076,
+            "mean_latency_ms": 20.9
+          }
+        },
+        "by_lang": {
+          "TR": {
+            "n_eval": 512,
+            "wer": 0.6591,
+            "cer": 0.3402
+          },
+          "EN": {
+            "n_eval": 512,
+            "wer": 0.2045,
+            "cer": 0.1183
+          }
+        }
+      },
+      "audio_ctx_latency_benchmark": {
+        "encoder_ms_audio_ctx_1500": 3.057,
+        "encoder_ms_audio_ctx_256": 1.884,
+        "speedup_factor": 1.62,
+        "measured_real_sliced_encoder": true
+      },
+      "adapter_dir": "/content/vertirta_m3_run/blobs/whisper_small_bvi_lora",
+      "ggml_q8_0_export_ready": true
+    }
+  },
+  "peak_torch_allocated_mib": 63132.95,
+  "elapsed_s": 1564.9412,
+  "report_sha256": "367acb765ee67625c7cf81e14e95b387caf64c045f4b3641d06b1545496cff60"
+}

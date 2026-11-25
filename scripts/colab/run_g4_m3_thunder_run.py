@@ -93,6 +93,7 @@ REMOTE_BOOTSTRAP_PACKAGES: tuple[str, ...] = (
     "pyyaml",
     "timm",
     "tifffile",
+    "imagecodecs",
     "opencv-python-headless",
 )
 
@@ -161,7 +162,7 @@ def build_remote_bootstrap_script(remote_work_dir: str) -> str:
             "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--upgrade-strategy', 'only-if-needed', *pkgs], check=True)",
             "# Install StanfordASL/hj_reachability v0.7.0 with --no-deps to protect Blackwell sm_120 JAX wheels",
             "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-deps', 'git+https://github.com/StanfordASL/hj_reachability.git@v0.7.0'], check=True)",
-            "import torch, jax, hj_reachability, transformers, trl, peft, z3, onnx, remotezip, datasets, tifffile, cv2",
+            "import torch, jax, hj_reachability, transformers, trl, peft, z3, onnx, remotezip, datasets, tifffile, imagecodecs, cv2",
             "print('BOOTSTRAP_OK', torch.__version__, jax.__version__, 'cuda=', torch.cuda.is_available())",
         ]
     )

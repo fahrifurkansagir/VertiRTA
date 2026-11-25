@@ -1,0 +1,490 @@
+{
+  "schema_version": "vertirta.g4_pidnet_v21_xfeat_metrics/v4.0.0",
+  "mode": "LIVE_G4_CUDA_BF16",
+  "weights_status": "TRAINED_COLAB_G4_DISTILLED_WEIGHTS_V21",
+  "timestamp_utc": "2026-11-25T12:03:12.486819+00:00",
+  "hardware": {
+    "device": "cuda:0",
+    "vram_config": {
+      "requested_vram_fraction": 0.65,
+      "pytorch_cuda_alloc_conf": "expandable_segments:True,max_split_size_mb:512",
+      "cuda_available": true,
+      "applied_on_device": 0,
+      "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "vram_total_mib": 97250.06,
+      "vram_cap_mib": 63212.54
+    },
+    "peak_cuda_allocated_mib": 15626.28,
+    "nvidia_smi": {
+      "timestamp_utc": "2026-11-25T12:03:12.486837+00:00",
+      "available": true,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "driver_version": "580.82.07",
+      "memory_used_mib": 36227.0,
+      "memory_total_mib": 97887.0,
+      "gpu_util_pct": 0.0,
+      "mem_util_pct": 0.0,
+      "power_w": 95.58,
+      "temp_c": 36.0,
+      "compute_apps": [
+        {
+          "pid": 61922,
+          "process_name": "/usr/bin/python3",
+          "used_gpu_memory_mib": 36206.0
+        }
+      ]
+    }
+  },
+  "license_audit": {
+    "job_name": "job_pidnet_v21_xfeat",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "FLAIR-1",
+      "OpenEarthMap_Permissive_Whitelist",
+      "FloodNet-Supervised-v1.0",
+      "SkyScenes"
+    ],
+    "eval_only_source_names": [
+      "AeroScapes",
+      "ICG_Semantic_Drone",
+      "UAVScenes"
+    ],
+    "model_names": [
+      "PIDNet-S",
+      "DINOv2-Large",
+      "Depth-Anything-V2-Small",
+      "XFeat_LighterGlue",
+      "MegaLoc"
+    ],
+    "oem_attribution_audit": {
+      "origin": "https://open-earth-map.org/attribution.html",
+      "sha256": "54d65e87141862f1ab7ccddf18c5d810d4f4fff8761977d1c57f31d02ac564f6",
+      "total_region_rows": 102,
+      "license_breakdown": {
+        "<blank>": 12,
+        "CC BY 4.0": 37,
+        "CC BY-NC-SA 4.0": 36,
+        "CC BY-SA 4.0": 6,
+        "DL-DE-BY-2.0": 6,
+        "Public domain": 5
+      }
+    },
+    "oem_permissive_region_count": 38,
+    "startup_gate_approved_train": [
+      "FLAIR-1",
+      "OpenEarthMap",
+      "FloodNet-Supervised-v1.0",
+      "SkyScenes"
+    ]
+  },
+  "skyscenes_nested_tar_filter_active": true,
+  "datasets": [
+    {
+      "source": "FLAIR-1",
+      "license": "OPEN LICENCE 2.0 (etalab-2.0)",
+      "uses_osm_odbl": false,
+      "archive_url": "https://storage.gra.cloud.ovh.net/v1/AUTH_366279ce616242ebb14161b7991a8461/defi-ia/flair_data_1/flair_1_toy_dataset.zip",
+      "archive_mb": 215.69,
+      "archive_sha256": "dd6075d6d10e862ab48dd0f13236c40b1a491df0ee5403f403632f1c9539d858",
+      "train_samples": 218,
+      "val_samples": 32,
+      "unique_zones": 130
+    },
+    {
+      "source": "OpenEarthMap-41",
+      "license": "CC BY 4.0 + DL-DE-BY-2.0 ONLY (strictly filtered via live attribution.html)",
+      "uses_osm_odbl": false,
+      "archive_url": "https://zenodo.org/api/records/7223446/files/OpenEarthMap.zip/content",
+      "ingestion_method": "selective_http_range_remotezip_zero_non_permissive_bytes_downloaded",
+      "total_labeled_pairs_scanned": 2687,
+      "accepted_pairs": 401,
+      "rejected_non_permissive_pairs": 1296,
+      "accepted_region_count": 20,
+      "accepted_regions": [
+        "aachen",
+        "accra",
+        "bielefeld",
+        "bogota",
+        "buenos aires",
+        "chiangmai",
+        "chisinau",
+        "cox's bazar",
+        "dar es salaam",
+        "koeln",
+        "lohur",
+        "mahe",
+        "monrovia",
+        "muenster",
+        "ngaoundere",
+        "santiago",
+        "soriano",
+        "svaneti",
+        "tonga",
+        "zanzibar"
+      ],
+      "rejected_region_count": 39,
+      "raw_mask_min": 0,
+      "raw_mask_max": 8,
+      "oem_zero_indexed": false,
+      "train_samples": 300,
+      "val_samples": 101
+    },
+    {
+      "source": "FloodNet-Supervised-v1.0",
+      "license": "CDLA-Permissive-1.0",
+      "uses_osm_odbl": false,
+      "hf_repo": "torchgeo/floodnet",
+      "ingestion_method": "selective_http_range_remotezip_labeled_only",
+      "raw_mask_min": 0,
+      "raw_mask_max": 9,
+      "train_samples": 338,
+      "val_samples": 60
+    },
+    {
+      "source": "SkyScenes",
+      "license": "MIT",
+      "uses_osm_odbl": false,
+      "hf_repo": "hoffman-lab/SkyScenes",
+      "shards": [
+        "H_35_P_45/Town01(train:69)",
+        "H_35_P_60/Town02(train:69)",
+        "H_60_P_90/Town03(train:69)",
+        "H_35_P_45/Town05(val:69)"
+      ],
+      "depth_normal_facade_filter_nz_threshold": 0.85,
+      "building_roof_kept_pixels": 6815923,
+      "building_facade_remapped_to_class2_pixels": 6651677,
+      "facade_remap_fraction_of_building": 0.493902,
+      "train_samples": 207,
+      "val_samples": 69
+    }
+  ],
+  "teachers": {
+    "enabled": true,
+    "dinov2_repo": "facebook/dinov2-large",
+    "dinov2_license": "Apache-2.0",
+    "dav2_repo": "depth-anything/Depth-Anything-V2-Small-hf",
+    "dav2_license": "Apache-2.0",
+    "dinov2_hidden_size": 1024,
+    "dinov2_num_register_tokens": 0,
+    "dav2_model_type": "depth_anything"
+  },
+  "pidnet_v21_training": {
+    "requested_batch_size": 64,
+    "batch_size": 64,
+    "learning_rate": 0.0008,
+    "epochs": 18,
+    "sampler_num_samples": 1063,
+    "num_workers": 4,
+    "persistent_workers": true,
+    "oom_fallback_triggered": false,
+    "oom_fallback_reason": null,
+    "oblique_perspective_aug_prob": 0.35,
+    "pareto_selection": {
+      "selected": {
+        "epoch": 2.0,
+        "val_miou": 0.16961,
+        "val_fsr": 0.009049
+      },
+      "feasible_count": 1,
+      "fsr_gate_met": true
+    },
+    "pareto_history": [
+      {
+        "epoch": 1.0,
+        "val_miou": 0.070054,
+        "val_fsr": 0.744981
+      },
+      {
+        "epoch": 2.0,
+        "val_miou": 0.16961,
+        "val_fsr": 0.009049
+      },
+      {
+        "epoch": 3.0,
+        "val_miou": 0.312952,
+        "val_fsr": 0.156646
+      },
+      {
+        "epoch": 4.0,
+        "val_miou": 0.2067,
+        "val_fsr": 0.103053
+      },
+      {
+        "epoch": 5.0,
+        "val_miou": 0.367363,
+        "val_fsr": 0.160204
+      },
+      {
+        "epoch": 6.0,
+        "val_miou": 0.399023,
+        "val_fsr": 0.096375
+      },
+      {
+        "epoch": 7.0,
+        "val_miou": 0.306906,
+        "val_fsr": 0.070502
+      },
+      {
+        "epoch": 8.0,
+        "val_miou": 0.41103,
+        "val_fsr": 0.087903
+      },
+      {
+        "epoch": 9.0,
+        "val_miou": 0.391011,
+        "val_fsr": 0.095465
+      },
+      {
+        "epoch": 10.0,
+        "val_miou": 0.36208,
+        "val_fsr": 0.060081
+      },
+      {
+        "epoch": 11.0,
+        "val_miou": 0.441834,
+        "val_fsr": 0.096965
+      },
+      {
+        "epoch": 12.0,
+        "val_miou": 0.442508,
+        "val_fsr": 0.077355
+      },
+      {
+        "epoch": 13.0,
+        "val_miou": 0.432145,
+        "val_fsr": 0.089616
+      },
+      {
+        "epoch": 14.0,
+        "val_miou": 0.446932,
+        "val_fsr": 0.105103
+      },
+      {
+        "epoch": 15.0,
+        "val_miou": 0.431726,
+        "val_fsr": 0.082413
+      },
+      {
+        "epoch": 16.0,
+        "val_miou": 0.431502,
+        "val_fsr": 0.09721
+      },
+      {
+        "epoch": 17.0,
+        "val_miou": 0.449918,
+        "val_fsr": 0.078626
+      },
+      {
+        "epoch": 18.0,
+        "val_miou": 0.450117,
+        "val_fsr": 0.078942
+      }
+    ]
+  },
+  "permissive_val_metrics": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.228461,
+      "Safe_Flat_Roof": 0.009622,
+      "Hazard_Obstacle_Structure": 0.025302,
+      "Hazard_Dynamic_Human_Vehicle": 0.0,
+      "Hazard_Water_Vegetation": 0.584666
+    },
+    "miou_present_classes": 0.16961,
+    "num_present_classes": 5,
+    "pixel_accuracy": 0.605157,
+    "false_safe_rate_fsr": 0.009049,
+    "safe_precision": 0.932657,
+    "total_eval_pixels": 63877094,
+    "true_hazard_pixels": 37061612,
+    "false_safe_pixels": 335352,
+    "confusion_matrix_5x5": [
+      [
+        4245342,
+        47892,
+        288307,
+        0,
+        13431904
+      ],
+      [
+        265706,
+        85467,
+        761,
+        0,
+        8450103
+      ],
+      [
+        195667,
+        27143,
+        72211,
+        0,
+        2258578
+      ],
+      [
+        56512,
+        212,
+        6946,
+        0,
+        131536
+      ],
+      [
+        51056,
+        4762,
+        4363,
+        0,
+        34252626
+      ]
+    ],
+    "surface_normal_mean_cosine_sim": 0.905343,
+    "surface_normal_mean_angle_deg": 25.131
+  },
+  "ood_metrics": {
+    "eval_protocol": "heldout_permissive_val_anomalymix_p0.5_stride4",
+    "id_pixels_evaluated": 3931292,
+    "ood_pixels_evaluated": 61052,
+    "raw_energy_auroc": 0.506644,
+    "raw_energy_fpr95": 0.943393,
+    "boundary_compensated_auroc": 0.447997,
+    "boundary_compensated_fpr95": 0.95177,
+    "mean_id_energy": -2.3095,
+    "mean_ood_energy": -2.3038
+  },
+  "ood_calibration": {
+    "T_ood": 1.0,
+    "T_prob": 0.9546113273138888,
+    "kappa_b": 1.5,
+    "tau_ood": -2.1573729515075684,
+    "id_tpr_target": 0.95,
+    "n_id_samples": 251030,
+    "nll_before": 1.0268845558166504,
+    "nll_after": 1.0260040760040283
+  },
+  "quarantined_zero_shot_aeroscapes": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.029563,
+      "Safe_Flat_Roof": null,
+      "Hazard_Obstacle_Structure": 0.0,
+      "Hazard_Dynamic_Human_Vehicle": 0.0,
+      "Hazard_Water_Vegetation": 0.616717
+    },
+    "miou_present_classes": 0.16157,
+    "num_present_classes": 4,
+    "pixel_accuracy": 0.617849,
+    "false_safe_rate_fsr": 0.004469,
+    "safe_precision": 0.71564,
+    "total_eval_pixels": 66313961,
+    "true_hazard_pixels": 48155889,
+    "false_safe_pixels": 215190,
+    "confusion_matrix_5x5": [
+      [
+        541404,
+        159,
+        0,
+        0,
+        17616509
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        134030,
+        43765,
+        0,
+        0,
+        6662250
+      ],
+      [
+        20955,
+        15792,
+        0,
+        0,
+        847837
+      ],
+      [
+        648,
+        0,
+        0,
+        0,
+        40430612
+      ]
+    ],
+    "dataset": "AeroScapes",
+    "hf_repo": "dronefreak/Aeroscapes",
+    "license": "CC BY-SA 4.0 (QUARANTINED_ZERO_SHOT_EVAL_ONLY)",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "evaluated_images": 350
+  },
+  "kartal_reloc_eval": {
+    "ortho_gsd_m": 0.5,
+    "matcher_backend": "verlab_xfeat_apache2_ransac",
+    "xfeat_distill_steps": 16,
+    "real_ortho_tiles_used": 36,
+    "queries_evaluated": 36,
+    "ransac_3gate_pass_count": 36,
+    "ransac_gate_pass_rate": 1.0,
+    "mean_inliers": 372.86,
+    "mean_reproj_rmse_px": 1.162,
+    "mean_hull_area_ratio": 0.6781,
+    "cep50_m": 0.2183,
+    "ce95_m": 0.4337,
+    "global_retrieval_r1": 0.3611,
+    "global_retrieval_r5": 0.7222,
+    "sentinel2_10m_status": "GROSS_BLUNDER_ONLY_45M_CEP50"
+  },
+  "onnx_exports": {
+    "pidnet_slz_v21": {
+      "filename": "pidnet_slz_v21_opset17.onnx",
+      "path": "/content/vertirta_m3_run/blobs/pidnet_slz_v21_opset17.onnx",
+      "size_bytes": 32069725,
+      "sha256": "6f6d246e8f5edfd192a380deaf4eb2cabd344e98e9b839e99a6173ce6447ad05",
+      "opset_version": 17,
+      "deploy_parameters": 8003817,
+      "input_names": [
+        "rgb_nchw"
+      ],
+      "output_names": [
+        "seg_logits",
+        "surf_normals",
+        "bdry_prob"
+      ],
+      "input_shape": [
+        1,
+        3,
+        512,
+        512
+      ],
+      "onnx_checker_passed": true
+    },
+    "xfeat_512": {
+      "filename": "xfeat_512_opset17.onnx",
+      "path": "/content/vertirta_m3_run/blobs/xfeat_512_opset17.onnx",
+      "size_bytes": 337857,
+      "sha256": "5725b19ae193306af5c7584d8c71b1dbd71c0f0090b38e70fcc720ae9396bd2a",
+      "opset_version": 17,
+      "deploy_parameters": 83946,
+      "input_names": [
+        "gray_nchw"
+      ],
+      "output_names": [
+        "descriptors",
+        "reliability",
+        "keypoints_logits"
+      ],
+      "input_shape": [
+        1,
+        1,
+        512,
+        512
+      ],
+      "onnx_checker_passed": true
+    }
+  },
+  "wall_clock_s": 933.955,
+  "report_sha256": "26a4798b582e1ce8dc604e1878d48e025b1b3c741b81aa8d84361b371122e8d5"
+}

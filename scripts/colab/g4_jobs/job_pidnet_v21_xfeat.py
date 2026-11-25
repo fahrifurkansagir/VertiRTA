@@ -109,20 +109,187 @@ def select_pidnet_learning_rate(batch_size: int) -> float:
     return 8e-4 if int(batch_size) >= 64 else 6e-4
 
 
+def _pareto_checkpoint_sort_key(
+    cand: dict[str, float],
+    *,
+    max_fsr: float = 0.030,
+    min_miou: float = 0.25,
+) -> tuple[int, float, float]:
+    """Total 3-tier ranking key: non-degenerate feasible > non-degenerate high-mIoU > degenerate."""
+    miou = float(cand["val_miou"])
+    fsr = float(cand["val_fsr"])
+    is_non_degenerate = miou >= float(min_miou)
+    if is_non_degenerate and fsr <= float(max_fsr):
+        return (2, miou, -fsr)
+    if is_non_degenerate:
+        return (1, miou, -fsr)
+    return (0, miou, -fsr)
+
+
 def select_pareto_checkpoint(
     candidates: list[dict[str, float]],
     *,
     max_fsr: float = 0.030,
+    min_miou: float = 0.25,
 ) -> dict[str, Any]:
-    """Select argmax val_mIoU strictly subject to val_FSR <= max_fsr (fallback: min val_FSR)."""
+    """Select argmax val_mIoU subject to val_mIoU >= min_miou and val_FSR <= max_fsr.
+
+    Never selects a collapsed all-hazard checkpoint (val_mIoU < min_miou) over a non-degenerate
+    checkpoint. When no non-degenerate epoch satisfies val_FSR <= max_fsr, selects the highest
+    val_mIoU non-degenerate backbone so post-hoc safe-logit bias calibration can satisfy FSR.
+    """
     if not candidates:
         raise ValueError("Candidate checkpoint list must be non-empty.")
-    feasible = [c for c in candidates if float(c["val_fsr"]) <= float(max_fsr)]
-    if feasible:
-        best = max(feasible, key=lambda c: (float(c["val_miou"]), -float(c["val_fsr"])))
-        return {"selected": best, "feasible_count": len(feasible), "fsr_gate_met": True}
-    best = min(candidates, key=lambda c: (float(c["val_fsr"]), -float(c["val_miou"])))
-    return {"selected": best, "feasible_count": 0, "fsr_gate_met": False}
+    if not (0.0 <= float(min_miou) <= 1.0):
+        raise ValueError(f"min_miou must be in [0.0, 1.0], got {min_miou}")
+
+    non_degenerate = [c for c in candidates if float(c["val_miou"]) >= float(min_miou)]
+    degenerate_rejected_count = len(candidates) - len(non_degenerate)
+    feasible = [c for c in non_degenerate if float(c["val_fsr"]) <= float(max_fsr)]
+    best = max(
+        candidates,
+        key=lambda c: _pareto_checkpoint_sort_key(c, max_fsr=max_fsr, min_miou=min_miou),
+    )
+    return {
+        "selected": best,
+        "feasible_count": len(feasible),
+        "fsr_gate_met": bool(len(feasible) > 0),
+        "degenerate_rejected_count": degenerate_rejected_count,
+        "min_miou_floor": float(min_miou),
+    }
+
+
+def _compute_fsr_and_miou_np(
+    preds: np.ndarray,
+    labels: np.ndarray,
+    num_classes: int,
+    safe_idx: list[int],
+    hazard_idx: list[int],
+) -> tuple[float, float, int]:
+    """Compute exact False-Safe Rate (FSR) and present-class mIoU from flat integer arrays."""
+    idx_flat = labels * num_classes + preds
+    conf = np.bincount(idx_flat, minlength=num_classes * num_classes).reshape(num_classes, num_classes)
+
+    true_hazard = int(conf[np.ix_(hazard_idx, list(range(num_classes)))].sum())
+    false_safe = int(conf[np.ix_(hazard_idx, safe_idx)].sum())
+    fsr = float(false_safe) / float(max(1, true_hazard)) if true_hazard > 0 else 0.0
+
+    present_ious: list[float] = []
+    for c in range(num_classes):
+        gt_sum = int(conf[c, :].sum())
+        if gt_sum == 0:
+            continue
+        tp = int(conf[c, c])
+        pred_sum = int(conf[:, c].sum())
+        union = gt_sum + pred_sum - tp
+        present_ious.append(float(tp) / float(max(1, union)))
+    miou = float(np.mean(present_ious)) if present_ious else 0.0
+    return fsr, miou, true_hazard
+
+
+def calibrate_safe_logit_bias_for_fsr(
+    logits: Any,
+    labels: Any,
+    target_max_fsr: float = 0.030,
+    *,
+    safe_classes: tuple[int, ...] = (0, 1),
+) -> dict[str, Any]:
+    """Find smallest-magnitude negative bias delta <= 0 on safe logits {0, 1} achieving FSR <= target.
+
+    Calibrated strictly post-hoc on the permissive ID validation split to preserve a high-mIoU
+    backbone while deterministically bounding False-Safe Rate (FSR). Accepts NumPy or PyTorch inputs.
+    """
+    if not (0.0 <= float(target_max_fsr) <= 1.0):
+        raise ValueError(f"target_max_fsr must be in [0.0, 1.0], got {target_max_fsr}")
+
+    logits_np = (
+        logits.detach().cpu().float().numpy()
+        if hasattr(logits, "detach")
+        else np.asarray(logits, dtype=np.float32)
+    )
+    labels_np = (
+        labels.detach().cpu().long().numpy()
+        if hasattr(labels, "detach")
+        else np.asarray(labels, dtype=np.int64)
+    )
+
+    if logits_np.ndim < 2:
+        raise ValueError(f"logits must have shape (..., C) with ndim >= 2, got {logits_np.shape}")
+    num_classes = int(logits_np.shape[-1])
+    if num_classes < 3:
+        raise ValueError(f"Expected at least 3 classes (safe + hazard), got {num_classes}")
+
+    safe_idx = sorted({int(c) for c in safe_classes})
+    if not safe_idx or any(c < 0 or c >= num_classes for c in safe_idx):
+        raise ValueError(f"Invalid safe_classes={safe_classes} for num_classes={num_classes}")
+    hazard_idx = [c for c in range(num_classes) if c not in safe_idx]
+    if not hazard_idx:
+        raise ValueError("At least one hazard class is required for FSR calibration.")
+
+    logits_flat = logits_np.reshape(-1, num_classes).astype(np.float32, copy=False)
+    labels_flat = labels_np.reshape(-1).astype(np.int64, copy=False)
+    if logits_flat.shape[0] != labels_flat.shape[0]:
+        raise ValueError(
+            f"Mismatched sample counts: logits={logits_flat.shape[0]} != labels={labels_flat.shape[0]}"
+        )
+
+    valid = (labels_flat >= 0) & (labels_flat < num_classes)
+    if not bool(np.any(valid)):
+        raise ValueError("No valid ID samples found for post-hoc FSR safe-logit bias calibration.")
+
+    v_logits = logits_flat[valid]
+    v_labels = labels_flat[valid]
+
+    raw_preds = np.argmax(v_logits, axis=1)
+    raw_fsr, raw_miou, true_hazard = _compute_fsr_and_miou_np(
+        raw_preds, v_labels, num_classes, safe_idx, hazard_idx
+    )
+
+    delta = 0.0
+    cal_fsr = raw_fsr
+    cal_miou = raw_miou
+
+    if true_hazard > 0 and raw_fsr > float(target_max_fsr):
+        hazard_mask = np.isin(v_labels, hazard_idx)
+        h_logits = v_logits[hazard_mask]
+        s_max = np.max(h_logits[:, safe_idx], axis=1).astype(np.float64)
+        h_max = np.max(h_logits[:, hazard_idx], axis=1).astype(np.float64)
+        margins = s_max - h_max
+
+        max_false_safe = int(math.floor(float(target_max_fsr) * len(margins)))
+        sorted_margins = np.sort(margins)[::-1]
+        if max_false_safe < len(sorted_margins):
+            cutoff_margin = float(sorted_margins[max_false_safe])
+            if cutoff_margin >= 0.0:
+                eps = max(1e-4, abs(cutoff_margin) * 1e-5)
+                delta = math.floor(-(cutoff_margin + eps) * 1e6) / 1e6
+
+        for _ in range(16):
+            shifted = v_logits.copy()
+            shifted[:, safe_idx] = shifted[:, safe_idx] + np.float32(delta)
+            cal_preds = np.argmax(shifted, axis=1)
+            cal_fsr, cal_miou, _ = _compute_fsr_and_miou_np(
+                cal_preds, v_labels, num_classes, safe_idx, hazard_idx
+            )
+            if cal_fsr <= float(target_max_fsr) + 1e-12:
+                break
+            step = max(1e-4, abs(delta) * 1e-4)
+            delta = math.floor((delta - step) * 1e6) / 1e6
+
+    delta_clean = 0.0 if delta == 0.0 else round(float(delta), 6)
+    return {
+        "safe_logit_bias_delta": delta_clean,
+        "safe_classes": safe_idx,
+        "target_max_fsr": float(target_max_fsr),
+        "val_fsr_before": round(float(raw_fsr), 6),
+        "val_fsr_after": round(float(cal_fsr), 6),
+        "val_miou_before": round(float(raw_miou), 6),
+        "val_miou_after": round(float(cal_miou), 6),
+        "applied": bool(delta_clean < 0.0),
+        "fsr_gate_met": bool(cal_fsr <= float(target_max_fsr) + 1e-12),
+        "n_valid_pixels": int(v_labels.shape[0]),
+        "n_hazard_pixels": int(true_hazard),
+    }
 
 
 def _find_perspective_coeffs(src_pts: list[tuple[float, float]], dst_pts: list[tuple[float, float]]) -> list[float]:
@@ -620,7 +787,7 @@ def _train_pidnet_attempt(
         pareto_history: list[dict[str, float]] = []
         best_state: dict[str, Any] | None = None
         best_val_tuple: tuple[dict[str, Any], Any, Any, Any, dict[str, Any]] | None = None
-        best_score_key: tuple[int, float, float] = (-1, -1.0, -1.0)
+        best_score_key: tuple[int, float, float] = (-1, -math.inf, -math.inf)
 
         for epoch in range(1, total_epochs + 1):
             pidnet_train.train()
@@ -673,8 +840,9 @@ def _train_pidnet_attempt(
             v_m = val_tuple[0]
             v_miou = float(v_m["miou_present_classes"])
             v_fsr = float(v_m["false_safe_rate_fsr"])
-            pareto_history.append({"epoch": float(epoch), "val_miou": round(v_miou, 6), "val_fsr": round(v_fsr, 6)})
-            score_key = (1 if v_fsr <= 0.030 else 0, v_miou if v_fsr <= 0.030 else -v_fsr, -v_fsr)
+            cand = {"epoch": float(epoch), "val_miou": round(v_miou, 6), "val_fsr": round(v_fsr, 6)}
+            pareto_history.append(cand)
+            score_key = _pareto_checkpoint_sort_key(cand, max_fsr=0.030, min_miou=0.25)
             if score_key > best_score_key:
                 best_score_key = score_key
                 best_state = copy.deepcopy({k: v.detach().cpu() for k, v in pidnet_train.state_dict().items()})
@@ -856,9 +1024,9 @@ def _run_live_g4_pidnet_v21(
     assert pidnet_train is not None and val_loader is not None
     assert best_state is not None and best_val_tuple is not None
     pidnet_train.load_state_dict(best_state)
-    pareto_res = select_pareto_checkpoint(pareto_history, max_fsr=0.030)
+    pareto_res = select_pareto_checkpoint(pareto_history, max_fsr=0.030, min_miou=0.25)
 
-    # Re-run full OOD calibration strictly on permissive ID val split
+    # Re-run full OOD & post-hoc safe-logit FSR calibration strictly on permissive ID val split
     try:
         val_metrics, cal_logits, cal_labels, cal_bdry, ood_metrics = evaluate_permissive_val_and_ood(
             pidnet_train, val_loader, teachers, device, use_bf16=use_bf16, eval_ood=True
@@ -866,9 +1034,14 @@ def _run_live_g4_pidnet_v21(
     finally:
         _shutdown_loader(val_loader)
     ood_cal = calibrate_temperature_and_tau(cal_logits, cal_labels, cal_bdry, kappa_b=1.5)
+    fsr_bias_cal = calibrate_safe_logit_bias_for_fsr(cal_logits, cal_labels, target_max_fsr=0.030)
+    ood_cal_dict: dict[str, Any] = {
+        **ood_cal.to_dict(),
+        "safe_logit_bias_delta": fsr_bias_cal["safe_logit_bias_delta"],
+        "safe_logit_bias_calibration": fsr_bias_cal,
+    }
     ood_cal_path = blob_dir / "ood_calibration_v21.json"
-    ood_cal.save_json(ood_cal_path)
-    ood_cal_dict = ood_cal.to_dict()
+    write_canonical_json(ood_cal_path, ood_cal_dict)
 
     # Strictly quarantined post-freeze zero-shot AeroScapes evaluation
     aeroscapes_eval = evaluate_quarantined_aeroscapes(

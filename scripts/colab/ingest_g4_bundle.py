@@ -60,6 +60,34 @@ EXCLUDED_ARTIFACT_JSONS: frozenset[str] = frozenset(
     }
 )
 
+CORE_ONNX_FILENAMES: frozenset[str] = frozenset(
+    {
+        "pidnet_slz_v21_opset17.onnx",
+        "mlsd_wireseg_640_opset17.onnx",
+        "dfine_n_640_opset17.onnx",
+        "xfeat_512_opset17.onnx",
+    }
+)
+
+CORE_CALIBRATION_FILENAMES: frozenset[str] = frozenset(
+    {
+        "ood_calibration_v21.json",
+    }
+)
+
+
+def _is_core_required_blob(relpath: str) -> bool:
+    """Return True if a manifest blob is a core edge/safety binary that must never be skipped."""
+    name = PurePosixPath(relpath.replace("\\", "/")).name
+    lower = name.lower()
+    if name in CORE_ONNX_FILENAMES or lower.endswith(".onnx"):
+        return True
+    if name in CORE_CALIBRATION_FILENAMES:
+        return True
+    if ".vrta_lut" in lower or lower.endswith(".vrta_cel2d"):
+        return True
+    return False
+
 
 def _normalize_tar_member_path(member: tarfile.TarInfo) -> PurePosixPath | None:
     """Validate TarInfo against path traversal, absolute paths, symlinks, hardlinks, and devices."""
@@ -180,8 +208,16 @@ def _verify_manifest_digests(
     manifest: dict[str, Any],
     staged_artifacts_dir: Path,
     staged_blobs_dir: Path,
+    allow_missing_non_onnx_blobs: bool = False,
 ) -> dict[str, Any]:
-    """Verify every SHA-256 entry recorded in remote_bundle_manifest.json fail-closed."""
+    """Verify every SHA-256 entry recorded in remote_bundle_manifest.json fail-closed.
+
+    When `allow_missing_non_onnx_blobs=True`, missing non-core optional blobs (such as LoRA
+    adapter directories missed during Colab Drive FUSE sync) are recorded transparently in
+    `missing_optional_blobs` rather than aborting. Core binaries (all ONNX models,
+    `ood_calibration_v21.json`, `*.vrta_lut*`, `*.vrta_cel2d`), all manifest JSONs, and
+    SHA-256/size parity for every present file remain strictly fail-closed.
+    """
     verified_jsons: dict[str, str] = {}
     for entry in manifest.get("json_artifacts", []):
         fname = str(entry["filename"])
@@ -200,12 +236,21 @@ def _verify_manifest_digests(
         verified_jsons[fname] = actual_sha
 
     verified_blobs: dict[str, str] = {}
+    missing_optional_blobs: list[str] = []
     for entry in manifest.get("blob_artifacts", []):
         rel = str(entry["relpath"]).replace("\\", "/")
         expected_sha = str(entry["sha256"])
         expected_size = int(entry["size_bytes"])
         target = staged_blobs_dir / Path(*PurePosixPath(rel).parts)
         if not target.is_file():
+            if allow_missing_non_onnx_blobs and not _is_core_required_blob(rel):
+                missing_optional_blobs.append(rel)
+                continue
+            if allow_missing_non_onnx_blobs:
+                raise FileNotFoundError(
+                    f"Manifest-listed core required blob missing from archive "
+                    f"(forbidden even with --allow-missing-non-onnx-blobs): {rel}"
+                )
             raise FileNotFoundError(f"Manifest-listed blob missing from archive: {rel}")
         actual_size = target.stat().st_size
         actual_sha = sha256_file(target)
@@ -216,11 +261,14 @@ def _verify_manifest_digests(
             )
         verified_blobs[rel] = actual_sha
 
+    missing_optional_sorted = sorted(missing_optional_blobs)
     return {
         "manifest_json_count": len(verified_jsons),
         "manifest_blob_count": len(verified_blobs),
         "verified_jsons": verified_jsons,
         "verified_blobs": verified_blobs,
+        "missing_optional_blobs": missing_optional_sorted,
+        "partial_blob_sync_detected": bool(missing_optional_sorted),
     }
 
 
@@ -263,6 +311,7 @@ def ingest_g4_bundles(
     dest_blobs_dir: Path = Path("/var/tmp/vertirta_v400_blobs"),
     out_report: Path | None = None,
     allow_partial: bool = False,
+    allow_missing_non_onnx_blobs: bool = False,
 ) -> dict[str, Any]:
     """Verify and stage downloaded Colab G4 artifacts and blobs with atomic fail-closed checks."""
     with tempfile.TemporaryDirectory(prefix="vertirta_g4_ingest_") as tmp_str:
@@ -328,6 +377,7 @@ def ingest_g4_bundles(
             manifest=manifest,
             staged_artifacts_dir=stage_art,
             staged_blobs_dir=stage_blobs,
+            allow_missing_non_onnx_blobs=allow_missing_non_onnx_blobs,
         )
 
         # 5) Check required G4 job JSON completeness (unless --allow-partial)
@@ -417,6 +467,9 @@ def ingest_g4_bundles(
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "colab_cu_spent": 0.0,
             "allow_partial": bool(allow_partial),
+            "allow_missing_non_onnx_blobs": bool(allow_missing_non_onnx_blobs),
+            "partial_blob_sync_detected": bool(manifest_verification["partial_blob_sync_detected"]),
+            "missing_optional_blobs": list(manifest_verification["missing_optional_blobs"]),
             "missing_required_jsons": missing_required,
             "manifest_state": manifest.get("state"),
             "manifest_verified_json_count": manifest_verification["manifest_json_count"],
@@ -504,6 +557,16 @@ def build_argparser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow ingestion when one of the 5 G4 job JSONs is not yet present.",
     )
+    parser.add_argument(
+        "--allow-missing-non-onnx-blobs",
+        action="store_true",
+        default=False,
+        help=(
+            "Opt-in: allow missing non-core optional blob paths (e.g. LoRA adapter folders missed "
+            "during Colab Drive FUSE sync) while still failing closed on any SHA-256 mismatch or "
+            "any missing ONNX model, ood_calibration_v21.json, *.vrta_lut*, *.vrta_cel2d, or manifest JSON."
+        ),
+    )
     return parser
 
 
@@ -517,6 +580,7 @@ def main(argv: list[str] | None = None) -> int:
         dest_blobs_dir=args.dest_blobs_dir,
         out_report=args.out_report,
         allow_partial=args.allow_partial,
+        allow_missing_non_onnx_blobs=args.allow_missing_non_onnx_blobs,
     )
     print(json.dumps(receipt, indent=2))
     return 0

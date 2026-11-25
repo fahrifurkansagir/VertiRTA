@@ -1,0 +1,153 @@
+{
+  "schema_version": "vertirta.g4_forward_wire_metrics/v4.0.0",
+  "mode": "LIVE_G4_CUDA_BF16",
+  "timestamp_utc": "2026-11-25T09:50:49.593078+00:00",
+  "hardware": {
+    "device": "cuda:0",
+    "vram_config": {
+      "requested_vram_fraction": 0.2,
+      "pytorch_cuda_alloc_conf": "expandable_segments:True,max_split_size_mb:512",
+      "cuda_available": true,
+      "applied_on_device": 0,
+      "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "vram_total_mib": 97250.06,
+      "vram_cap_mib": 19450.01
+    },
+    "peak_cuda_allocated_mib": 16085.69,
+    "nvidia_smi": {
+      "timestamp_utc": "2026-11-25T09:50:49.593100+00:00",
+      "available": true,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "driver_version": "580.82.07",
+      "memory_used_mib": 31202.0,
+      "memory_total_mib": 97887.0,
+      "gpu_util_pct": 97.0,
+      "mem_util_pct": 47.0,
+      "power_w": 453.83,
+      "temp_c": 64.0,
+      "compute_apps": [
+        {
+          "pid": 4081,
+          "process_name": "/usr/bin/python3",
+          "used_gpu_memory_mib": 9142.0
+        },
+        {
+          "pid": 4079,
+          "process_name": "/usr/bin/python3",
+          "used_gpu_memory_mib": 22046.0
+        }
+      ]
+    }
+  },
+  "license_audit": {
+    "job_name": "job_forward_wire",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "VertiRTA_Procedural_Catenary_Horizon"
+    ],
+    "eval_only_source_names": [],
+    "model_names": [
+      "M-LSD-WireSeg",
+      "D-FINE-N"
+    ]
+  },
+  "dataset_ingestion": {
+    "real_ttpla_frames_ingested": 0,
+    "procedural_frames_ingested": 800,
+    "train_split_size": 640,
+    "val_split_size": 160,
+    "ttpla_details": {
+      "source": "TTPLA",
+      "license": "Apache-2.0",
+      "origin": null,
+      "frames_ingested": 0,
+      "fallback_reason": "no_ttpla_pairs_found_using_procedural_apache2_catenary"
+    }
+  },
+  "split_stack_contract": {
+    "source_hw": [
+      720,
+      1280
+    ],
+    "horizon_y0": 200,
+    "overlap_px": 16,
+    "roll_rad": 0.0,
+    "f_net_px": 1545.1,
+    "round_trip_err_px": 0.0,
+    "canonical_input_shape": [
+      1,
+      3,
+      640,
+      640
+    ]
+  },
+  "training": {
+    "requested_batch_size": 64,
+    "batch_size": 64,
+    "oom_fallback_triggered": false,
+    "lr_scheduler": "CosineAnnealingLR",
+    "steps": 400,
+    "cldice_iters": 3,
+    "wire_loss_start": 2.262019,
+    "wire_loss_end": 1.23158,
+    "det_loss_start": 1.223518,
+    "det_loss_end": 0.000551,
+    "all_losses_finite": true
+  },
+  "heldout_validation": {
+    "val_samples": 160,
+    "val_wire_iou": 0.381922,
+    "val_cldice_score": 0.964418,
+    "val_det_box_l1": 0.186173,
+    "val_det_cls_acc": 1.0
+  },
+  "onnx_exports": {
+    "mlsd_wireseg": {
+      "filename": "mlsd_wireseg_640_opset17.onnx",
+      "path": "/content/vertirta_m3_run/blobs/mlsd_wireseg_640_opset17.onnx",
+      "size_bytes": 8309270,
+      "sha256": "00919af2a42c0189eae4e8453279ff4dd87e81cb008a8fdbfc6403c883fbdbe5",
+      "opset_version": 17,
+      "deploy_parameters": 1257126,
+      "input_names": [
+        "rgb_split_nchw"
+      ],
+      "output_names": [
+        "wire_mask_logits",
+        "line_junction_map"
+      ],
+      "input_shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "onnx_checker_passed": true
+    },
+    "dfine_n": {
+      "filename": "dfine_n_640_opset17.onnx",
+      "path": "/content/vertirta_m3_run/blobs/dfine_n_640_opset17.onnx",
+      "size_bytes": 4821733,
+      "sha256": "036990bbdb1d77d5d04c4f607631be5910d9bb75a957e9eb1e831a7302ca17da",
+      "opset_version": 17,
+      "deploy_parameters": 1204725,
+      "input_names": [
+        "rgb_split_nchw"
+      ],
+      "output_names": [
+        "boxes_xyxy",
+        "class_logits"
+      ],
+      "input_shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "onnx_checker_passed": true
+    }
+  },
+  "wall_clock_s": 273.998,
+  "report_sha256": "363a5e8c847844fe323a681cae7c12364f9f31cbff6187a86de554ea1b858604"
+}

@@ -1,0 +1,221 @@
+{
+  "schema_version": "vertirta.local_gtx1650s_m3_timesliced_proof/v4.0.0",
+  "mode": "LIVE_TU116_CUDA_TIMESLICED",
+  "timestamp_utc": "2026-11-25T13:20:50.971571+00:00",
+  "host_os": "Windows 10 (AMD64)",
+  "gpu": {
+    "name": "NVIDIA GeForce GTX 1650 SUPER",
+    "driver_version": "621.24",
+    "memory_total_mib": 4096,
+    "memory_free_before_mib": 2367,
+    "compute_cap": "7.5"
+  },
+  "phase_b_cuda_provider_options": {
+    "device_id": "0",
+    "arena_extend_strategy": "kSameAsRequested",
+    "cudnn_conv_algo_search": "EXHAUSTIVE",
+    "cudnn_conv_use_max_workspace": "1",
+    "enable_cuda_graph": "1"
+  },
+  "verified_models": {
+    "pidnet_slz_v21": {
+      "path": "C:\\Temp\\vertirta_v400_blobs\\pidnet_slz_v21_opset17.onnx",
+      "filename": "pidnet_slz_v21_opset17.onnx",
+      "sha256": "6f6d246e8f5edfd192a380deaf4eb2cabd344e98e9b839e99a6173ce6447ad05",
+      "sha256_verified": true,
+      "size_bytes": 32069725
+    },
+    "mlsd_wireseg": {
+      "path": "C:\\Temp\\vertirta_v400_blobs\\mlsd_wireseg_640_opset17.onnx",
+      "filename": "mlsd_wireseg_640_opset17.onnx",
+      "sha256": "00919af2a42c0189eae4e8453279ff4dd87e81cb008a8fdbfc6403c883fbdbe5",
+      "sha256_verified": true,
+      "size_bytes": 8309270
+    },
+    "dfine_n": {
+      "path": "C:\\Temp\\vertirta_v400_blobs\\dfine_n_640_opset17.onnx",
+      "filename": "dfine_n_640_opset17.onnx",
+      "sha256": "036990bbdb1d77d5d04c4f607631be5910d9bb75a957e9eb1e831a7302ca17da",
+      "sha256_verified": true,
+      "size_bytes": 4821733
+    },
+    "xfeat_512": {
+      "path": "C:\\Temp\\vertirta_v400_blobs\\xfeat_512_opset17.onnx",
+      "filename": "xfeat_512_opset17.onnx",
+      "sha256": "5725b19ae193306af5c7584d8c71b1dbd71c0f0090b38e70fcc720ae9396bd2a",
+      "sha256_verified": true,
+      "size_bytes": 337857
+    }
+  },
+  "phase_a_empirical_fp32_vs_fp16": {
+    "pidnet_slz_v21": {
+      "fp32": {
+        "mean_ms": 13.4523,
+        "p50_ms": 13.1913,
+        "p95_ms": 15.6113,
+        "p99_ms": 17.0588,
+        "min_ms": 10.7902,
+        "max_ms": 33.019,
+        "fps_mean": 74.34
+      },
+      "fp32_cuda_graph": {
+        "mean_ms": 10.8523,
+        "p50_ms": 10.9772,
+        "p95_ms": 12.214,
+        "p99_ms": 12.5848,
+        "min_ms": 8.7621,
+        "max_ms": 13.0288,
+        "fps_mean": 92.15
+      },
+      "fp16": {
+        "mean_ms": 28.5618,
+        "p50_ms": 28.2671,
+        "p95_ms": 30.3198,
+        "p99_ms": 33.3496,
+        "min_ms": 26.7773,
+        "max_ms": 55.149,
+        "fps_mean": 35.01
+      },
+      "fp16_vs_fp32_speedup_p50": 0.3883,
+      "recommended_tu116_precision": "ort_cuda_fp32_cuda_graph",
+      "outputs_finite": true
+    },
+    "mlsd_wireseg": {
+      "fp32": {
+        "mean_ms": 10.4627,
+        "p50_ms": 9.5938,
+        "p95_ms": 15.8558,
+        "p99_ms": 23.0652,
+        "min_ms": 8.686,
+        "max_ms": 29.1766,
+        "fps_mean": 95.58
+      },
+      "fp32_cuda_graph": {
+        "mean_ms": 9.4288,
+        "p50_ms": 9.4101,
+        "p95_ms": 10.1033,
+        "p99_ms": 10.5109,
+        "min_ms": 8.5986,
+        "max_ms": 10.9389,
+        "fps_mean": 106.06
+      },
+      "fp16": {
+        "mean_ms": 50.6557,
+        "p50_ms": 50.3245,
+        "p95_ms": 53.4054,
+        "p99_ms": 68.7644,
+        "min_ms": 37.8566,
+        "max_ms": 90.9983,
+        "fps_mean": 19.74
+      },
+      "fp16_vs_fp32_speedup_p50": 0.187,
+      "recommended_tu116_precision": "ort_cuda_fp32_cuda_graph",
+      "outputs_finite": true
+    },
+    "dfine_n": {
+      "fp32": {
+        "mean_ms": 2.0571,
+        "p50_ms": 1.8677,
+        "p95_ms": 2.5274,
+        "p99_ms": 2.8117,
+        "min_ms": 1.7914,
+        "max_ms": 8.2742,
+        "fps_mean": 486.12
+      },
+      "fp32_cuda_graph": {
+        "mean_ms": 1.972,
+        "p50_ms": 1.9595,
+        "p95_ms": 2.5022,
+        "p99_ms": 2.6983,
+        "min_ms": 1.6996,
+        "max_ms": 3.1725,
+        "fps_mean": 507.09
+      },
+      "fp16": {
+        "mean_ms": 5.2064,
+        "p50_ms": 5.1864,
+        "p95_ms": 5.6652,
+        "p99_ms": 5.9161,
+        "min_ms": 4.6053,
+        "max_ms": 6.4087,
+        "fps_mean": 192.07
+      },
+      "fp16_vs_fp32_speedup_p50": 0.3778,
+      "recommended_tu116_precision": "ort_cuda_fp32_cuda_graph",
+      "outputs_finite": true
+    },
+    "xfeat_512": {
+      "fp32": {
+        "mean_ms": 0.968,
+        "p50_ms": 0.87,
+        "p95_ms": 1.3873,
+        "p99_ms": 1.8886,
+        "min_ms": 0.7778,
+        "max_ms": 3.5834,
+        "fps_mean": 1033.05
+      },
+      "fp32_cuda_graph": {
+        "mean_ms": 1.0009,
+        "p50_ms": 0.7813,
+        "p95_ms": 1.8451,
+        "p99_ms": 2.1575,
+        "min_ms": 0.7274,
+        "max_ms": 6.0296,
+        "fps_mean": 999.08
+      },
+      "fp16": {
+        "mean_ms": 2.4958,
+        "p50_ms": 2.3797,
+        "p95_ms": 3.5178,
+        "p99_ms": 4.2537,
+        "min_ms": 1.9498,
+        "max_ms": 5.8783,
+        "fps_mean": 400.67
+      },
+      "fp16_vs_fp32_speedup_p50": 0.3283,
+      "recommended_tu116_precision": "ort_cuda_fp32",
+      "outputs_finite": true
+    }
+  },
+  "phase_b_timesliced_schedule": {
+    "cruise_30hz_with_1hz_xfeat": {
+      "mean_ms": 17.7765,
+      "p50_ms": 17.752,
+      "p95_ms": 19.3789,
+      "p99_ms": 19.8302,
+      "min_ms": 15.77,
+      "max_ms": 20.0096,
+      "fps_mean": 56.25
+    },
+    "terminal_pidnet_v21": {
+      "mean_ms": 10.065,
+      "p50_ms": 10.0232,
+      "p95_ms": 12.5028,
+      "p99_ms": 13.357,
+      "min_ms": 7.6027,
+      "max_ms": 14.5922,
+      "fps_mean": 99.35
+    },
+    "cruise_vram_delta_mib": 366.0,
+    "terminal_vram_delta_mib": 164.0,
+    "cruise_process_vram_mib": 0.0,
+    "terminal_process_vram_mib": 0.0,
+    "cruise_cuda_graph_selected": {
+      "mlsd_wireseg": true,
+      "dfine_n": true,
+      "xfeat_512": false
+    },
+    "phase_b_isolated_subprocess": true,
+    "timesliced_peak_vram_mib": 366.0
+  },
+  "gates": {
+    "onnx_sha256_all_verified": true,
+    "empirical_fp32_vs_fp16_logged": true,
+    "timesliced_peak_vram_lt_300mb": false,
+    "pidnet_v21_p99_lt_12ms": false,
+    "cruise_combined_p99_lt_25ms": true,
+    "all_trained_outputs_finite_and_nondegenerate": true
+  },
+  "wall_clock_s": 113.097,
+  "report_sha256": "be9c35d342d0f555a766f300bbaff5409b3f69ffb03b86f79587a7b353b9f117"
+}
