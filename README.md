@@ -22,11 +22,9 @@
 
 <br>
 
-<a href="https://fahrifurkansagir.github.io/VertiRTA/">
-  <img src="docs/assets/vertirta_vertigcs_hero.gif" width="840" alt="VertiRTA Live 3D WebAssembly Flight Core, 20-eVTOL U-Space & Part-IS Cyber Sandbox">
-</a>
+<img src="docs/assets/vertirta_real_drone_hud_preview.gif" width="840" alt="Real Moving NASA Goddard Drone Video — GTX 1650 SUPER Causal Temporal SLZ HUD">
 
-<sub>Live 3D WebAssembly sandbox (38.5 KiB <code>.wasm</code>) running the frozen C++17 flight core over the Istanbul LTFJ/LTBX corridor — click to launch in browser, zero install.</sub>
+<sub>Real moving aerial footage (NASA Goddard, PD-USGov) running live on GTX 1650 SUPER: raw PIDNet-S v2.1 (center) vs. causal homography EMA + hysteresis (right) — <strong>-56.25%</strong> flicker, <strong>-62.15%</strong> SLZ centroid jitter, <strong>77.4 FPS</strong>.</sub>
 
 </div>
 
@@ -34,7 +32,7 @@
 
 ## Engineering Overview
 
-**VertiRTA** is an open-source, deterministic flight-control and run-time assurance (RTA) platform engineered for urban eVTOL failure physics — combining a bare-metal C++17 flight core, a 100 Hz C++20 Hamilton-Jacobi safety filter, a zero-GPL MAVLink v2 offboard shield, real-world perception/forensics proofs, and a zero-install WebAssembly 3D flight console.
+**VertiRTA** is an open-source, deterministic flight-control and run-time assurance (RTA) platform engineered for urban eVTOL failure physics — combining a bare-metal C++17 flight core, a 100 Hz C++20 Hamilton-Jacobi safety filter, a zero-GPL MAVLink v2 offboard shield, real-world perception/forensics pipelines, and a zero-install WebAssembly 3D flight console.
 
 - **Bare-Metal Simplex Flight Core (C++17, 400 Hz):** Freestanding `libvertirta_flight_core` compiles to **28,886 B** Cortex-M7 Flash, **0 B** library RAM, **0** heap symbols, **0** recursion, and a **2,960 B** max call-graph stack DAG — isolating the deterministic 3-tier priority arbiter (`CEL > CSFL > CBVF > CF`) from ROS 2, Python, and AI modules.
 - **Coupled eVTOL Fault Physics:** Models coaxial interference (0.85 thrust efficiency), asymmetric BLDC spool-up/coast-down inertia, and a 112S12P 1-RC Thevenin battery pack across **VertiRTA-X8-240** and **Lift+Cruise 8+1**, backed by a **102.85M-node** 4D HJI-CBVF PDE and a **1,000 + 180** seeded C++20 Monte Carlo failure-boundary campaign.
@@ -43,28 +41,33 @@
 
 ---
 
-## Visual Verification
+## Verification Visuals
 
-### 1. Real Moving NASA Goddard Drone Footage — Causal Temporal SLZ HUD (GTX 1650 SUPER)
-
-<div align="center">
-  <img src="docs/assets/vertirta_real_drone_hud_preview.gif" width="840" alt="NASA Goddard Drone Causal Temporal SLZ HUD on GTX 1650 SUPER">
-  <p><sub>240 consecutive frames (PD-USGov-NASA): causal homography EMA + hysteresis reduces safe/hazard flicker from <strong>2.19% to 0.96% (-56.25%)</strong> and top-SLZ centroid jitter from <strong>1.22 to 0.46 px (-62.15%)</strong> at <strong>77.4 FPS</strong> (PIDNet-S v2.1).</sub></p>
-</div>
-
-### 2. Native C++20 1,000-Flight Dispersion & 180-Flight Thrust-Saturation Cliff
+### 1. Native C++20 1,000-Flight Dispersion & 180-Flight Thrust-Saturation Cliff
 
 <div align="center">
   <img src="docs/assets/vertirta_mc1000_envelope_dispersion.png" width="840" alt="1,000-Flight Native C++20 Monte Carlo Dispersion and 6x6 Thrust-Saturation Cliff">
-  <p><sub><strong>0 / 1,000</strong> airspace breaches (95% CP ≤ 0.30%). <strong>Lift+Cruise 8+1:</strong> 500/500 safe (CEP50 0.80 m, CEP95 1.97 m). <strong>X8-240:</strong> 429/500 safe — honestly exposing ±5 cm CG-shift tipping under collinear 2-arm CEL spin (29/100) vs nominal-CG Tier-1 (1,500/1,500). Physical thrust wall begins at +14% overload @ 10 m/s and saturates at ≥ +21%.</sub></p>
+  <p><sub><strong>0 / 1,000</strong> airspace breaches (95% CP ≤ 0.30%). <strong>Lift+Cruise 8+1:</strong> 500/500 safe (CEP50 0.80 m, CEP95 1.97 m). <strong>X8-240:</strong> 429/500 safe — exposing ±5 cm CG-shift tipping under collinear 2-arm CEL spin (29/100) vs nominal-CG Tier-1 (1,500/1,500). Physical thrust wall begins at +14% overload @ 10 m/s and saturates at ≥ +21%.</sub></p>
 </div>
 
-### 3. Zero-ShareAlike SLZ Perception Recovery (PIDNet-S v2.1 on Local GTX 1650 SUPER)
+### 2. Interactive 3D WebAssembly Flight Console & Local SLZ Perception Recovery
 
-<div align="center">
-  <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="840" alt="PIDNet-S v2.1 6-Scene Permissive Validation Grid">
-  <p><sub>Local FP16 recovery (0.00 CU): Val mIoU <strong>0.4669</strong> (0.4811 raw), False-Safe Rate <strong>2.81%</strong> (≤ 3.0% gate), OOD AUROC <strong>0.7554</strong>, quarantined zero-shot AeroScapes mIoU 0.2468 (FSR 3.43%).</sub></p>
-</div>
+<table width="100%">
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <a href="https://fahrifurkansagir.github.io/VertiRTA/">
+        <img src="docs/assets/vertirta_vertigcs_live_3d.png" width="100%" alt="Live VertiGCS 3D WebAssembly Console">
+      </a>
+      <br>
+      <sub><strong><a href="https://fahrifurkansagir.github.io/VertiRTA/">Launch VertiGCS 3D WASM Console</a> (38.5 KiB)</strong> — Istanbul LTFJ/LTBX corridor, live 1M/2M/CEL faults, 20-eVTOL fleet & Part-IS cyber-attack simulation.</sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="100%" alt="PIDNet-S v2.1 6-Scene Validation Grid">
+      <br>
+      <sub><strong>PIDNet-S v2.1 Local Recovery (0.00 CU)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes 0.2468.</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -173,16 +176,13 @@ Download verified ONNX weights and 4D `VRTALUT1` tables from the [**v1.0.0 Relea
 
 ---
 
-## Known Limitations & Scope
-
-> [!IMPORTANT]
-> **Research & Simulation Testbed Only — Zero Airworthiness Certification Claim.**  
-> VertiRTA is not certified under DO-178C, DO-254, EASA SC-VTOL, Part-IAM, Part-IS, SORA 2.5, or SHGM SHT-İHA, and is not approved for flight on manned or unmanned aircraft. Hardware qualification (G5) and certification lifecycle (G6) remain `[UNDEVELOPED]` in [`docs/SAFETY_CASE.md`](docs/SAFETY_CASE.md).
+## Known Limitations & Regulatory Note
 
 - **Open Hardware & SITL:** Physical STM32H753 on-silicon `DWT->CYCCNT` (`PENDING_PHYSICAL_STM32H7_HITL`) and local PX4 v1.16 + Gazebo Harmonic closed-loop SITL (`PENDING_LOCAL_PX4_GZ_SITL`) remain open.
 - **Whisper Negative Ablation:** BVI-LoRA fine-tuning degraded WER vs. Zero-Shot (13.1%–31.7% Zero-Shot retained as default).
 - **Real-Video Domain Shift:** Procedurally trained `WireSeg` triggers false positives on building roofline seams in the NASA Goddard footage (240/240 conservative 15 m/s cap), and bright oblique walls motivate a 3D normal veto (`|n_z| < 0.85`).
 - **Conformal Set Size & Edge GPU Bounds:** Qwen3-4B v3 G4 set size (`|C| = 7.80`) is root-caused in [`qwen3_v3_conformal_raps_diagnostic.json`](artifacts/v4.0.0/qwen3_v3_conformal_raps_diagnostic.json); TU116 Cruise VRAM delta (366 MiB) and WDDM p99 (13.36 ms) are logged verbatim. See [`OPTIONAL_G4_V1_1_BATCH_SPEC.md`](docs/research/OPTIONAL_G4_V1_1_BATCH_SPEC.md) for the v1.1 roadmap.
+- **Regulatory Boundary:** VertiRTA is open-source software provided as-is under Apache-2.0 without warranty. References to ASTM F3269, DO-178C, EASA SC-VTOL, Part-IAM, Part-IS, SORA 2.5, and SHGM SHT-İHA describe architectural alignment rather than airworthiness certification; hardware qualification (G5) and certification lifecycle (G6) remain open in [`docs/SAFETY_CASE.md`](docs/SAFETY_CASE.md).
 
 ---
 
