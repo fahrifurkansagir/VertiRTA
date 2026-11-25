@@ -234,7 +234,11 @@ def _load_fleurs_split(
     for i in range(limit):
         row = ds[i]
         audio_obj = row["audio"]
-        wav = _resample_to_16khz(audio_obj["array"], int(audio_obj.get("sampling_rate", 16000)), 16000)
+        try:
+            sr_val = int(audio_obj["sampling_rate"])
+        except Exception:
+            sr_val = 16000
+        wav = _resample_to_16khz(audio_obj["array"], sr_val, 16000)
         text = str(row.get("transcription", row.get("raw_transcription", ""))).strip()
         if wav.size >= 3200 and text:
             # Cap single utterance at 12 s matching SileroVadConfig.max_utterance_s

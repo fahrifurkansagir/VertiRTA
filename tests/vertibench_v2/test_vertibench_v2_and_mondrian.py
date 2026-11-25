@@ -686,5 +686,89 @@ def test_driver_artifact_digests_skip_work_dirs_and_orchestrator_downloads_stage
         assert f"/content/work/artifacts/logs/{expected_log}" in requested_remote_paths
 
 
+def test_whisper_bvi_load_fleurs_split_handles_datasets_v4_audiodecoder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify `_load_fleurs_split` cleanly handles non-dict `datasets` v4 `AudioDecoder` objects (`__getitem__` only)."""
+    import types
+
+    import numpy as np
+
+    from scripts.colab.g4_jobs.job_whisper_bvi_lora import _load_fleurs_split
+
+    class _MockAudioDecoder:
+        """Simulates `torchcodec` / `datasets` v4 AudioDecoder: subscriptable only, NO `.get()` method."""
+
+        def __init__(self, array: np.ndarray, sampling_rate: int | None) -> None:
+            self._array = array
+            self._sr = sampling_rate
+
+        def __getitem__(self, key: str) -> object:
+            if key == "array":
+                return self._array
+            if key == "sampling_rate":
+                if self._sr is None:
+                    raise KeyError("sampling_rate")
+                return self._sr
+            raise KeyError(key)
+
+    assert not isinstance(_MockAudioDecoder(np.zeros(4, dtype=np.float32), 16000), dict)
+    assert not hasattr(_MockAudioDecoder(np.zeros(4, dtype=np.float32), 16000), "get")
+
+    # 1) 16 kHz utterance (0.5 s), 2) 24 kHz utterance (> 12 s to test resampling + 12 s cap), 3) missing sr fallback
+    rows = [
+        {
+            "audio": _MockAudioDecoder(np.linspace(-0.2, 0.2, 8000, dtype=np.float32), 16000),
+            "transcription": "Kartal Sahil inis izni",
+        },
+        {
+            "audio": _MockAudioDecoder(np.linspace(-0.1, 0.1, 24000 * 14, dtype=np.float32), 24000),
+            "raw_transcription": "Dragos corridor maintain sixty meters",
+        },
+        {
+            "audio": _MockAudioDecoder(np.linspace(-0.15, 0.15, 6400, dtype=np.float32), None),
+            "transcription": "Maltepe park hold",
+        },
+    ]
+
+    class _MockDataset:
+        def __init__(self, data: list[dict[str, object]]) -> None:
+            self._data = data
+            self.cast_called = False
+
+        def cast_column(self, col: str, feature: object) -> _MockDataset:
+            assert col == "audio"
+            assert getattr(feature, "sampling_rate", None) == 16000
+            self.cast_called = True
+            return self
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+        def __getitem__(self, idx: int) -> dict[str, object]:
+            return self._data[idx]
+
+    mock_ds = _MockDataset(rows)
+
+    fake_datasets = types.ModuleType("datasets")
+    fake_datasets.Audio = lambda *, sampling_rate: types.SimpleNamespace(sampling_rate=sampling_rate)  # type: ignore[attr-defined]
+    fake_datasets.load_dataset = lambda *a, **kw: mock_ds  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "datasets", fake_datasets)
+
+    items = _load_fleurs_split("tr_tr", "validation", max_samples=5, lang_code="TR")
+    assert mock_ds.cast_called is True
+    assert len(items) == 3
+    assert items[0]["lang"] == "TR"
+    assert items[0]["text"] == "Kartal Sahil inis izni"
+    assert items[0]["audio"].shape == (8000,)
+    # 14 s at 24 kHz resampled to 16 kHz -> capped strictly at 12 s (192,000 samples)
+    assert items[1]["text"] == "Dragos corridor maintain sixty meters"
+    assert items[1]["audio"].shape == (16000 * 12,)
+    # Missing sampling_rate cleanly falls back to 16000 Hz
+    assert items[2]["text"] == "Maltepe park hold"
+    assert items[2]["audio"].shape == (6400,)
+
+
+
 
 

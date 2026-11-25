@@ -1,0 +1,123 @@
+{
+  "schema_version": "vertirta.realworld_px4_ulog_forensics_proof/v1.0.0",
+  "mode": "LIVE_REALWORLD_PX4_ULOG",
+  "timestamp_utc": "2026-11-25T10:18:46.315339+00:00",
+  "colab_cu_consumed": 0.0,
+  "host_platform": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "python_version": "3.12.16"
+  },
+  "source_ulog": {
+    "filename": "sample.ulg",
+    "source_url": "https://raw.githubusercontent.com/PX4/pyulog/main/test/sample.ulg",
+    "license": "BSD-3-Clause (PX4/pyulog)",
+    "zero_gpl_parser": "pure_python_ulog_v1_apache2",
+    "ulog_version": 0,
+    "file_size_bytes": 4053364,
+    "file_sha256": "81952e6059bc095717e7911c010e07f85749d6b04d332a5ffc51575a3fd0a558",
+    "start_timestamp_us": 112500176,
+    "flight_duration_s": 68.83,
+    "format_definitions_count": 103,
+    "subscribed_topics_count": 43,
+    "message_type_counts": {
+      "A": 43,
+      "D": 64542,
+      "F": 103,
+      "I": 4,
+      "L": 4,
+      "O": 4,
+      "P": 499
+    },
+    "total_ulog_messages": 65199,
+    "logged_strings_count": 4,
+    "dropout_count": 4,
+    "dropout_total_ms": 119,
+    "system_info": {
+      "sys_name": "PX4",
+      "ver_sw": "fd483321a5cf50ead91164356d15aa474643aa73",
+      "time_ref_utc": 0
+    },
+    "extracted_telemetry_rows": {
+      "actuator_outputs": 1311,
+      "vehicle_attitude": 6461,
+      "vehicle_local_position": 678
+    }
+  },
+  "telemetry_summary": {
+    "primary_driver_topic": "vehicle_local_position",
+    "vrta_frames_encoded": 400,
+    "vrta_file_size_bytes": 102528,
+    "vrta_file_sha256": "d0f7c0a6b6490a67d24f077fc6948b9a537e34538a3a5d7aa48034e6faaf8442",
+    "max_speed_mps": 0.214,
+    "max_relative_agl_m": 0.005,
+    "max_tilt_deg": 21.013,
+    "min_battery_soc_pct": 75.0,
+    "min_battery_voltage_v": 22.2,
+    "min_ltfj_clearance_m": 1240.85,
+    "min_ltbx_clearance_m": 3024.61
+  },
+  "ed155a_sidecar": {
+    "filename": "sample.vrta_events.jsonl",
+    "event_count": 3,
+    "sidecar_sha256": "2a9ad0c94415e21353792c6f8bd64202c3a51f60ff338e79f967bbd940944b75",
+    "public_key_hex": "dfbf68d69e2ba85ca24fa48b966fa39de3bdeefd711f3f0ba34ceaed77224c28",
+    "signer_backend": "SIM_SHA256_TEST_SIGNER",
+    "vertigcs_chain_verified": true,
+    "head_event_sha256": "e255a383089a94e39c650e409f86531a38901700cf0631625da36a957dc67c91",
+    "tamper_rejection_self_test_passed": true,
+    "joined_events_count": 3
+  },
+  "forensics_e5x": {
+    "engine_backend": "cpp_nanobind",
+    "ok": true,
+    "frames_verified": 400,
+    "cictt_category": "SCF-NP",
+    "ercs_matrix_code": "I5",
+    "effective_barrier8_score": 0,
+    "occurrence_class_id_431": "DRAFT_INCIDENT_ONLY",
+    "auto_classified_accident_or_serious_incident": false,
+    "numeric_hallucination_count": 0,
+    "e5x_xml_filename": "sample.e5x.xml",
+    "xsd_valid": true,
+    "xsd_errors": [],
+    "xsd_schema_relpath": "core/forensics/schemas/eccairs2_e5x_minimal.xsd",
+    "occurrence_attribute_ids": [
+      16,
+      121,
+      372,
+      430,
+      431,
+      433,
+      440,
+      452,
+      453,
+      454,
+      477,
+      601,
+      659,
+      1109
+    ],
+    "strictly_ascending_attribute_ids": true,
+    "na_injury_ids_omitted": true,
+    "narrative_languages": [
+      "en",
+      "tr"
+    ],
+    "reporting_status": "DRAFT_INTERNAL_PRE_SUBMISSION",
+    "compliance_claim": "NONE_RESEARCH_TESTBED_ONLY",
+    "e5x_xml_sha256": "e8487604b40bb6ad2080737ac5302f473b48fca2c23c346004a95767f9b1e8c3"
+  },
+  "statutory_gates": {
+    "cictt_scf_np_locked": true,
+    "barrier8_clamped_zero": true,
+    "draft_incident_only_id_431": true,
+    "zero_auto_accident_classification": true,
+    "zero_hallucinated_numbers": true,
+    "w3c_xsd_passed": true,
+    "sidecar_chain_and_tamper_verified": true
+  },
+  "elapsed_s": 0.2979,
+  "all_gates_passed": true,
+  "report_sha256": "3d659eb47934d1fbf5cf485ad3d0317e0964fd2ad6260bfda818c9828deb7450"
+}

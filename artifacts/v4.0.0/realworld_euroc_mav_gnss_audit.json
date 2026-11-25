@@ -1,0 +1,128 @@
+{
+  "schema_version": "vertirta.realworld_euroc_mav_gnss_audit/v4.0.0",
+  "execution_mode": "LIVE_REAL_EUROC_MAV_ZERO_SHOT",
+  "timestamp_utc": "2026-11-25T10:19:35Z",
+  "colab_cu_spent": 0.0,
+  "host_os": "Linux 6.18.58.1-microsoft-standard-WSL2 (x86_64)",
+  "verti_gnss_denied_backend": "cpp_nanobind",
+  "has_m3_native_cpp20": true,
+  "license_audit": {
+    "job_name": "realworld_euroc_mav_gnss_audit",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [],
+    "eval_only_source_names": [
+      "EuRoC_MAV_V1_01_easy"
+    ],
+    "model_names": [
+      "VertiGnssDenied_M3_CPP20"
+    ],
+    "quarantined_zero_shot_eval_only": true,
+    "euroc_license": "CC BY-SA 4.0",
+    "zero_training_zero_calibration_enforced": true
+  },
+  "dataset_provenance": {
+    "dataset": "ETH Zurich EuRoC MAV (AscTec Firefly 200 Hz ADIS16448 IMU + Vicon GT)",
+    "doi": "10.3929/ethz-b-000690084",
+    "license": "CC BY-SA 4.0",
+    "quarantined_zero_shot_eval_only": true,
+    "fetch_method": "http_range_remotezip",
+    "sequence": "V1_01_easy",
+    "source_label": "ETH_Zurich_EuRoC_MAV_V1_01_easy_HF_Range_Mirror",
+    "remote_zip_url": "https://huggingface.co/datasets/pepijn223/euroc-mirror/resolve/main/V1_01_easy.zip",
+    "bytes_fetched_csv_total": 8995221,
+    "imu_csv_filename": "imu0_data.csv",
+    "gt_csv_filename": "state_groundtruth_estimate0_data.csv",
+    "imu_csv_size_bytes": 4113500,
+    "gt_csv_size_bytes": 4881721,
+    "imu_csv_sha256": "4cef78a5cf7c8ee52016a160de4b50184da2a216d615feb7ebbbb3bc99efa89e",
+    "gt_csv_sha256": "701200e6924ba845ccdeea884bd717c82d1ed91f480913ea6e2e6ccb9c0fbf6d"
+  },
+  "real_flight_telemetry": {
+    "imu_csv_rows": 29120,
+    "gt_csv_rows": 28712,
+    "aligned_10hz_epochs": 1436,
+    "flight_duration_s": 143.555,
+    "imu_measured_rate_hz": 200.0,
+    "accel_norm_mean_mps2": 9.8012,
+    "accel_norm_std_mps2": 1.2773,
+    "accel_norm_max_mps2": 17.0061,
+    "gyro_norm_mean_rads": 0.2828,
+    "gyro_norm_max_rads": 0.9382,
+    "max_horiz_speed_mps": 1.0267,
+    "total_path_length_m": 58.592,
+    "imu_0p1s_preint_vel_res_p50_mps": 0.0095,
+    "imu_0p1s_preint_vel_res_p95_mps": 0.0201
+  },
+  "regimes": {
+    "regime_a_clean_flight": {
+      "regime": "A_CLEAN_REAL_PHYSICAL_FLIGHT",
+      "epochs_evaluated": 1436,
+      "false_alarms": 0,
+      "false_alarm_rate": 0.0,
+      "final_hypothesis": "H0_NOMINAL",
+      "max_mcusum_norm_mps": 0.0,
+      "all_outputs_finite": true,
+      "gate_zero_false_alarms": true
+    },
+    "regime_b_slow_ramp_spoof": {
+      "regime": "B_REAL_FLIGHT_SLOW_RAMP_SPOOF",
+      "inject_t_s": 30.0,
+      "spoof_ramp_mps": 1.25,
+      "pre_inject_false_alarms": 0,
+      "detected": true,
+      "detected_hypothesis": "H3_SLOW_RAMP_SPOOF",
+      "ttd_s": 0.1,
+      "rollback_executed": true,
+      "rollback_slip_m": 0.1371,
+      "sigma_init_m": 3.5,
+      "max_mcusum_norm_mps": 2.0731,
+      "ctr_inflation": {
+        "steps_evaluated": 1135,
+        "three_sigma_start_m": 6.003,
+        "three_sigma_end_m": 8.84,
+        "monotonic_3sigma_growth": true,
+        "max_ltfj_r_dot_infl_mps": 0.03,
+        "min_ltfj_inflated_margin_m": 1527.299,
+        "min_ltbx_inflated_margin_m": 2689.289,
+        "ctr_breaches": 0,
+        "final_nav_state": "BOUNDED_GNSS_DENIED_CRUISE"
+      },
+      "all_outputs_finite": true,
+      "gate_spoof_ttd_le_1p4s": true
+    },
+    "regime_c_jam_and_step": {
+      "regime": "C_REAL_FLIGHT_JAM_AND_STEP_DISCRIMINATION",
+      "inject_t_s": 30.0,
+      "rf_jamming_c1": {
+        "detected_hypothesis": "H1_RF_JAMMING",
+        "ttd_s": 0.0,
+        "rollback_executed": false,
+        "sigma_init_m": 2.0,
+        "passed": true
+      },
+      "step_meaconing_c2": {
+        "detected_hypothesis": "H2_STEP_MEACONING",
+        "ttd_s": 0.0,
+        "rollback_executed": true,
+        "sigma_init_m": 3.5,
+        "rollback_slip_m": 0.0211,
+        "passed": true
+      },
+      "all_outputs_finite": true,
+      "gate_deterministic_discrimination": true
+    }
+  },
+  "gates": {
+    "quarantined_zero_shot_eval_only_verified": true,
+    "regime_a_zero_false_alarms": true,
+    "regime_b_spoof_ttd_le_1p4s_and_rollback": true,
+    "regime_b_monotonic_3sigma_ctr_inflation": true,
+    "regime_b_zero_ctr_breaches": true,
+    "regime_c_deterministic_jam_step_discrimination": true,
+    "zero_nan_inf": true
+  },
+  "all_gates_passed": true,
+  "wall_clock_s": 4.136,
+  "report_sha256": "c8a4b940c490eb7b4ef9677ea9874196f3587f5e235619250e08416badd9f543"
+}
