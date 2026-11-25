@@ -104,12 +104,17 @@ TEST_CASE("SeqlockSnapshot guarantees zero torn reads and monotonic versions und
   seqlock.publish(init);
 
   constexpr uint64_t kWrites = 250'000ULL;
+  constexpr uint64_t kMinReads = 50'000ULL;
+  std::atomic<bool> reader_started{false};
   std::atomic<bool> writer_done{false};
   std::atomic<uint64_t> torn_reads{0};
   std::atomic<uint64_t> non_monotonic{0};
   std::atomic<uint64_t> total_reads{0};
 
   std::thread writer([&]() {
+    while (!reader_started.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
     for (uint64_t v = 2; v <= kWrites; ++v) {
       PerceptionHazardSnapshot snap{};
       snap.version = v;
@@ -130,8 +135,9 @@ TEST_CASE("SeqlockSnapshot guarantees zero torn reads and monotonic versions und
   });
 
   std::thread reader([&]() {
+    reader_started.store(true, std::memory_order_release);
     uint64_t last_ver = 0;
-    while (!writer_done.load(std::memory_order_acquire) || total_reads.load() < 50'000ULL) {
+    while (!writer_done.load(std::memory_order_acquire) || total_reads.load(std::memory_order_relaxed) < kMinReads) {
       const auto snap = seqlock.read();
       if (snap.checksum != compute_hazard_checksum(snap)) {
         torn_reads.fetch_add(1, std::memory_order_relaxed);
@@ -140,8 +146,8 @@ TEST_CASE("SeqlockSnapshot guarantees zero torn reads and monotonic versions und
         non_monotonic.fetch_add(1, std::memory_order_relaxed);
       }
       last_ver = snap.version;
-      total_reads.fetch_add(1, std::memory_order_relaxed);
-      if (writer_done.load(std::memory_order_acquire) && snap.version == kWrites) {
+      const uint64_t reads_now = total_reads.fetch_add(1, std::memory_order_relaxed) + 1ULL;
+      if (writer_done.load(std::memory_order_acquire) && snap.version == kWrites && reads_now >= kMinReads) {
         break;
       }
     }
