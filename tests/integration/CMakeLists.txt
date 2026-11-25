@@ -112,4 +112,35 @@ if(_vertirta_build_compound_fault)
     Catch2::Catch2WithMain
   )
   add_test(NAME test_compound_fault_istanbul_mission COMMAND test_compound_fault_istanbul_mission)
+
+  # -------------------------------------------------------------------------
+  # 3. 1,000-Flight Seeded Native C++20 Monte Carlo Dispersion & Failure-Boundary Suite
+  # -------------------------------------------------------------------------
+  if(NOT TARGET vertirta::monte_carlo_dispersion)
+    add_subdirectory(
+      "${_vertirta_repo_root}/benchmarks/monte_carlo_dispersion"
+      "${CMAKE_BINARY_DIR}/deps/benchmarks_monte_carlo_dispersion"
+    )
+  endif()
+
+  add_executable(test_monte_carlo_dispersion
+    test_monte_carlo_dispersion.cpp
+  )
+  target_compile_features(test_monte_carlo_dispersion PRIVATE cxx_std_20)
+  target_compile_options(test_monte_carlo_dispersion PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+  )
+  if(VERTIRTA_ENABLE_STRICT_FP)
+    target_compile_options(test_monte_carlo_dispersion PRIVATE ${VERTIRTA_STRICT_FP_FLAGS})
+  endif()
+  target_compile_definitions(test_monte_carlo_dispersion PRIVATE
+    VERTIRTA_REPO_ROOT="${_vertirta_repo_root}"
+  )
+  target_link_libraries(test_monte_carlo_dispersion PRIVATE
+    vertirta::monte_carlo_dispersion
+    Catch2::Catch2WithMain
+  )
+  add_test(NAME test_monte_carlo_dispersion COMMAND test_monte_carlo_dispersion)
 endif()
