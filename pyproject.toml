@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "vertirta"
-version = "3.5.1"
+version = "1.0.0"
 description = "VertiRTA — Deterministic eVTOL Coaxial-X8 Run-Time Assurance (RTA) C++17/20 & Gymnasium Python SDK"
 readme = "README.md"
 license = "Apache-2.0"

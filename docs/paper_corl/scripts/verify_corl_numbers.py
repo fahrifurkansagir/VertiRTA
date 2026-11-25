@@ -39,6 +39,111 @@ def _check_close(
         errors.append(f"Drift on {label}: manifest={manifest_val} vs source={source_val}")
 
 
+def _verify_v400_slots_against_sources(errors: list[str], manifest: dict[str, Any]) -> None:
+    """Cross-check populated Phase-3 v4.0.0 slots against their live source JSONs."""
+    g = manifest["phase3_g4_slots"]
+
+    qwen_p = REPO_ROOT / "artifacts" / "v4.0.0" / "g4_qwen3_v3_vertibench_v2_eval.json"
+    if g["qwen3_v3_ast_stl_mean_pct"]["value"] is not None and qwen_p.is_file():
+        qd = json.loads(qwen_p.read_text(encoding="utf-8"))
+        ms = qd["multi_seed_summary"]
+        ov = qd["test_overall_metrics"]
+        _check_close(
+            errors,
+            "qwen3_v3_ast_stl_mean_pct",
+            g["qwen3_v3_ast_stl_mean_pct"]["value"],
+            ms["ast_stl_correctness_mean_pct"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_ast_stl_sd_pct",
+            g["qwen3_v3_ast_stl_sd_pct"]["value"],
+            ms["ast_stl_correctness_sd_pct"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_b3_reject_pct",
+            g["qwen3_v3_b3_reject_pct"]["value"],
+            ms["bucket3_safe_reject_mean_pct"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_mondrian_coverage_pct",
+            g["qwen3_v3_mondrian_coverage_pct"]["value"],
+            ov["lang_mondrian_coverage_pct"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_mondrian_ece",
+            g["qwen3_v3_mondrian_ece"]["value"],
+            ov["ece"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_mondrian_mean_set_size",
+            g["qwen3_v3_mondrian_mean_set_size"]["value"],
+            ov["lang_mondrian_mean_set_size"],
+        )
+        _check_close(
+            errors,
+            "qwen3_v3_mondrian_singleton_exec_pct",
+            g["qwen3_v3_mondrian_singleton_exec_pct"]["value"],
+            ov["lang_mondrian_singleton_exec_pct"],
+        )
+
+    whisper_p = REPO_ROOT / "artifacts" / "v4.0.0" / "g4_whisper_bvi_lora_eval.json"
+    if g["whisper_s0_clean_wer_pct"]["value"] is not None and whisper_p.is_file():
+        wd = json.loads(whisper_p.read_text(encoding="utf-8"))
+        zs = wd["models_trained"]["whisper_large_v3_turbo_bvi_lora"]["zero_shot_eval"][
+            "by_snr_stratum"
+        ]
+        for slot_k, str_k in (
+            ("whisper_s0_clean_wer_pct", "S0_Clean"),
+            ("whisper_s1_cruise_wer_pct", "S1_Cruise"),
+            ("whisper_s2_hover_wer_pct", "S2_Hover"),
+            ("whisper_s3_garbled_wer_pct", "S3_Garbled"),
+        ):
+            _check_close(errors, slot_k, g[slot_k]["value"], float(zs[str_k]["wer"]) * 100.0)
+
+    local_rec_p = REPO_ROOT / "artifacts" / "v4.0.0" / "local_gtx1650s_pidnet_v21_recovery_metrics.json"
+    if g["pidnet_v21_val_miou"]["value"] is not None and local_rec_p.is_file():
+        ld = json.loads(local_rec_p.read_text(encoding="utf-8"))
+        _check_close(
+            errors,
+            "pidnet_v21_val_miou",
+            g["pidnet_v21_val_miou"]["value"],
+            ld["permissive_val_metrics_bias_calibrated"]["miou_present_classes"],
+        )
+        _check_close(
+            errors,
+            "pidnet_v21_val_fsr",
+            g["pidnet_v21_val_fsr"]["value"],
+            ld["permissive_val_metrics_bias_calibrated"]["false_safe_rate_fsr"],
+        )
+        _check_close(
+            errors,
+            "pidnet_v21_aeroscapes_miou",
+            g["pidnet_v21_aeroscapes_miou"]["value"],
+            ld["quarantined_zero_shot_aeroscapes_bias_calibrated"]["miou_present_classes"],
+        )
+        _check_close(
+            errors,
+            "pidnet_v21_aeroscapes_fsr",
+            g["pidnet_v21_aeroscapes_fsr"]["value"],
+            ld["quarantined_zero_shot_aeroscapes_bias_calibrated"]["false_safe_rate_fsr"],
+        )
+
+    xfeat_p = REPO_ROOT / "artifacts" / "v4.0.0" / "g4_pidnet_v21_xfeat_metrics.json"
+    if g["xfeat_kartal_recall_at_5m_pct"]["value"] is not None and xfeat_p.is_file():
+        xd = json.loads(xfeat_p.read_text(encoding="utf-8"))
+        _check_close(
+            errors,
+            "xfeat_kartal_recall_at_5m_pct",
+            g["xfeat_kartal_recall_at_5m_pct"]["value"],
+            float(xd["kartal_reloc_eval"]["ransac_gate_pass_rate"]) * 100.0,
+        )
+
+
 def verify_corl_manuscript(
     corl_dir: Path = DEFAULT_CORL_DIR,
     *,
@@ -162,6 +267,9 @@ def verify_corl_manuscript(
         v351_e["benchmarks"]["ort_cuda_fp32_cuda_graph"]["network_iobinding"]["p99_ms"],
     )
 
+    # 1b) Cross-check populated Phase-3 v4.0.0 slots against live v4.0.0 source JSONs
+    _verify_v400_slots_against_sources(errors, manifest)
+
     # 2) Verify generated/corl_tables.tex matches manifest byte-for-byte
     expected_tex = render_corl_tables_tex(manifest)
     if gen_tex != expected_tex:
@@ -175,7 +283,8 @@ def verify_corl_manuscript(
     ]
     if pending_g4 and not allow_pending_g4:
         errors.append(
-            f"{len(pending_g4)} Phase-3 G4 slots remain PENDING_PHASE3_G4_THUNDER_RUN (run with --allow-pending-g4 in Phase 2)"
+            f"{len(pending_g4)} Phase-3 G4 slots remain PENDING_PHASE3_G4_THUNDER_RUN "
+            "(run with --allow-pending-g4 in Phase 2)"
         )
 
     # 4) Double-anonymity, zero banned tokens, zero certification claims, honest provenance

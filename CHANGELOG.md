@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 > **Scope Reminder:** Every release below is an open-source research, simulation, and software-verification testbed — NOT a certified airborne product.
 
+## [1.0.0] - 2026-11-25 (First Stable Public SemVer Release)
+
+> **Semantic Versioning Reset Note:** `v1.0.0` is the first stable public SemVer release of **VertiRTA**, unifying the complete verified platform across all four engineering milestones. Earlier prototype tags (`v1.0.0-alpha`, `v2.0.0`, `v3.0.0`, `v3.1.0`, `v3.5.0`, `v3.5.1`) represent pre-1.0 research milestones; all subsequent maintenance releases follow strict SemVer (`1.0.1`, `1.0.2`, ...). Frozen `libvertirta_flight_core.a` (`28,886 B` Cortex-M7 Flash / `0 B` static RAM / `2,960 B` stack DAG / `0` heap) and the live `VertiGCS` `.wasm` Worker (`38,470 B`) remain byte-identical.
+
+### Added
+- **High-Resolution `102.85M`-Node Dual-Airframe JAX 4D `HJI-CBVF` PDE (`artifacts/v4.0.0/g4_jax_4d_hires_and_lc_manifest.json`):** `101×71×101×71` (`51,423,241` nodes/airframe × 2 = `102.85M` nodes, `true_jax_vmap_batch2`, `435.73 s`) for `VertiRTA-X8-240` and `Lift+Cruise 8+1` with **`0` violations** (`soundness_passed: true`, `hover_nom_ge_oei_max_viol_m = 0.0`), exported to `41×29×41×29` (`11.31 MB`) `VRTALUT1` LUTs.
+- **Forward-Wire Vision (`artifacts/v4.0.0/g4_forward_wire_metrics.json`):** `M-LSD-WireSeg` + `D-FINE-N` `640×640` split-stack (`0.0 px` round-trip error) achieving held-out **`clDice = 0.9644`**, `wire_iou = 0.3819`, `det_cls_acc = 1.0` (`800` Apache-2.0 procedural catenary frames; `0` real TTPLA pairs logged transparently).
+- **GNSS-Denied Navigation & Real-World `EuRoC MAV` Audit (`artifacts/v4.0.0/{realworld_euroc_mav_gnss_audit,g4_pidnet_v21_xfeat_metrics}.json`):** Quarantined zero-shot ETH Zurich `EuRoC MAV V1_01_easy` (`29,120` IMU rows / `143.56 s`, C++20 `cpp_nanobind`) passed **`7 / 7` gates** (`0` clean false alarms, `1.25 m/s` slow-ramp spoof `TTD = 0.1 s`, `0.137 m` rollback slip, monotonic `3σ` CTR inflation `6.00 -> 8.84 m`, `0` CTR breaches); Kartal 0.5 m ortho `XFeat` achieved **`36/36` RANSAC `CEP50 = 0.218 m`** (`CE95 = 0.434 m`).
+- **Bilingual `Qwen3-4B v3` Z3-GRPO + SNR-Mondrian & Live BF16 Cockpit Proof (`artifacts/v4.0.0/{g4_qwen3_v3_vertibench_v2_eval,g4_realworld_eval_report}.json`):** 3-seed GRPO on `VertiBench-v2` (`train=2,240`, `cal=2,000`, `test=1,200`, `Jaccard = 0.0707 < 0.15`): **Grammar `100.0%`**, **Z3 SAT `100.0%`**, **AST-STL `82.83 ± 0.71%`**, SNR-Mondrian coverage **`95.25%`** (Lang `96.0%`); live BF16 12-turn cockpit evaluation verified **`100.0%` Z3 SAT** and **`4 / 4` adversarial reject**.
+- **`PIDNet-S v2.1` Local `GTX 1650 SUPER` Recovery (`artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json`):** Zero-CU local FP16 recovery (Epoch 17 + safe-logit bias `-0.2714`, `pidnet_slz_v21_local_gtx_opset17.onnx` `32.07 MB`) resolved the historical G4 Epoch-2 Pareto collapse (`0.1696 mIoU` preserved untouched), achieving **`Val mIoU = 0.4669`** (`0.4811` raw), **`FSR = 2.81%`** (`safe_precision = 92.31%`), **`OOD AUROC = 0.7554`**, and zero-shot **`AeroScapes mIoU = 0.2468`** (`FSR = 3.43%`).
+- **Real-World Forensics, Live Istanbul Feeds, Compound Faults & Offline Voice ATC (`artifacts/v4.0.0/{realworld_px4_ulog_forensics_proof,realworld_istanbul_live_feed_audit,compound_fault_mission_report,local_voice_atc_live_proof,gtx1650s_m3_timesliced_edge_gate}.json`):**
+  - Real `PX4 ULog` (`sample.ulg`, `68.83 s`) -> `400` `.vrta` frames + ED-155A hash-chained sidecar -> **`W3C XSD`-valid `E5X`** (`CICTT SCF-NP`, `ERCS I5`, `Barrier-8 = 0`, `DRAFT_INCIDENT_ONLY`, `0` hallucinations).
+  - Live Istanbul `METAR (LTFJ)` / `Open-Meteo` / `adsb.lol` audit (`10` aircraft, `0` well-clear violations, `52.77%` SoC remaining, `all_gates_passed: true`) and **`5 / 5` compound 6-axis fault mission scenarios PASS** (`545.68 ms`).
+  - Zero-GPL `sherpa-onnx v2.0.3` TTS **`TTFA p50 = 71.7 ms`** (`0` GPL violations, `espeak-ng` deleted), `faster-whisper` + Mondrian + Z3 closed-loop `24/24` turns **`100.0%` Z3 SAT**, and physical `GTX 1650 SUPER` time-sliced Cruise **`p99 = 19.83 ms < 25 ms` / `56.25 FPS`** (honestly logging `366.0 MiB` cruise VRAM delta, `13.36 ms` terminal WDDM p99, and Whisper BVI-LoRA negative ablation vs. Zero-Shot).
+
+### Changed
+- Standardized package, SDK, citation, Zenodo, and `VertiGCS` versions to **`1.0.0`** (`pyproject.toml`, `sdk/python/vertirta/_version.py`, `CITATION.cff`, `.zenodo.json`, `apps/vertigcs/package.json`, `apps/vertigcs/package-lock.json`).
+- Refreshed `README.md` and `docs/SAFETY_CASE.md` (`Sn15–Sn18`) with verified `artifacts/v4.0.0/*.json` evidence links under strict Research & Simulation Testbed Only scope.
+
 ## [3.5.1] - 2026-11-23 (Phase B Real-World Hardening & Colab L4 ML Leap)
 
 ### Added

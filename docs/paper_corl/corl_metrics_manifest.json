@@ -96,83 +96,83 @@
   },
   "phase3_g4_slots": {
     "qwen3_v3_ast_stl_mean_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 82.83,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_ast_stl_sd_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 0.71,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_b3_reject_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 59.8,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_mondrian_coverage_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 96.0,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_mondrian_ece": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 0.1744,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_mondrian_mean_set_size": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 7.803,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "qwen3_v3_mondrian_singleton_exec_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 0.0,
       "source_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json"
     },
     "whisper_s0_clean_wer_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 13.14,
       "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
     },
     "whisper_s1_cruise_wer_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 14.46,
       "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
     },
     "whisper_s2_hover_wer_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 19.6,
       "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
     },
     "whisper_s3_garbled_wer_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA",
+      "value": 31.74,
       "source_artifact": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json"
     },
     "pidnet_v21_val_miou": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
-      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+      "status": "LIVE_LOCAL_GTX1650S_CUDA_FP16",
+      "value": 0.466898,
+      "source_artifact": "artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json"
     },
     "pidnet_v21_val_fsr": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
-      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+      "status": "LIVE_LOCAL_GTX1650S_CUDA_FP16",
+      "value": 0.028099,
+      "source_artifact": "artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json"
     },
     "pidnet_v21_aeroscapes_miou": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
-      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+      "status": "LIVE_LOCAL_GTX1650S_CUDA_FP16",
+      "value": 0.246811,
+      "source_artifact": "artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json"
     },
     "pidnet_v21_aeroscapes_fsr": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
-      "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
+      "status": "LIVE_LOCAL_GTX1650S_CUDA_FP16",
+      "value": 0.034324,
+      "source_artifact": "artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json"
     },
     "xfeat_kartal_recall_at_5m_pct": {
-      "status": "PENDING_PHASE3_G4_THUNDER_RUN",
-      "value": null,
+      "status": "LIVE_G4_CUDA_BF16",
+      "value": 100.0,
       "source_artifact": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json"
     }
   },
@@ -196,6 +196,156 @@
       "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
       "value": null,
       "quarantined_zero_shot_eval_only": true
+    }
+  },
+  "phase3_ablations_and_edge": {
+    "qwen3_v3_detail": {
+      "source": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json",
+      "n_seeds": 3,
+      "grammar_validity_mean_pct": 100.0,
+      "gated_z3_sat_mean_pct": 100.0,
+      "unconstrained_grammar_mean_pct": 79.97,
+      "unconstrained_ast_stl_mean_pct": 68.33,
+      "cv_best_gamma": 1.0,
+      "cv_best_tau": 0.318372,
+      "snr_mondrian_coverage_pct": 95.25,
+      "snr_mondrian_mean_set_size": 7.601,
+      "snr_mondrian_singleton_exec_pct": 0.0,
+      "lang_group_coverage_pct": {
+        "EN": 98.8,
+        "MIX": 97.0,
+        "TR": 92.8
+      },
+      "snr_stratum_coverage_pct": {
+        "S0_Clean": 93.33,
+        "S1_Cruise": 94.33,
+        "S2_Hover": 98.67,
+        "S3_Garbled": 94.67
+      },
+      "bootstrap_snr_coverage_mean_pct": 95.02,
+      "bootstrap_snr_coverage_sd_pct": 0.73,
+      "bootstrap_lang_coverage_mean_pct": 94.97,
+      "bootstrap_lang_coverage_sd_pct": 0.74
+    },
+    "whisper_bvi_lora_ablation": {
+      "source": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json",
+      "finding": "NEGATIVE_ABLATION_ZERO_SHOT_BEATS_AGGRESSIVE_3EP_LORA",
+      "turbo_zero_shot_wer_pct": {
+        "S0_Clean": 13.14,
+        "S1_Cruise": 14.46,
+        "S2_Hover": 19.6,
+        "S3_Garbled": 31.74
+      },
+      "turbo_bvi_lora_wer_pct": {
+        "S0_Clean": 17.97,
+        "S1_Cruise": 20.25,
+        "S2_Hover": 21.55,
+        "S3_Garbled": 35.36
+      },
+      "small_zero_shot_wer_pct": {
+        "S0_Clean": 19.29,
+        "S1_Cruise": 24.72,
+        "S2_Hover": 33.51,
+        "S3_Garbled": 52.4
+      },
+      "small_bvi_lora_wer_pct": {
+        "S0_Clean": 28.76,
+        "S1_Cruise": 36.7,
+        "S2_Hover": 39.89,
+        "S3_Garbled": 57.74
+      },
+      "turbo_audio_ctx_speedup": 2.76
+    },
+    "pidnet_v21_g4_collapsed_epoch2": {
+      "source": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json",
+      "status": "COLLAPSED_EPOCH2_ALL_HAZARD_SELECTOR_BUG",
+      "selected_epoch": 2,
+      "val_miou": 0.16961,
+      "val_fsr": 0.009049,
+      "ood_boundary_auroc": 0.447997,
+      "aeroscapes_miou": 0.16157,
+      "aeroscapes_fsr": 0.004469,
+      "unselected_peak_epoch": 18,
+      "unselected_peak_val_miou": 0.450117,
+      "unselected_peak_val_fsr": 0.078942
+    },
+    "xfeat_kartal_reloc": {
+      "source": "artifacts/v4.0.0/g4_pidnet_v21_xfeat_metrics.json",
+      "queries_evaluated": 36,
+      "ransac_3gate_pass_count": 36,
+      "ransac_gate_pass_rate_pct": 100.0,
+      "cep50_m": 0.2183,
+      "ce95_m": 0.4337,
+      "mean_inliers": 372.86,
+      "mean_reproj_rmse_px": 1.162,
+      "global_retrieval_r1": 0.3611,
+      "global_retrieval_r5": 0.7222
+    },
+    "pidnet_v21_local_recovery": {
+      "source": "artifacts/v4.0.0/local_gtx1650s_pidnet_v21_recovery_metrics.json",
+      "cu_consumed": 0.0,
+      "selected_epoch": 17,
+      "min_miou_floor": 0.25,
+      "safe_logit_bias_delta": -0.271367,
+      "raw_val_miou": 0.481134,
+      "raw_val_fsr": 0.046476,
+      "cal_val_miou": 0.466898,
+      "cal_val_fsr": 0.028099,
+      "cal_val_safe_precision": 0.923054,
+      "ood_raw_auroc": 0.742277,
+      "ood_boundary_auroc": 0.755362,
+      "raw_aeroscapes_miou": 0.271033,
+      "raw_aeroscapes_fsr": 0.053931,
+      "cal_aeroscapes_miou": 0.246811,
+      "cal_aeroscapes_fsr": 0.034324
+    },
+    "gtx1650s_timesliced_edge": {
+      "source": "artifacts/v4.0.0/gtx1650s_m3_timesliced_edge_gate.json",
+      "cruise_mean_ms": 17.7765,
+      "cruise_p50_ms": 17.752,
+      "cruise_p99_ms": 19.8302,
+      "cruise_fps_mean": 56.25,
+      "cruise_vram_delta_mib": 366.0,
+      "terminal_mean_ms": 10.065,
+      "terminal_p50_ms": 10.0232,
+      "terminal_p99_ms": 13.357,
+      "terminal_fps_mean": 99.35,
+      "terminal_vram_delta_mib": 164.0,
+      "pidnet_v21_fp32_cg_p50_ms": 10.9772,
+      "pidnet_v21_fp32_cg_p99_ms": 12.5848,
+      "pidnet_v21_fp16_p50_ms": 28.2671,
+      "pidnet_v21_fp16_p99_ms": 33.3496
+    },
+    "g4_realworld_bf16_copilot": {
+      "source": "artifacts/v4.0.0/g4_realworld_eval_report.json",
+      "n_turns": 12,
+      "raw_z3_sat_pct": 83.33,
+      "gated_z3_sat_pct": 100.0,
+      "z3_fail_closed_interventions": 2,
+      "bucket3_n_cases": 4,
+      "bucket3_gated_safe_reject_pct": 100.0
+    },
+    "g4_forward_wire": {
+      "source": "artifacts/v4.0.0/g4_forward_wire_metrics.json",
+      "real_ttpla_frames_ingested": 0,
+      "procedural_frames_ingested": 800,
+      "val_wire_iou": 0.381922,
+      "val_cldice_score": 0.964418,
+      "val_det_cls_acc": 1.0
+    },
+    "realworld_euroc_gnss": {
+      "source": "artifacts/v4.0.0/realworld_euroc_mav_gnss_audit.json",
+      "aligned_10hz_epochs": 1436,
+      "regime_a_false_alarms": 0,
+      "regime_b_spoof_ttd_s": 0.1,
+      "regime_b_ctr_breaches": 0
+    },
+    "realworld_px4_ulog_forensics": {
+      "source": "artifacts/v4.0.0/realworld_px4_ulog_forensics_proof.json",
+      "frames_verified": 400,
+      "xsd_valid": true,
+      "numeric_hallucination_count": 0,
+      "cictt_category": "SCF-NP"
     }
   }
 }

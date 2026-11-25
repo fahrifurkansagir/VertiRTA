@@ -1,3 +1,3 @@
 """VertiRTA Python SDK version constant."""
 
-__version__ = "3.5.1"
+__version__ = "1.0.0"

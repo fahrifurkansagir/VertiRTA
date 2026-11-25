@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TDD & anti-drift contract tests for Paper 2 (CoRL 2027 — Plan 6B Task 6)."""
+"""TDD & anti-drift contract tests for Paper 2 (CoRL 2027 — Plan 6B/6C)."""
 
 from __future__ import annotations
 
@@ -96,10 +96,15 @@ def test_verify_corl_numbers_and_figures_pass_zero_errors_in_phase2() -> None:
     assert res["passed"] is True, f"Verification errors: {res['errors']}"
     assert res["errors"] == []
 
-    # Strict mode (without --allow-pending-g4) MUST reject pending Phase-3 G4 slots
+    # Strict mode (without --allow-pending-g4) MUST pass with 0 pending Phase-3 slots
     strict_res = verify_corl_manuscript(CORL_DIR, allow_pending_g4=False)
     if res["pending_g4_slot_count"] > 0:
         assert strict_res["passed"] is False
+    else:
+        assert strict_res["passed"] is True, f"Strict verification errors: {strict_res['errors']}"
+        assert strict_res["errors"] == []
+        assert strict_res["pending_g4_slot_count"] == 0
+        assert strict_res["external_eval_pending_count"] == 4
 
     # Verify all 3 double-anonymous vector PDF figures exist, are wired in tex, and leak-free
     tex = (CORL_DIR / "vertirta_corl_manuscript.tex").read_text(encoding="utf-8")
@@ -183,3 +188,24 @@ def test_phase3_v400_ingestion_populates_slots_without_fabricating_unrun_externa
     tex_out = render_corl_tables_tex(updated)
     assert "95.4" in tex_out and "1.48" in tex_out and "0.341" in tex_out
     assert "TODO" not in tex_out and "[TBD]" not in tex_out
+
+
+def test_phase3_live_v400_ingestion_matches_strict_manifest_and_honest_ablations() -> None:
+    manifest = json.loads((CORL_DIR / "corl_metrics_manifest.json").read_text(encoding="utf-8"))
+    reingested = ingest_v400_into_manifest(manifest, REPO / "artifacts" / "v4.0.0")
+    assert reingested == manifest
+
+    slots = manifest["phase3_g4_slots"]
+    assert len(slots) == 16
+    for key, slot in slots.items():
+        assert slot["status"] != "PENDING_PHASE3_G4_THUNDER_RUN", f"Pending slot: {key}"
+        assert slot["value"] is not None, f"Null slot: {key}"
+
+    assert manifest["external_eval_only_slots"]["icg_drone_miou"]["value"] is None
+    assert manifest["external_eval_only_slots"]["uavscenes_miou"]["value"] is None
+    abl = manifest["phase3_ablations_and_edge"]
+    assert abl["pidnet_v21_g4_collapsed_epoch2"]["selected_epoch"] == 2
+    assert abl["pidnet_v21_local_recovery"]["cu_consumed"] == 0.0
+    assert abl["whisper_bvi_lora_ablation"]["finding"] == (
+        "NEGATIVE_ABLATION_ZERO_SHOT_BEATS_AGGRESSIVE_3EP_LORA"
+    )
