@@ -339,7 +339,7 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH="$PWD" uv run --no-project --python 3.11 \
-            --with pytest --with pyyaml --with numpy --with scipy --with lxml --with matplotlib --with z3-solver \
+            --with pytest --with pyyaml --with numpy --with scipy --with lxml --with matplotlib --with z3-solver --with pillow \
             pytest \
               tests/forward_hazard/test_forward_data_license_gate.py \
               tests/vertibench_v2/ \
@@ -347,8 +347,10 @@ jobs:
               tests/integration/test_m3_voice_node_contracts.py \
               docs/paper_corl/tests/test_paper_corl_contracts.py \
               tests/colab/test_g4_thunder_contracts.py \
+              tests/colab/test_ingest_g4_bundle.py \
               tests/ci/test_m3_workflow_contracts.py \
-              tests/wind_acoustics/test_zero_gpl_gate.py -v
+              tests/wind_acoustics/test_zero_gpl_gate.py \
+              tests/realworld/ -v
           python3 scripts/colab/run_g4_m3_thunder_run.py --dry-run
 
   m3_vertigcs_build_and_wasm_lock:

@@ -176,10 +176,19 @@ def pack_whisper_label_batch(
     *,
     device: Any = None,
 ) -> Any:
-    """Pack variable-length Whisper label sequences into a -100-padded tensor without masking EOS."""
-    import torch  # type: ignore[import-not-found]
-
+    """Pack variable-length Whisper label sequences into a -100-padded tensor/ndarray without masking EOS."""
     max_l = max(len(s) for s in label_seqs)
+    try:
+        import torch  # type: ignore[import-not-found]
+    except ModuleNotFoundError:
+        if device is not None:
+            raise
+        labels_np = np.full((len(label_seqs), max_l), -100, dtype=np.int64)
+        for bi, seq in enumerate(label_seqs):
+            if seq:
+                labels_np[bi, : len(seq)] = np.asarray(seq, dtype=np.int64)
+        return labels_np
+
     labels_t = torch.full((len(label_seqs), max_l), -100, dtype=torch.long, device=device)
     for bi, seq in enumerate(label_seqs):
         if seq:
