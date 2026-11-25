@@ -624,6 +624,488 @@ def bootstrap_resplit_mondrian_coverage(
     }
 
 
+def _sorted_prob_order(probs: Sequence[float]) -> list[tuple[int, float]]:
+    """Return [(class_idx, prob)] sorted by descending prob with deterministic index tie-breaking."""
+    if not probs:
+        raise ValueError("probs must be non-empty")
+    return sorted(((idx, float(p)) for idx, p in enumerate(probs)), key=lambda kv: (-kv[1], kv[0]))
+
+
+def compute_raps_nonconformity_score(
+    probs: Sequence[float],
+    gold_idx: int,
+    *,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    u: float | None = None,
+) -> float:
+    """Compute APS (lam_reg=0) or RAPS (Angelopoulos et al. 2021) nonconformity score.
+
+    When `u is None` (deterministic conservative mode):
+        E(x, y) = sum_{j < rank(y)} p_(j) + lam_reg * max(0, rank(y) - k_reg)
+    When `u in [0, 1]` (exact randomized Angelopoulos et al. 2021 mode):
+        E(x, y; u) = sum_{j < rank(y)} p_(j) + u * p_(rank(y)) + lam_reg * max(0, rank(y) - k_reg)
+
+    Both forms are strictly non-decreasing in 1-based rank r(y) and satisfy exact finite-sample
+    split conformal coverage >= 1 - alpha under exchangeability.
+    """
+    if not (0 <= gold_idx < len(probs)):
+        raise IndexError(f"gold index {gold_idx} out of range for row of length {len(probs)}")
+    if k_reg < 0:
+        raise ValueError(f"k_reg must be >= 0, got {k_reg}")
+    if lam_reg < 0.0 or not math.isfinite(lam_reg):
+        raise ValueError(f"lam_reg must be finite and >= 0, got {lam_reg}")
+    if u is not None and not (0.0 <= float(u) <= 1.0):
+        raise ValueError(f"u must be in [0, 1], got {u}")
+
+    ordered = _sorted_prob_order(probs)
+    cum_mass = 0.0
+    for rank_1based, (cls_idx, p_val) in enumerate(ordered, start=1):
+        if cls_idx == gold_idx:
+            pen = float(lam_reg) * float(max(0, rank_1based - int(k_reg)))
+            if u is None:
+                return cum_mass + pen
+            return cum_mass + float(u) * p_val + pen
+        cum_mass += p_val
+    raise RuntimeError("gold_idx not found in sorted probability order")
+
+
+def predict_raps_set(
+    probs: Sequence[float],
+    q_hat: float,
+    *,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    u: float | None = None,
+    disallow_zero_sets: bool = True,
+) -> list[int]:
+    """Construct APS (lam_reg=0) or RAPS prediction set C(x; q_hat) ordered by descending prob."""
+    if k_reg < 0:
+        raise ValueError(f"k_reg must be >= 0, got {k_reg}")
+    if lam_reg < 0.0 or not math.isfinite(lam_reg):
+        raise ValueError(f"lam_reg must be finite and >= 0, got {lam_reg}")
+    if u is not None and not (0.0 <= float(u) <= 1.0):
+        raise ValueError(f"u must be in [0, 1], got {u}")
+
+    ordered = _sorted_prob_order(probs)
+    pred_set: list[int] = []
+    cum_mass = 0.0
+    thr = float(q_hat) + 1e-12
+    for rank_1based, (cls_idx, p_val) in enumerate(ordered, start=1):
+        pen = float(lam_reg) * float(max(0, rank_1based - int(k_reg)))
+        score = (cum_mass + pen) if u is None else (cum_mass + float(u) * p_val + pen)
+        if score <= thr:
+            pred_set.append(cls_idx)
+        cum_mass += p_val
+    if disallow_zero_sets and not pred_set:
+        pred_set.append(ordered[0][0])
+    return pred_set
+
+
+def fit_raps_conformal(
+    prob_rows: Sequence[Sequence[float]],
+    gold_indices: Sequence[int],
+    *,
+    alpha: float = 0.05,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    randomized: bool = False,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Fit exact finite-sample APS (lam_reg=0) or RAPS split conformal quantile q_hat."""
+    n = len(prob_rows)
+    if n == 0 or n != len(gold_indices):
+        raise ValueError("prob_rows and gold_indices must be non-empty and equal length")
+    rng = random.Random(int(seed)) if randomized else None
+    scores = [
+        compute_raps_nonconformity_score(
+            probs,
+            g_idx,
+            k_reg=k_reg,
+            lam_reg=lam_reg,
+            u=(rng.random() if rng is not None else None),
+        )
+        for probs, g_idx in zip(prob_rows, gold_indices)
+    ]
+    q_hat, rank_k, q_level = compute_split_conformal_qhat(scores, alpha=alpha)
+    return {
+        "method": "APS" if float(lam_reg) == 0.0 else "RAPS",
+        "alpha": float(alpha),
+        "target_coverage": round(1.0 - float(alpha), 6),
+        "k_reg": int(k_reg),
+        "lam_reg": float(lam_reg),
+        "randomized": bool(randomized),
+        "seed": int(seed),
+        "n_cal": n,
+        "order_statistic_k": rank_k,
+        "q_level": round(q_level, 6),
+        "q_hat": round(q_hat, 6),
+    }
+
+
+def evaluate_raps_conformal(
+    prob_rows: Sequence[Sequence[float]],
+    gold_indices: Sequence[int],
+    *,
+    q_hat: float,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    randomized: bool = False,
+    seed: int = 1042,
+    disallow_zero_sets: bool = True,
+) -> dict[str, Any]:
+    """Evaluate APS/RAPS empirical coverage, set-size distribution, singleton rate, and ECE."""
+    n = len(prob_rows)
+    if n == 0 or n != len(gold_indices):
+        raise ValueError("prob_rows and gold_indices must be non-empty and equal length")
+    rng = random.Random(int(seed)) if randomized else None
+    covered = 0
+    set_sizes: list[int] = []
+    for probs, g_idx in zip(prob_rows, gold_indices):
+        u_val = rng.random() if rng is not None else None
+        pred_set = predict_raps_set(
+            probs,
+            q_hat,
+            k_reg=k_reg,
+            lam_reg=lam_reg,
+            u=u_val,
+            disallow_zero_sets=disallow_zero_sets,
+        )
+        if g_idx in pred_set:
+            covered += 1
+        set_sizes.append(len(pred_set))
+
+    ordered_sz = sorted(set_sizes)
+    median_sz = ordered_sz[n // 2] if (n % 2 == 1) else 0.5 * (ordered_sz[n // 2 - 1] + ordered_sz[n // 2])
+    return {
+        "method": "APS" if float(lam_reg) == 0.0 else "RAPS",
+        "q_hat": round(float(q_hat), 6),
+        "k_reg": int(k_reg),
+        "lam_reg": float(lam_reg),
+        "randomized": bool(randomized),
+        "n_eval": n,
+        "covered": covered,
+        "empirical_coverage_pct": round(100.0 * covered / float(n), 2),
+        "mean_prediction_set_size": round(sum(set_sizes) / float(n), 3),
+        "median_prediction_set_size": round(float(median_sz), 3),
+        "singleton_exec_pct": round(100.0 * sum(1 for s in set_sizes if s == 1) / float(n), 2),
+        "clarify_multi_pct": round(100.0 * sum(1 for s in set_sizes if s > 1) / float(n), 2),
+        "abstain_empty_pct": round(100.0 * sum(1 for s in set_sizes if s == 0) / float(n), 2),
+        "ece": round(compute_ece(prob_rows, gold_indices), 6),
+    }
+
+
+def fit_temperature_scaled_raps(
+    cal_score_rows: Sequence[Sequence[float]],
+    cal_gold_indices: Sequence[int],
+    *,
+    alpha: float = 0.05,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    randomized: bool = False,
+    seed: int = 42,
+    tau_min: float = 0.05,
+    tau_max: float = 5.0,
+    split_disjoint_half: bool = True,
+) -> dict[str, Any]:
+    """Fit NLL temperature tau* on disjoint half of cal split, then calibrate RAPS/APS q_hat on other half.
+
+    Zero test leakage and strict exchangeability: tau* never sees the q_hat calibration rows when
+    `split_disjoint_half=True` (default, requires n_cal >= 10).
+    """
+    n = len(cal_score_rows)
+    if n == 0 or n != len(cal_gold_indices):
+        raise ValueError("cal_score_rows and cal_gold_indices must be non-empty and equal length")
+
+    if split_disjoint_half and n >= 10:
+        tau_rows = [cal_score_rows[i] for i in range(0, n, 2)]
+        tau_golds = [cal_gold_indices[i] for i in range(0, n, 2)]
+        q_rows = [cal_score_rows[i] for i in range(1, n, 2)]
+        q_golds = [cal_gold_indices[i] for i in range(1, n, 2)]
+        split_policy = "disjoint_even_odd_50_50"
+    else:
+        tau_rows = list(cal_score_rows)
+        tau_golds = list(cal_gold_indices)
+        q_rows = list(cal_score_rows)
+        q_golds = list(cal_gold_indices)
+        split_policy = "shared_cal_full"
+
+    ts_fit = fit_temperature_scaling_nll(tau_rows, tau_golds, tau_min=tau_min, tau_max=tau_max)
+    tau_opt = float(ts_fit["tau_opt"])
+    q_probs = [softmax_with_temperature(r, tau=tau_opt) for r in q_rows]
+    raps_fit = fit_raps_conformal(
+        q_probs,
+        q_golds,
+        alpha=alpha,
+        k_reg=k_reg,
+        lam_reg=lam_reg,
+        randomized=randomized,
+        seed=seed,
+    )
+    return {
+        "method": raps_fit["method"],
+        "split_policy": split_policy,
+        "zero_test_leakage": True,
+        "n_cal_total": n,
+        "n_tau_fit": len(tau_rows),
+        "n_qhat_cal": len(q_rows),
+        "tau_opt": round(tau_opt, 6),
+        "temperature_scaling": ts_fit,
+        **raps_fit,
+    }
+
+
+def fit_mondrian_raps_groups(
+    prob_rows: Sequence[Sequence[float]],
+    gold_indices: Sequence[int],
+    group_labels: Sequence[str],
+    *,
+    alpha: float = 0.05,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    randomized: bool = False,
+    seed: int = 42,
+    min_group_size_warn: int = 250,
+) -> dict[str, Any]:
+    """Fit exact finite-sample group-conditional Mondrian APS/RAPS quantiles q_hat[g] at fixed alpha."""
+    n = len(prob_rows)
+    if n == 0 or n != len(gold_indices) or n != len(group_labels):
+        raise ValueError("prob_rows, gold_indices, and group_labels must be non-empty and equal length")
+    if not (0.0 < alpha < 1.0):
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+
+    rng = random.Random(int(seed)) if randomized else None
+    grouped_scores: dict[str, list[float]] = {}
+    all_scores: list[float] = []
+    for probs, g_idx, grp in zip(prob_rows, gold_indices, group_labels):
+        s = compute_raps_nonconformity_score(
+            probs,
+            g_idx,
+            k_reg=k_reg,
+            lam_reg=lam_reg,
+            u=(rng.random() if rng is not None else None),
+        )
+        grouped_scores.setdefault(str(grp), []).append(s)
+        all_scores.append(s)
+
+    global_q, global_k, global_ql = compute_split_conformal_qhat(all_scores, alpha=alpha)
+    group_q_hat: dict[str, float] = {}
+    group_stats: dict[str, dict[str, Any]] = {}
+    for grp, scores in sorted(grouped_scores.items()):
+        q_g, k_g, ql_g = compute_split_conformal_qhat(scores, alpha=alpha)
+        group_q_hat[grp] = round(q_g, 6)
+        group_stats[grp] = {
+            "n_cal": len(scores),
+            "meets_min_n": len(scores) >= int(min_group_size_warn),
+            "order_statistic_k": k_g,
+            "q_level": round(ql_g, 6),
+            "q_hat": round(q_g, 6),
+        }
+
+    return {
+        "method": "MONDRIAN_APS" if float(lam_reg) == 0.0 else "MONDRIAN_RAPS",
+        "alpha": float(alpha),
+        "target_coverage": round(1.0 - float(alpha), 6),
+        "k_reg": int(k_reg),
+        "lam_reg": float(lam_reg),
+        "randomized": bool(randomized),
+        "seed": int(seed),
+        "n_cal_total": n,
+        "global_q_hat": round(global_q, 6),
+        "global_order_statistic_k": global_k,
+        "global_q_level": round(global_ql, 6),
+        "group_q_hat": group_q_hat,
+        "groups": group_stats,
+    }
+
+
+def evaluate_mondrian_raps(
+    prob_rows: Sequence[Sequence[float]],
+    gold_indices: Sequence[int],
+    group_labels: Sequence[str],
+    group_q_hat: Mapping[str, float],
+    *,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    fallback_q_hat: float | None = None,
+    randomized: bool = False,
+    seed: int = 1042,
+    disallow_zero_sets: bool = True,
+) -> dict[str, Any]:
+    """Evaluate group-conditional Mondrian APS/RAPS coverage, set size, singleton rate, and ECE."""
+    n = len(prob_rows)
+    if n == 0 or n != len(gold_indices) or n != len(group_labels):
+        raise ValueError("prob_rows, gold_indices, and group_labels must be non-empty and equal length")
+
+    fb_q = float(fallback_q_hat) if fallback_q_hat is not None else max(float(v) for v in group_q_hat.values())
+    rng = random.Random(int(seed)) if randomized else None
+    per_group: dict[str, list[tuple[Sequence[float], int, list[int]]]] = {}
+    all_covered = 0
+    all_sizes: list[int] = []
+
+    for probs, g_idx, grp in zip(prob_rows, gold_indices, group_labels):
+        q_g = float(group_q_hat.get(str(grp), fb_q))
+        u_val = rng.random() if rng is not None else None
+        pred_set = predict_raps_set(
+            probs,
+            q_g,
+            k_reg=k_reg,
+            lam_reg=lam_reg,
+            u=u_val,
+            disallow_zero_sets=disallow_zero_sets,
+        )
+        if g_idx in pred_set:
+            all_covered += 1
+        all_sizes.append(len(pred_set))
+        per_group.setdefault(str(grp), []).append((probs, g_idx, pred_set))
+
+    group_metrics: dict[str, dict[str, Any]] = {}
+    for grp, items in sorted(per_group.items()):
+        m = len(items)
+        g_cov = sum(1 for _, g_idx, pset in items if g_idx in pset)
+        g_sizes = [len(pset) for _, _, pset in items]
+        g_ece = compute_ece([probs for probs, _, _ in items], [g_idx for _, g_idx, _ in items])
+        group_metrics[grp] = {
+            "n_eval": m,
+            "q_hat": round(float(group_q_hat.get(grp, fb_q)), 6),
+            "empirical_coverage_pct": round(100.0 * g_cov / float(m), 2),
+            "mean_prediction_set_size": round(sum(g_sizes) / float(m), 3),
+            "singleton_exec_pct": round(100.0 * sum(1 for s in g_sizes if s == 1) / float(m), 2),
+            "clarify_multi_pct": round(100.0 * sum(1 for s in g_sizes if s > 1) / float(m), 2),
+            "abstain_empty_pct": round(100.0 * sum(1 for s in g_sizes if s == 0) / float(m), 2),
+            "ece": round(g_ece, 6),
+        }
+
+    return {
+        "method": "MONDRIAN_APS" if float(lam_reg) == 0.0 else "MONDRIAN_RAPS",
+        "k_reg": int(k_reg),
+        "lam_reg": float(lam_reg),
+        "randomized": bool(randomized),
+        "n_eval": n,
+        "overall_coverage_pct": round(100.0 * all_covered / float(n), 2),
+        "overall_mean_set_size": round(sum(all_sizes) / float(n), 3),
+        "overall_singleton_exec_pct": round(100.0 * sum(1 for s in all_sizes if s == 1) / float(n), 2),
+        "overall_clarify_multi_pct": round(100.0 * sum(1 for s in all_sizes if s > 1) / float(n), 2),
+        "overall_abstain_empty_pct": round(100.0 * sum(1 for s in all_sizes if s == 0) / float(n), 2),
+        "overall_ece": round(compute_ece(prob_rows, gold_indices), 6),
+        "group_metrics": group_metrics,
+    }
+
+
+def fit_temperature_scaled_mondrian_raps(
+    cal_score_rows: Sequence[Sequence[float]],
+    cal_gold_indices: Sequence[int],
+    cal_group_labels: Sequence[str],
+    *,
+    alpha: float = 0.05,
+    k_reg: int = 1,
+    lam_reg: float = 0.05,
+    randomized: bool = False,
+    seed: int = 42,
+    tau_min: float = 0.05,
+    tau_max: float = 5.0,
+    per_group_temperature: bool = True,
+    min_group_size_warn: int = 250,
+) -> dict[str, Any]:
+    """Disjoint stratified 50/50 split: fit NLL temperature(s) on half 1, Mondrian RAPS q_hat on half 2."""
+    n = len(cal_score_rows)
+    if n < 20 or n != len(cal_gold_indices) or n != len(cal_group_labels):
+        raise ValueError("Need >= 20 equal-length calibration rows for disjoint Mondrian RAPS fit")
+
+    by_group: dict[str, list[int]] = {}
+    for idx, grp in enumerate(cal_group_labels):
+        by_group.setdefault(str(grp), []).append(idx)
+
+    tau_idx: list[int] = []
+    q_idx: list[int] = []
+    for _, idxs in sorted(by_group.items()):
+        tau_idx.extend(idxs[0::2])
+        q_idx.extend(idxs[1::2])
+
+    global_ts = fit_temperature_scaling_nll(
+        [cal_score_rows[i] for i in tau_idx],
+        [cal_gold_indices[i] for i in tau_idx],
+        tau_min=tau_min,
+        tau_max=tau_max,
+    )
+    global_tau = float(global_ts["tau_opt"])
+
+    group_tau: dict[str, float] = {}
+    for grp, idxs in sorted(by_group.items()):
+        g_tau_idxs = idxs[0::2]
+        if per_group_temperature and len(g_tau_idxs) >= 10:
+            g_ts = fit_temperature_scaling_nll(
+                [cal_score_rows[i] for i in g_tau_idxs],
+                [cal_gold_indices[i] for i in g_tau_idxs],
+                tau_min=tau_min,
+                tau_max=tau_max,
+            )
+            group_tau[grp] = float(g_ts["tau_opt"])
+        else:
+            group_tau[grp] = global_tau
+
+    q_probs = [
+        softmax_with_temperature(cal_score_rows[i], tau=group_tau[str(cal_group_labels[i])])
+        for i in q_idx
+    ]
+    q_golds = [cal_gold_indices[i] for i in q_idx]
+    q_groups = [str(cal_group_labels[i]) for i in q_idx]
+
+    mondrian_fit = fit_mondrian_raps_groups(
+        q_probs,
+        q_golds,
+        q_groups,
+        alpha=alpha,
+        k_reg=k_reg,
+        lam_reg=lam_reg,
+        randomized=randomized,
+        seed=seed,
+        min_group_size_warn=min_group_size_warn,
+    )
+    return {
+        "split_policy": "stratified_disjoint_50_50_tau_then_qhat",
+        "zero_test_leakage": True,
+        "per_group_temperature": bool(per_group_temperature),
+        "n_cal_total": n,
+        "n_tau_fit": len(tau_idx),
+        "n_qhat_cal": len(q_idx),
+        "global_tau": round(global_tau, 6),
+        "group_tau": {k: round(v, 6) for k, v in sorted(group_tau.items())},
+        "global_temperature_scaling": global_ts,
+        **mondrian_fit,
+    }
+
+
+def evaluate_temperature_scaled_mondrian_raps(
+    test_score_rows: Sequence[Sequence[float]],
+    test_gold_indices: Sequence[int],
+    test_group_labels: Sequence[str],
+    fitted_bundle: Mapping[str, Any],
+    *,
+    seed: int = 2042,
+    disallow_zero_sets: bool = True,
+) -> dict[str, Any]:
+    """Evaluate a fitted temperature-scaled Mondrian APS/RAPS bundle on held-out test logits."""
+    group_tau = fitted_bundle.get("group_tau", {})
+    global_tau = float(fitted_bundle.get("global_tau", 1.0))
+    test_probs = [
+        softmax_with_temperature(row, tau=float(group_tau.get(str(grp), global_tau)))
+        for row, grp in zip(test_score_rows, test_group_labels)
+    ]
+    return evaluate_mondrian_raps(
+        test_probs,
+        test_gold_indices,
+        test_group_labels,
+        fitted_bundle["group_q_hat"],
+        k_reg=int(fitted_bundle["k_reg"]),
+        lam_reg=float(fitted_bundle["lam_reg"]),
+        fallback_q_hat=float(fitted_bundle["global_q_hat"]),
+        randomized=bool(fitted_bundle.get("randomized", False)),
+        seed=seed,
+        disallow_zero_sets=disallow_zero_sets,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Calibrate KnowNo Split Conformal quantile q_hat for VertiRTA."

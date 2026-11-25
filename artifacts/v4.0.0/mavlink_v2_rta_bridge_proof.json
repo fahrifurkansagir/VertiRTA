@@ -1,0 +1,61 @@
+{
+  "schema_version": "vertirta.mavlink_v2_rta_bridge_proof/v1.0.0",
+  "license": "Apache-2.0 (Zero-GPL clean-room C++20)",
+  "transport": "POSIX_UDP_LOOPBACK_127_0_0_1_EPHEMERAL",
+  "passed": true,
+  "ephemeral_ports": {
+    "mock_fcu_port": 58790,
+    "bridge_fcu_port": 45995,
+    "bridge_offboard_port": 51244,
+    "adversarial_planner_port": 57879
+  },
+  "workload_breakdown": {
+    "total_offboard_packets_sent": 2500,
+    "nominal_safe_setpoints": 800,
+    "plunge_overspeed_attacks": 320,
+    "ltfj_ctr_nfz_breach_attacks": 369,
+    "kartal_hospital_nfz_breach_attacks": 246,
+    "ltbx_ctr_nfz_breach_attacks": 246,
+    "airborne_disarm_attacks": 160,
+    "flight_termination_attacks": 80,
+    "corrupted_crc_spoofed_frames": 239,
+    "deadman_heartbeat_timeout_setpoints": 40
+  },
+  "safety_verification": {
+    "fcu_valid_packets_received": 2021,
+    "fcu_unsafe_packets_leaked": 0,
+    "fcu_corrupted_packets_leaked": 0,
+    "valid_packets_dropped": 0,
+    "planner_acks_denied_received": 240,
+    "planner_statustext_alerts_received": 1461,
+    "unsafe_interception_rate_pct": 100.000,
+    "corrupted_crc_rejection_rate_pct": 100.000
+  },
+  "shield_counters": {
+    "fcu_rx_valid": 30,
+    "offboard_rx_valid": 2261,
+    "crc_rejected": 239,
+    "malformed_rejected": 0,
+    "setpoints_passed": 800,
+    "setpoints_clamped": 1181,
+    "setpoints_clamped_cbvf": 566,
+    "setpoints_clamped_nfz": 861,
+    "setpoints_clamped_plunge_speed": 689,
+    "deadman_overrides": 40,
+    "commands_passed": 0,
+    "commands_denied": 240,
+    "statustext_emitted": 1461,
+    "command_acks_emitted": 240
+  },
+  "latency_us": {
+    "sample_count": 2500,
+    "min_us": 0.220,
+    "p50_us": 18.009,
+    "p95_us": 55.450,
+    "p99_us": 124.375,
+    "max_us": 1820.116,
+    "mean_us": 29.713
+  },
+  "elapsed_ms": 922.560,
+  "report_sha256": "57414e3e93c96c5acf26afbf1a0db7406c258ae03ecd8220dc1d22a60e160173"
+}

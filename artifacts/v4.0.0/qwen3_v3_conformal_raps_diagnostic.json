@@ -1,0 +1,252 @@
+{
+  "schema_version": "vertirta.qwen3_v3_conformal_raps_diagnostic/v1.0.0",
+  "timestamp_utc": "2026-11-25T17:53:14.030920+00:00",
+  "compute_cost_cu": 0.0,
+  "source_g4_artifact": "artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json",
+  "source_g4_artifact_sha256": "4e227bf753def1a5e6f30062216ab4f0ba096cf6d395d459e87111cd85a019ca",
+  "post_hoc_recalibration_possible_on_saved_artifacts": false,
+  "post_hoc_block_reason": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py lines 1070-1096 compute cal_lps/cal_tcs/cal_golds and test_lps/test_tcs/test_golds in GPU host RAM during _run_live_finalize_phase and pass them to _run_mondrian_audit, but NEVER persist per-sample candidate log-probs or token counts to disk. Only aggregate calibration/evaluation summaries were written to g4_qwen3_v3_vertibench_v2_eval.json.",
+  "observed_live_g4_qwen3_v3_metrics": {
+    "best_seed_index": 0,
+    "seed0_gbnf_z3_ast_stl_accuracy_pct": 83.58,
+    "seed0_nominal_ast_stl_accuracy_pct": 99.03,
+    "seed0_ambiguous_asr_ast_stl_accuracy_pct": 100.0,
+    "seed0_adversarial_ast_stl_accuracy_pct": 44.93,
+    "cv_selected_gamma": 1.0,
+    "cv_selected_tau": 0.318372,
+    "cv_mean_nll_at_best_gamma": 1.991462,
+    "uniform_14_branch_entropy_nats": 2.639057,
+    "lang_mondrian_coverage_pct": 96.0,
+    "lang_mondrian_mean_set_size": 7.803,
+    "lang_mondrian_singleton_exec_pct": 0.0,
+    "snr_mondrian_coverage_pct": 95.25,
+    "snr_mondrian_mean_set_size": 7.601,
+    "snr_mondrian_singleton_exec_pct": 0.0,
+    "overall_ece": 0.1744,
+    "stratum_ece_range": [
+      0.162248,
+      0.250835
+    ],
+    "stratum_q_hat_range": [
+      0.947889,
+      0.977292
+    ],
+    "stratum_p_min_range": [
+      0.022708,
+      0.052111
+    ]
+  },
+  "root_causes": [
+    {
+      "id": "RC1_TEMPLATE_AND_EOS_MISMATCH",
+      "severity": "CRITICAL",
+      "file": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+      "lines": "217-263, 489-493, 673-674",
+      "explanation": "SFT supervises canonical_dsl with row-specific AGL/SPD/ETA plus trailing <|im_end|> (line 674), whereas build_language_matched_candidate_branches (lines 217-263) hardcodes static AGL=45,95;SPD=18 for DIVERT_SLZ, AGL=35,80;SPD=12 for ABORT_RETURN, and DUR=30;AGL=60 for HOLD_LOITER, and _score_live_branch_logprobs (line 490) omits <|im_end|>. Teacher-forcing mismatched hardcoded tokens heavily penalizes even the true gold branch, driving CV NLL up to 1.9915 nats (vs ln(14)=2.639 uniform)."
+    },
+    {
+      "id": "RC2_BOILERPLATE_DILUTION_AT_GAMMA_1",
+      "severity": "HIGH",
+      "file": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+      "lines": "355-364, 513-514; ml/copilot/calibrate_conformal.py:346-359",
+      "explanation": "All 14 candidate branches share 70-85% deterministic boilerplate DSL tokens whose log-probs are ~0 after SFT (sft_mean_loss=0.08438). Dividing sum_logprob by n_tok^gamma at gamma=1.0 dilutes the 1-3 discriminative decision tokens by ~25-32x and introduces length bias between short HOLD_LOITER and longer DIVERT/CLARIFY strings, flattening softmax posteriors (forcing tau*=0.318 yet leaving ECE=0.1744-0.2950)."
+    },
+    {
+      "id": "RC3_NAIVE_LAC_NONCONFORMITY_TAIL_COLLAPSE",
+      "severity": "HIGH",
+      "file": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+      "lines": "371-378; ml/copilot/calibrate_conformal.py:425-527",
+      "explanation": "_run_mondrian_audit uses naive LAC/THR nonconformity s_i = 1 - p(y_i*). Because the ADVERSARIAL bucket (25% of cal/test) has 44.93% AST accuracy, >5% of calibration rows fall in a low-p(y*) error tail, pushing q_hat to 0.9479-0.9774 and setting a static probability floor p_min = 0.0226-0.0521. With 14 compressed branches, 6.6-8.4 candidates exceed p_min on every sample -> 0.0% singleton_exec_pct. Crucially, fixing RC1+RC2 so gold ranks in top-2/top-3 is also required for RAPS/APS to yield singletons."
+    },
+    {
+      "id": "RC4_SHARED_CAL_SPLIT_AND_SINGLE_SCALAR_TAU",
+      "severity": "MEDIUM",
+      "file": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+      "lines": "355-378",
+      "explanation": "A single scalar tau*=0.318372 is fit on all 2,000 cal rows and reused across all language and SNR strata before fitting group q_hat on the exact same 2,000 rows, ignoring per-stratum ECE divergence (S1_Cruise=0.1622 vs S2_Hover=0.2508 vs MIX=0.2950) and weakening strict split exchangeability."
+    }
+  ],
+  "raps_upgrade_verification": {
+    "module": "ml/copilot/calibrate_conformal.py",
+    "backward_compatible": true,
+    "added_functions": [
+      "compute_raps_nonconformity_score",
+      "predict_raps_set",
+      "fit_raps_conformal",
+      "evaluate_raps_conformal",
+      "fit_temperature_scaled_raps",
+      "fit_mondrian_raps_groups",
+      "evaluate_mondrian_raps",
+      "fit_temperature_scaled_mondrian_raps",
+      "evaluate_temperature_scaled_mondrian_raps"
+    ],
+    "unit_test_suite": "tests/copilot/test_conformal_raps_calibration.py"
+  },
+  "synthetic_raps_ablation": {
+    "provenance": "SYNTHETIC_ABLATION_VERIFYING_RAPS_MATH",
+    "is_live_qwen3_score": false,
+    "disclaimer": "Synthetic 14-branch controlled benchmark (modeling gamma=1.0 boilerplate dilution + top-2 ambiguity after RC1/RC2 alignment) verifying APS/RAPS/Mondrian-RAPS mathematics and finite-sample coverage guarantees at 0.00 CU. NOT live Qwen3-4B v3 scores.",
+    "n_cal": 2000,
+    "n_test": 1200,
+    "n_branches": 14,
+    "alpha": 0.05,
+    "lac_uncalibrated_tau_1": {
+      "tau": 1.0,
+      "q_hat": 0.914145,
+      "p_min_threshold": 0.085855,
+      "n_eval": 1200,
+      "covered": 1127,
+      "empirical_coverage_pct": 93.92,
+      "mean_prediction_set_size": 1.02,
+      "singleton_exec_pct": 98.0,
+      "clarify_multi_pct": 2.0,
+      "abstain_empty_pct": 0.0,
+      "nll": 2.289309,
+      "ece": 0.816874
+    },
+    "lac_temp_calibrated": {
+      "tau": 0.053992,
+      "q_hat": 0.826883,
+      "p_min_threshold": 0.173117,
+      "n_eval": 1200,
+      "covered": 1145,
+      "empirical_coverage_pct": 95.42,
+      "mean_prediction_set_size": 1.035,
+      "singleton_exec_pct": 96.5,
+      "clarify_multi_pct": 3.5,
+      "abstain_empty_pct": 0.0,
+      "nll": 0.170581,
+      "ece": 0.062285
+    },
+    "aps_disjoint_temp_scaled": {
+      "tau_opt": 0.056,
+      "q_hat": 0.761699,
+      "method": "APS",
+      "k_reg": 1,
+      "lam_reg": 0.0,
+      "randomized": false,
+      "n_eval": 1200,
+      "covered": 1150,
+      "empirical_coverage_pct": 95.83,
+      "mean_prediction_set_size": 1.039,
+      "median_prediction_set_size": 1.0,
+      "singleton_exec_pct": 96.08,
+      "clarify_multi_pct": 3.92,
+      "abstain_empty_pct": 0.0,
+      "ece": 0.070095
+    },
+    "raps_disjoint_temp_scaled_det": {
+      "tau_opt": 0.056,
+      "q_hat": 0.811699,
+      "method": "RAPS",
+      "k_reg": 1,
+      "lam_reg": 0.05,
+      "randomized": false,
+      "n_eval": 1200,
+      "covered": 1150,
+      "empirical_coverage_pct": 95.83,
+      "mean_prediction_set_size": 1.039,
+      "median_prediction_set_size": 1.0,
+      "singleton_exec_pct": 96.08,
+      "clarify_multi_pct": 3.92,
+      "abstain_empty_pct": 0.0,
+      "ece": 0.070095
+    },
+    "raps_disjoint_temp_scaled_rand": {
+      "tau_opt": 0.056,
+      "q_hat": 0.961788,
+      "method": "RAPS",
+      "k_reg": 1,
+      "lam_reg": 0.05,
+      "randomized": true,
+      "n_eval": 1200,
+      "covered": 1176,
+      "empirical_coverage_pct": 98.0,
+      "mean_prediction_set_size": 1.065,
+      "median_prediction_set_size": 1.0,
+      "singleton_exec_pct": 93.5,
+      "clarify_multi_pct": 6.5,
+      "abstain_empty_pct": 0.0,
+      "ece": 0.070095
+    },
+    "mondrian_raps_per_group_temp": {
+      "split_policy": "stratified_disjoint_50_50_tau_then_qhat",
+      "group_tau": {
+        "S0_Clean": 0.062904,
+        "S1_Cruise": 0.061026,
+        "S2_Hover": 0.056897,
+        "S3_Garbled": 0.05
+      },
+      "group_q_hat": {
+        "S0_Clean": 0.0,
+        "S1_Cruise": 0.850273,
+        "S2_Hover": 0.806256,
+        "S3_Garbled": 0.85175
+      },
+      "method": "MONDRIAN_RAPS",
+      "k_reg": 1,
+      "lam_reg": 0.05,
+      "randomized": false,
+      "n_eval": 1200,
+      "overall_coverage_pct": 95.92,
+      "overall_mean_set_size": 1.04,
+      "overall_singleton_exec_pct": 96.0,
+      "overall_clarify_multi_pct": 4.0,
+      "overall_abstain_empty_pct": 0.0,
+      "overall_ece": 0.074459,
+      "group_metrics": {
+        "S0_Clean": {
+          "n_eval": 300,
+          "q_hat": 0.0,
+          "empirical_coverage_pct": 95.0,
+          "mean_prediction_set_size": 1.0,
+          "singleton_exec_pct": 100.0,
+          "clarify_multi_pct": 0.0,
+          "abstain_empty_pct": 0.0,
+          "ece": 0.034602
+        },
+        "S1_Cruise": {
+          "n_eval": 300,
+          "q_hat": 0.850273,
+          "empirical_coverage_pct": 96.0,
+          "mean_prediction_set_size": 1.013,
+          "singleton_exec_pct": 98.67,
+          "clarify_multi_pct": 1.33,
+          "abstain_empty_pct": 0.0,
+          "ece": 0.057962
+        },
+        "S2_Hover": {
+          "n_eval": 300,
+          "q_hat": 0.806256,
+          "empirical_coverage_pct": 96.33,
+          "mean_prediction_set_size": 1.047,
+          "singleton_exec_pct": 95.33,
+          "clarify_multi_pct": 4.67,
+          "abstain_empty_pct": 0.0,
+          "ece": 0.08327
+        },
+        "S3_Garbled": {
+          "n_eval": 300,
+          "q_hat": 0.85175,
+          "empirical_coverage_pct": 96.33,
+          "mean_prediction_set_size": 1.1,
+          "singleton_exec_pct": 90.0,
+          "clarify_multi_pct": 10.0,
+          "abstain_empty_pct": 0.0,
+          "ece": 0.125328
+        }
+      }
+    }
+  },
+  "future_g4_finalize_3line_patch_spec": {
+    "target_file": "scripts/colab/g4_jobs/job_qwen3_v3_vertibench_v2.py",
+    "target_function": "_run_live_finalize_phase (lines 1070-1075)",
+    "estimated_gpu_cost_cu": "optional ~0.15 CU finalize-only re-run using existing saved seed0 LoRA adapter",
+    "patch_lines": [
+      "1) Persist raw cal/test candidate branch logprobs + token_counts + gold_indices to blob_dir/qwen3_4b_v3_conformal_logits.npz (np.savez_compressed) immediately after lines 1070-1071.",
+      "2) Append \"<|im_end|>\" and score action/target/violation decision tokens (or prefix-matched canonical_dsl parameters) inside _score_live_branch_logprobs line 490 so gold branch tokens match SFT targets.",
+      "3) Run fit_temperature_scaled_mondrian_raps(..., k_reg=1, lam_reg=0.05, per_group_temperature=True) + evaluate_temperature_scaled_mondrian_raps(...) alongside legacy LAC inside _run_mondrian_audit lines 371-378."
+    ]
+  },
+  "report_sha256": "b302258c25e7c562f52ddbcbf8fe8be42b90850010de16203815a6fe710ef4d5"
+}

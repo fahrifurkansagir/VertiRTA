@@ -143,4 +143,35 @@ if(_vertirta_build_compound_fault)
     Catch2::Catch2WithMain
   )
   add_test(NAME test_monte_carlo_dispersion COMMAND test_monte_carlo_dispersion)
+
+  # -------------------------------------------------------------------------
+  # 4. Zero-GPL Native C++20 MAVLink v2 UDP/Offboard RTA Shield Bridge Suite
+  # -------------------------------------------------------------------------
+  if(NOT TARGET vertirta::mavlink_rta_bridge)
+    add_subdirectory(
+      "${_vertirta_repo_root}/tools/mavlink_rta_bridge"
+      "${CMAKE_BINARY_DIR}/deps/tools_mavlink_rta_bridge"
+    )
+  endif()
+
+  add_executable(test_mavlink_v2_rta_bridge
+    test_mavlink_v2_rta_bridge.cpp
+  )
+  target_compile_features(test_mavlink_v2_rta_bridge PRIVATE cxx_std_20)
+  target_compile_options(test_mavlink_v2_rta_bridge PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+    -Wshadow
+    -Wuninitialized
+  )
+  if(VERTIRTA_ENABLE_STRICT_FP)
+    target_compile_options(test_mavlink_v2_rta_bridge PRIVATE ${VERTIRTA_STRICT_FP_FLAGS})
+  endif()
+  target_link_libraries(test_mavlink_v2_rta_bridge PRIVATE
+    vertirta::mavlink_rta_bridge
+    Catch2::Catch2WithMain
+  )
+  add_test(NAME test_mavlink_v2_rta_bridge COMMAND test_mavlink_v2_rta_bridge)
 endif()
