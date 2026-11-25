@@ -21,6 +21,8 @@ on:
       - "apps/vertigcs/**"
       - "benchmarks/vertibench_v2/**"
       - "benchmarks/compound_fault_suite/**"
+      - "benchmarks/monte_carlo_dispersion/**"
+      - "tools/mavlink_rta_bridge/**"
       - "ml/voice/**"
       - "ml/copilot/calibrate_conformal.py"
       - "docs/paper_corl/**"
@@ -36,10 +38,13 @@ on:
       - "tests/voice/**"
       - "tests/forensics/**"
       - "tests/vertibench_v2/**"
+      - "tests/copilot/test_conformal_raps_calibration.py"
       - "tests/colab/**"
       - "tests/realworld/**"
       - "tests/integration/CMakeLists.txt"
       - "tests/integration/test_compound_fault_istanbul_mission.cpp"
+      - "tests/integration/test_monte_carlo_dispersion.cpp"
+      - "tests/integration/test_mavlink_v2_rta_bridge.cpp"
       - "tests/integration/test_m3_voice_node_contracts.py"
       - "tests/ci/test_m3_workflow_contracts.py"
       - ".github/workflows/m3_perception_voice_forensics.yml"
@@ -62,6 +67,8 @@ on:
       - "apps/vertigcs/**"
       - "benchmarks/vertibench_v2/**"
       - "benchmarks/compound_fault_suite/**"
+      - "benchmarks/monte_carlo_dispersion/**"
+      - "tools/mavlink_rta_bridge/**"
       - "ml/voice/**"
       - "ml/copilot/calibrate_conformal.py"
       - "docs/paper_corl/**"
@@ -77,10 +84,13 @@ on:
       - "tests/voice/**"
       - "tests/forensics/**"
       - "tests/vertibench_v2/**"
+      - "tests/copilot/test_conformal_raps_calibration.py"
       - "tests/colab/**"
       - "tests/realworld/**"
       - "tests/integration/CMakeLists.txt"
       - "tests/integration/test_compound_fault_istanbul_mission.cpp"
+      - "tests/integration/test_monte_carlo_dispersion.cpp"
+      - "tests/integration/test_mavlink_v2_rta_bridge.cpp"
       - "tests/integration/test_m3_voice_node_contracts.py"
       - "tests/ci/test_m3_workflow_contracts.py"
       - ".github/workflows/m3_perception_voice_forensics.yml"
@@ -237,10 +247,14 @@ jobs:
             test_mondrian_voice_gate \
             test_forensics_sidecar_ercs_e5x \
             test_compound_fault_istanbul_mission \
+            test_monte_carlo_dispersion \
+            test_mavlink_v2_rta_bridge \
             vertirta_compound_fault_cli \
+            vertirta_mc_1000_cli \
+            vertirta_mavlink_rta_bridge_cli \
             vertirta_forensics_cli -j
           ctest --test-dir build-m3-asan \
-            -R "^(test_forward_hazard_fusion|test_mmwave_77ghz_sensor|test_gnss_spoof_mcusum_vio|test_visual_reloc_and_ctr_inflation|test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x|test_compound_fault_istanbul_mission)$" \
+            -R "^(test_forward_hazard_fusion|test_mmwave_77ghz_sensor|test_gnss_spoof_mcusum_vio|test_visual_reloc_and_ctr_inflation|test_voice_pipeline|test_mondrian_voice_gate|test_forensics_sidecar_ercs_e5x|test_compound_fault_istanbul_mission|test_monte_carlo_dispersion|test_mavlink_v2_rta_bridge)$" \
             --output-on-failure -j4
 
       - name: Build & Run TSan on M3 Voice & Forensics Suites (Targeted libz3 Suppression)
@@ -312,7 +326,13 @@ jobs:
               build-m3-asan/tests/forensics/test_forensics_sidecar_ercs_e5x \
               build-m3-asan/benchmarks/compound_fault_suite/libvertirta_compound_fault_suite.a \
               build-m3-asan/benchmarks/compound_fault_suite/vertirta_compound_fault_cli \
+              build-m3-asan/benchmarks/monte_carlo_dispersion/libvertirta_monte_carlo_dispersion.a \
+              build-m3-asan/benchmarks/monte_carlo_dispersion/vertirta_mc_1000_cli \
+              build-m3-asan/tools/mavlink_rta_bridge/libvertirta_mavlink_rta_bridge.a \
+              build-m3-asan/tools/mavlink_rta_bridge/vertirta_mavlink_rta_bridge \
               build-m3-asan/tests/integration/test_compound_fault_istanbul_mission \
+              build-m3-asan/tests/integration/test_monte_carlo_dispersion \
+              build-m3-asan/tests/integration/test_mavlink_v2_rta_bridge \
             --source-roots \
               core/forward_hazard \
               core/gnss_denied \
@@ -320,6 +340,8 @@ jobs:
               core/voice \
               core/forensics \
               benchmarks/compound_fault_suite \
+              benchmarks/monte_carlo_dispersion \
+              tools/mavlink_rta_bridge \
               ros2_ws/src/vertirta_forward_hazard_node \
               ros2_ws/src/vertirta_gnss_denied_node \
               ros2_ws/src/vertirta_voice_node \
@@ -347,6 +369,7 @@ jobs:
             pytest \
               tests/forward_hazard/test_forward_data_license_gate.py \
               tests/vertibench_v2/ \
+              tests/copilot/test_conformal_raps_calibration.py \
               tests/forensics/test_e5x_xsd_and_grounding.py \
               tests/integration/test_m3_voice_node_contracts.py \
               docs/paper_corl/tests/test_paper_corl_contracts.py \
@@ -365,10 +388,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: "apps/vertigcs/package-lock.json"
 

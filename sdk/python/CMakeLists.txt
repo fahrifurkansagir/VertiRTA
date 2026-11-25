@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(vertirta_python_sdk VERSION 3.0.0 LANGUAGES C CXX)
+project(vertirta_python_sdk VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(VERTIRTA_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." CACHE PATH "VertiRTA repository root")

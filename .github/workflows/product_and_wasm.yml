@@ -142,7 +142,7 @@ jobs:
           uv pip install --python /tmp/vertirta_sdk_venv/bin/python scikit-build-core nanobind pytest numpy gymnasium typer
           uv pip install --python /tmp/vertirta_sdk_venv/bin/python --no-build-isolation --no-deps .
           /tmp/vertirta_sdk_venv/bin/python -c "import vertirta; assert vertirta.get_backend_name() == 'cpp_nanobind', vertirta.get_backend_name(); print('Native backend verified:', vertirta.get_backend_name())"
-          VERTIRTA_REQUIRE_NATIVE=1 /tmp/vertirta_sdk_venv/bin/pytest tests/sdk/test_vertirta_sdk.py -v
+          VERTIRTA_REQUIRE_NATIVE=1 /tmp/vertirta_sdk_venv/bin/pytest tests/sdk/test_vertirta_sdk.py tests/sdk/test_vertirta_m3_sdk.py -v
 
   docker_and_governance:
     name: Hardened Docker Compose, Paper 1 RA-L & Public Hygiene Gates

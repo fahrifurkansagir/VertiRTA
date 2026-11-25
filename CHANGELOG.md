@@ -19,10 +19,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
   - Real `PX4 ULog` (`sample.ulg`, `68.83 s`) -> `400` `.vrta` frames + ED-155A hash-chained sidecar -> **`W3C XSD`-valid `E5X`** (`CICTT SCF-NP`, `ERCS I5`, `Barrier-8 = 0`, `DRAFT_INCIDENT_ONLY`, `0` hallucinations).
   - Live Istanbul `METAR (LTFJ)` / `Open-Meteo` / `adsb.lol` audit (`10` aircraft, `0` well-clear violations, `52.77%` SoC remaining, `all_gates_passed: true`) and **`5 / 5` compound 6-axis fault mission scenarios PASS** (`545.68 ms`).
   - Zero-GPL `sherpa-onnx v2.0.3` TTS **`TTFA p50 = 71.7 ms`** (`0` GPL violations, `espeak-ng` deleted), `faster-whisper` + Mondrian + Z3 closed-loop `24/24` turns **`100.0%` Z3 SAT**, and physical `GTX 1650 SUPER` time-sliced Cruise **`p99 = 19.83 ms < 25 ms` / `56.25 FPS`** (honestly logging `366.0 MiB` cruise VRAM delta, `13.36 ms` terminal WDDM p99, and Whisper BVI-LoRA negative ablation vs. Zero-Shot).
+- **Wave A — Real-World Moving NASA Drone Temporal SLZ HUD & Dual-Airframe `1,000 + 180` C++20 Monte Carlo Dispersion (`artifacts/v4.0.0/{realworld_drone_video_temporal_proof,monte_carlo_1000_dispersion_report}.json`):**
+  - Moving `PD-USGov-NASA` Goddard drone video (`240` frames on `GTX 1650 SUPER`, `0.00 CU`): homography-warped EMA + hysteresis cut safe/hazard pixel flicker **`2.19% -> 0.96%` (`-56.25%`)** and SLZ centroid jitter **`1.217 -> 0.461 px` (`-62.15%`)** at **`77.35 FPS`** `PIDNet-S v2.1` (honestly disclosing oblique white-wall 2D RGB triggers and procedural WireSeg roofline false positives).
+  - Native C++20 `1,000 + 180` Monte Carlo suite (`benchmarks/monte_carlo_dispersion/`, `11.11 s` on `12` threads): **`0/1,000`** airspace breaches; `LC-240 8+1` **`500/500`** (`CEP50 0.80 m / CEP95 1.97 m`); `X8-240` **`429/500`** (`400/400` non-CEL, honestly contrasting `29/100` `±5 cm` CG-shifted same-arm CEL vs. nominal-CG Tier-1 10k `1,500/1,500`); `6×6` thrust-saturation cliff at **`+14% @ 10 m/s`** and `0%` wall at **`>= +21%`**.
+- **Wave B — Zero-GPL Native C++20 MAVLink v2 UDP RTA Shield, `Qwen3-4B v3` RAPS Diagnostic & Cross-Benchmark Audit (`tools/mavlink_rta_bridge/`, `artifacts/v4.0.0/{mavlink_v2_rta_bridge_proof,qwen3_v3_conformal_raps_diagnostic}.json`, `docs/research/{CROSS_BENCHMARK_AUDIT_v1,OPTIONAL_G4_V1_1_BATCH_SPEC}.md`):**
+  - Clean-room Apache-2.0 MAVLink v2 (`0xFD`, `8` `common.xml` `CRC_EXTRA`) live POSIX UDP shield (`2,500` packets): **`0`** drops, **`0`** leaks, **`1,181/1,181`** clamped, **`240/240`** airborne disarm/termination denied, **`239/239`** CRC rejected, **`p50 = 18.0 us / p99 = 124.4 us`**.
+  - `0.00 CU` conformal audit isolating `Qwen3-4B v3` `|C| = 7.80` (`RC1–RC4`) plus backward-compatible `Mondrian-RAPS` implementation & unit tests in `ml/copilot/calibrate_conformal.py`.
+- **Wave C — Public Showcase Polish & Executive System Card (`docs/SYSTEM_CARD.md`, `docs/assets/`):**
+  - Added 1-page Principal-Engineer [`docs/SYSTEM_CARD.md`](docs/SYSTEM_CARD.md), 2×2 visual proof gallery (`docs/assets/vertirta_vertigcs_live_3d.png`, `vertirta_mc1000_envelope_dispersion.png`, `vertirta_real_drone_hud_preview.gif`, `vertirta_pidnet_v21_slz_grid.jpg`), and 7th CI badge (`m3_perception_voice_forensics.yml`).
 
 ### Changed
 - Standardized package, SDK, citation, Zenodo, and `VertiGCS` versions to **`1.0.0`** (`pyproject.toml`, `sdk/python/vertirta/_version.py`, `CITATION.cff`, `.zenodo.json`, `apps/vertigcs/package.json`, `apps/vertigcs/package-lock.json`).
-- Refreshed `README.md` and `docs/SAFETY_CASE.md` (`Sn15–Sn18`) with verified `artifacts/v4.0.0/*.json` evidence links under strict Research & Simulation Testbed Only scope.
+- Refreshed `README.md` (`7/7` CI, `36/36` CTest, `17/17` Vitest) and `docs/SAFETY_CASE.md` (`Sn15–Sn19`, preserving `G5`/`G6` `[UNDEVELOPED]`) with verified `artifacts/v4.0.0/*.json` evidence links under strict Research & Simulation Testbed Only scope.
 
 ## [3.5.1] - 2026-11-23 (Phase B Real-World Hardening & Colab L4 ML Leap)
 
@@ -80,7 +88,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 ### Added
 - **Pillar 2 Verified Bilingual TR/EN Contingency Co-Pilot (`core/stl/`, `core/copilot/`, `benchmarks/vertibench_tr_en/`, `ros2_ws/src/vertirta_mission_node/`):** `<= 30`-token GBNF grammar, zero-heap quantitative STL monitor (`FixedMonotonicWedge`), `< 12 ms` Z3 `QF_LRA` corridor verifier + UNSAT-core repair, `KnowNo` Split Conformal gate (`q_lvl = 0.955`), and Apache-2.0 `VertiBench-TR/EN` `< 0.15` Jaccard ARM64 CI (`.github/workflows/vertibench_ci.yml`).
 
-## [1.0.0] - 2026-11-22 (`ef9be75`)
+## [0.1.0-proto / 1.0.0-alpha] - 2026-11-22 (`ef9be75`, Archived Prototype Baseline)
 
 ### Added
 - **Pillar 1 Bare-Metal Flight Core & RTA Companion (`core/flight_core/`, `core/rta_companion/`):** Freestanding C++17 `400 Hz` core (`28,886 B` Cortex-M7 Flash, `0 B` static RAM, `1,496 B` max frame, `2,960 B` stack DAG, `0` heap) with 3-IMU TMR voter, coaxial-unblanked `f64` INDI+WLS (`StaticDaqpSolver`), Motor FDI, Option B1b active flat-spin CEL, and `256 B` CRC-32C `.vrta` flight recorder; `100 Hz` C++20 companion with `mmap` 4D `HJI-CBVF` / 2D `CEL` LUTs, `3.094 MiB` robocentric ESDF, wire capsules, intruder CV-KF, and real DHMİ AIP `LTFJ`/`LTBX` hard CTR walls.

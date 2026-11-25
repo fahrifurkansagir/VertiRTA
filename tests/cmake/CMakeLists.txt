@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(vertirta_consumer_smoke VERSION 1.0.0 LANGUAGES CXX)
 
-find_package(VertiRTA CONFIG REQUIRED COMPONENTS flight_core)
+find_package(VertiRTA 1.0 CONFIG REQUIRED COMPONENTS flight_core)
 
 add_executable(consumer_smoke consumer_smoke.cpp)
 target_link_libraries(consumer_smoke PRIVATE VertiRTA::flight_core)

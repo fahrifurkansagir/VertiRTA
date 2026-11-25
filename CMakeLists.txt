@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(VertiRTA VERSION 3.0.0 LANGUAGES C CXX)
+project(VertiRTA VERSION 1.0.0 LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)
@@ -38,8 +38,10 @@ if(VERTIRTA_BUILD_COMPANION)
       core/voice
       core/forensics
       tools/cli
+      tools/mavlink_rta_bridge
       sim/colab_egl
-      benchmarks/compound_fault_suite)
+      benchmarks/compound_fault_suite
+      benchmarks/monte_carlo_dispersion)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_vertirta_opt_dir}/CMakeLists.txt")
       add_subdirectory(${_vertirta_opt_dir})
     endif()

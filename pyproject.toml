@@ -77,7 +77,7 @@ build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*"]
 skip = ["cp31?t-*", "pp*", "*-musllinux_*", "*-win32", "*-manylinux_i686"]
 environment = { VERTIRTA_REQUIRE_NATIVE = "1" }
 test-requires = ["pytest>=8.0", "numpy>=1.26", "gymnasium>=1.1", "typer>=0.12"]
-test-command = "pytest {project}/tests/sdk/test_vertirta_sdk.py -v"
+test-command = "pytest {project}/tests/sdk/test_vertirta_sdk.py {project}/tests/sdk/test_vertirta_m3_sdk.py -v"
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
