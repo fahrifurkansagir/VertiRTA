@@ -593,6 +593,8 @@ def run_live_local_hardware_proof(
     tts_threads: int = 2,
 ) -> dict[str, Any]:
     """Run real local sherpa-onnx >= 2.0.0 TTS + faster-whisper BVI ASR + Mondrian + Z3 proof."""
+    # Enforce strict CPU-only execution so local voice proof never touches GPU VRAM.
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
     from faster_whisper import WhisperModel
     import sherpa_onnx
 
@@ -603,12 +605,17 @@ def run_live_local_hardware_proof(
     assert not is_audio_corpus_allowed("tr_TR-fahrettin-medium")
     assert not is_audio_corpus_allowed("tr_TR-fettah-medium")
     assert not is_audio_corpus_allowed("piper1-gpl")
+    whisper_license_name = (
+        whisper_model_name
+        if whisper_model_name.startswith("openai/")
+        else f"openai/whisper-{whisper_model_name}"
+    )
     lic_audit = audit_audio_manifest(
         [
             {"name": "en_US-ljspeech-medium", "license": "Public-Domain"},
             {"name": "FLEURS-CC-BY-4.0", "license": "CC-BY-4.0"},
             {"name": "VertiRTA-BVI-DSP-Apache2", "license": "Apache-2.0"},
-            {"name": "openai/whisper-small", "license": "MIT"},
+            {"name": whisper_license_name, "license": "MIT"},
             {"name": "sherpa-onnx>=2.0.0", "license": "Apache-2.0"},
         ]
     )
@@ -717,10 +724,11 @@ def run_live_local_hardware_proof(
     closed_loop_by_stratum: dict[str, Any] = {}
     keyword_recall_by_stratum: dict[str, float] = {}
     all_closed_turns: list[dict[str, Any]] = []
+    all_closed_rtfs: list[float] = []
     for s_idx, stratum in enumerate(CANONICAL_SNR_STRATA):
         tgt_db = STRATUM_SNR_DB[stratum]
         rpm = 1350.0 + 300.0 * s_idx
-        refs, hyps, lats, lps, nss = [], [], [], [], []
+        refs, hyps, lats, rtfs_atc, lps, nss = [], [], [], [], [], []
         stratum_turns = []
         kw_hits = 0
         kw_total = 0
@@ -735,6 +743,9 @@ def run_live_local_hardware_proof(
             refs.append(case["text"])
             hyps.append(hyp)
             lats.append(lat_ms)
+            rtf_turn = (lat_ms / 1000.0) / dur_s
+            rtfs_atc.append(rtf_turn)
+            all_closed_rtfs.append(rtf_turn)
             lps.append(avg_lp)
             nss.append(ns_p)
             norm_hyp = normalize_transcript(hyp)
@@ -757,6 +768,7 @@ def run_live_local_hardware_proof(
             "keyword_recall": kw_recall,
             "decode_latency_p50_ms": round(float(np.percentile(lats, 50)), 2),
             "decode_latency_p95_ms": round(float(np.percentile(lats, 95)), 2),
+            "mean_rtf": round(float(np.mean(rtfs_atc)), 4),
             "mean_avg_logprob": round(float(np.mean(lps)), 4),
             "mean_no_speech_prob": round(float(np.mean(nss)), 4),
             "z3_sat_pct": round(100.0 * sum(1 for t in stratum_turns if t["z3_sat"]) / float(len(stratum_turns)), 2),
@@ -769,6 +781,7 @@ def run_live_local_hardware_proof(
     # Track 2B: Real human Turkish (tr_tr) + English (en_us) google/fleurs speech under X8-240 BVI noise
     fleurs = _fetch_fleurs_validation_samples(cache_dir, n_per_lang=fleurs_per_lang)
     human_by_stratum: dict[str, Any] = {}
+    all_fleurs_rtfs: list[float] = []
     for s_idx, stratum in enumerate(CANONICAL_SNR_STRATA):
         tgt_db = STRATUM_SNR_DB[stratum]
         rpm = 1350.0 + 300.0 * s_idx
@@ -786,7 +799,9 @@ def run_live_local_hardware_proof(
                 refs.append(item["text"])
                 hyps.append(hyp)
                 lats.append(lat_ms)
-                rtfs_asr.append((lat_ms / 1000.0) / dur_s)
+                rtf_u = (lat_ms / 1000.0) / dur_s
+                rtfs_asr.append(rtf_u)
+                all_fleurs_rtfs.append(rtf_u)
                 lps.append(avg_lp)
             wer, cer = compute_wer_cer(refs, hyps)
             lang_metrics[lang_code] = {
@@ -852,10 +867,15 @@ def run_live_local_hardware_proof(
         "offline_whisper_bvi_proof": {
             "engine": "faster-whisper (MIT, CTranslate2 INT8 CPU)",
             "model_name": whisper_model_name,
+            "device": "cpu",
+            "compute_type": "int8",
+            "gpu_vram_touched_mib": 0.0,
             "translate": False,
             "condition_on_previous_text": False,
             "x8_240_bvi_max_rpm": round(X8_240_ACOUSTIC_PARAMS.rpm_max, 2),
             "x8_240_bvi_max_bpf_hz": round(X8_240_ACOUSTIC_PARAMS.bpf_max_hz, 2),
+            "overall_closed_loop_mean_rtf": round(float(np.mean(all_closed_rtfs)), 4),
+            "overall_fleurs_mean_rtf": round(float(np.mean(all_fleurs_rtfs)), 4),
             "closed_loop_atc_by_snr_stratum": closed_loop_by_stratum,
             "real_human_fleurs_tr_en_by_snr_stratum": human_by_stratum,
         },

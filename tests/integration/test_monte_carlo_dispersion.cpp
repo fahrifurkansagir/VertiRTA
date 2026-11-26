@@ -130,3 +130,65 @@ TEST_CASE("Sealed 1,000-flight campaign artifact passes SHA-256 and pure UTF-8 L
   REQUIRE(raw.find("\"stress_flights_total\": 180") != std::string::npos);
   REQUIRE(raw.find("vertirta.monte_carlo_1000_dispersion_report/v4.0.0") != std::string::npos);
 }
+
+TEST_CASE("X8 same-arm CEL exhibits exact directional CG-axis sensitivity (cg_v safe vs cg_u cliff)",
+          "[integration][monte_carlo][cg_physics]") {
+  // Arm 0 lies along e_u = (+1, +1)/sqrt(2); orthogonal actuated axis is e_v = (-1, +1)/sqrt(2).
+  // Bidirectional surviving-arm torque tau_u rejects +/-5 cm cg_v, whereas unactuated-axis torque
+  // tau_v = -L*T_opp - cg_u*T_tot triggers genuine rigid-body tipping beyond cg_u >= +1.25 cm.
+  constexpr double kInvSqrt2 = 0.70710678118654752440;
+  auto make_hover_cel = [](AirframeKind af, double cgx, double cgy) {
+    FlightSampleConfig sc{};
+    sc.flight_id = 777000U;
+    sc.seed = 2026112577ULL;
+    sc.airframe = af;
+    sc.regime = FaultRegimeKind::kSameArmDualKillCel;
+    sc.mass_kg = 240.0;
+    sc.cg_x_m = cgx;
+    sc.cg_y_m = cgy;
+    sc.wind_speed_mps = 0.0;
+    sc.gust_sigma_scale = 0.0;
+    sc.init_agl_m = 45.0;
+    sc.init_east_m = -220.0;
+    sc.init_north_m = 0.0;
+    sc.init_vx_mps = 0.0;
+    sc.slz_offset_n_m = 0.0;
+    sc.init_soc = 0.70;
+    sc.fault_time_s = 0.20;
+    sc.fault_index = 0U;
+    sc.imu_gyro_sigma_rads = 0.0;
+    sc.alt_noise_sigma_m = 0.0;
+    return sc;
+  };
+
+  // 1. Nominal CG (0 cm) hover CEL survives cleanly
+  const auto o_nom = run_single_flight(make_hover_cel(AirframeKind::kCoaxialX8_240, 0.0, 0.0));
+  REQUIRE(o_nom.cel_latched);
+  REQUIRE(o_nom.safe_recovery);
+  REQUIRE(o_nom.max_tilt_deg < 45.0);
+  REQUIRE(o_nom.touchdown_vz_mps < 1.0);
+
+  // 2. +/-5 cm CG shift purely along actuated orthogonal axis e_v survives cleanly
+  const auto o_cgv_pos = run_single_flight(
+      make_hover_cel(AirframeKind::kCoaxialX8_240, -0.05 * kInvSqrt2, +0.05 * kInvSqrt2));
+  const auto o_cgv_neg = run_single_flight(
+      make_hover_cel(AirframeKind::kCoaxialX8_240, +0.05 * kInvSqrt2, -0.05 * kInvSqrt2));
+  REQUIRE(o_cgv_pos.safe_recovery);
+  REQUIRE(o_cgv_pos.max_tilt_deg < 45.0);
+  REQUIRE(o_cgv_neg.safe_recovery);
+  REQUIRE(o_cgv_neg.max_tilt_deg < 45.0);
+
+  // 3. +2.5 cm CG shift toward dead Arm 0 (cg_u > +1.25 cm cliff) triggers genuine attitude upset
+  const auto o_cgu_cliff = run_single_flight(
+      make_hover_cel(AirframeKind::kCoaxialX8_240, +0.025 * kInvSqrt2, +0.025 * kInvSqrt2));
+  REQUIRE(o_cgu_cliff.cel_latched);
+  REQUIRE_FALSE(o_cgu_cliff.safe_recovery);
+  REQUIRE(o_cgu_cliff.failure_mode == "ATTITUDE_UPSET");
+  REQUIRE(o_cgu_cliff.max_tilt_deg > 60.0);
+
+  // 4. Lift+Cruise 8+1 retains full rank-4 bidirectional control under corner (+5 cm, +5 cm) CG shift
+  const auto o_lc = run_single_flight(make_hover_cel(AirframeKind::kLiftCruise_240_8p1, 0.05, 0.05));
+  REQUIRE(o_lc.safe_recovery);
+  REQUIRE(o_lc.max_tilt_deg < 35.0);
+  REQUIRE(o_lc.touchdown_vz_mps < 1.5);
+}

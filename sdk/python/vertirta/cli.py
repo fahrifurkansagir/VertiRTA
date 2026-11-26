@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import socket
 import struct
 import time
 from typing import Optional
@@ -132,7 +133,10 @@ def cmd_sim(
 ) -> None:
     """Run deterministic 400 Hz Coaxial-X8 simulation over Kartal Coastal Vertiport and emit .vrta."""
     if airframe.lower() != "x8":
-        typer.echo(f"ERROR: Unsupported airframe {airframe!r}; v3.0.0 supports 'x8' (VertiRTA-X8-240).", err=True)
+        typer.echo(
+            f"ERROR: Unsupported airframe {airframe!r}; v{__version__} supports 'x8' (VertiRTA-X8-240).",
+            err=True,
+        )
         raise typer.Exit(code=2)
     if fault not in FAULT_MODE_MAP:
         typer.echo(f"ERROR: Invalid fault {fault!r}; expected one of {sorted(FAULT_MODE_MAP)}.", err=True)
@@ -318,24 +322,67 @@ def cmd_verify(
         raise typer.Exit(code=1)
 
 
+def _is_loopback_port_available(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
 @app.command("gcs")
 def cmd_gcs(
     port: int = typer.Option(5180, help="VertiGCS HTTP port (default 5180; forbidden: 4173/4174/8765/9222/9223)."),
     ws_port: int = typer.Option(8891, help="Live WebSocket telemetry port (default 8891)."),
     mode: str = typer.Option("sandbox", help="Launch mode: sandbox | live."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate ports and print launch URL without binding."),
+    dry_run: bool = typer.Option(
+        True,
+        "--dry-run/--no-dry-run",
+        help=(
+            "Validate ports and print VertiGCS launch configuration JSON without binding sockets "
+            "(default: True; pass --no-dry-run to probe loopback port availability and print launch instructions)."
+        ),
+    ),
 ) -> None:
-    """Validate VertiGCS ports and print/prepare console launch configuration."""
+    """Validate VertiGCS ports and print launch configuration JSON (run UI via Vite or Docker Compose)."""
     _validate_port(port, "HTTP")
     _validate_port(ws_port, "WebSocket")
     if mode not in ("sandbox", "live"):
         typer.echo(f"ERROR: Invalid mode {mode!r}; expected 'sandbox' or 'live'.", err=True)
         raise typer.Exit(code=2)
+    if mode == "live" and port == ws_port:
+        typer.echo(f"ERROR: HTTP port and WebSocket port must differ in live mode (both={port}).", err=True)
+        raise typer.Exit(code=2)
+
     url = (
         f"http://127.0.0.1:{port}/?mode=live&ws=ws://127.0.0.1:{ws_port}"
         if mode == "live"
         else f"http://127.0.0.1:{port}/"
     )
+    launch_commands = [
+        "docker compose -f docker/docker-compose.yml up --build",
+        f"npm --prefix apps/vertigcs run dev -- --host 127.0.0.1 --port {port}",
+    ]
+    if mode == "live":
+        launch_commands.append(f"python -m viz.cesium.ws_server --host 127.0.0.1 --port {ws_port}")
+
+    if not dry_run:
+        if not _is_loopback_port_available(port):
+            typer.echo(f"ERROR: HTTP port 127.0.0.1:{port} is already in use.", err=True)
+            raise typer.Exit(code=2)
+        if mode == "live" and not _is_loopback_port_available(ws_port):
+            typer.echo(f"ERROR: WebSocket port 127.0.0.1:{ws_port} is already in use.", err=True)
+            raise typer.Exit(code=2)
+        typer.echo(
+            "ERROR: The standalone vertirta Python wheel validates VertiGCS configuration but does not "
+            "bundle Node/Vite or spawn background daemons. Start VertiGCS with:\n  "
+            + "\n  ".join(launch_commands),
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     typer.echo(
         json.dumps(
             {
@@ -344,7 +391,8 @@ def cmd_gcs(
                 "http_port": port,
                 "ws_port": ws_port,
                 "url": url,
-                "dry_run": dry_run,
+                "dry_run": True,
+                "launch_commands": launch_commands,
             }
         )
     )

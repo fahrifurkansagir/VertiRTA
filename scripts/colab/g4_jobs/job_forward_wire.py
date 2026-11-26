@@ -62,6 +62,7 @@ def build_forward_license_manifest(
     ingested_ttpla: bool = False,
     ingested_teias: bool = False,
     ingested_purdue: bool = False,
+    ingested_permissive_hardneg: bool = False,
     include_planned_dry_run: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Scope train_sources strictly to actually ingested corpora (zero phantom claims!)."""
@@ -69,9 +70,36 @@ def build_forward_license_manifest(
     if ingested_ttpla or include_planned_dry_run:
         train_sources.append({"name": "TTPLA", "repo": "R3ab/ttpla_dataset", "license": "Apache-2.0"})
     if ingested_teias:
-        train_sources.append({"name": "Mendeley_TEIAS_Powerline_GT", "repo": "twxp8xccsw/9", "license": "CC BY 4.0"})
+        train_sources.append(
+            {
+                "name": "Mendeley_TEIAS_Powerline_GT",
+                "repo": "data.mendeley.com/datasets/twxp8xccsw/9",
+                "license": "MIT",
+            }
+        )
     if ingested_purdue:
         train_sources.append({"name": "Purdue_UAV", "repo": "purdue-uav-air2air", "license": "BSD-3-Clause"})
+    if ingested_permissive_hardneg:
+        train_sources.extend(
+            [
+                {"name": "SkyScenes_HardNeg_Rooftops", "repo": "hoffman-lab/SkyScenes", "license": "MIT"},
+                {
+                    "name": "OpenEarthMap_Permissive_HardNeg",
+                    "repo": "zenodo/7223446 (CC-BY-4.0/DL-DE-BY-2.0 whitelist)",
+                    "license": "CC BY 4.0",
+                },
+                {
+                    "name": "FloodNet_Supervised_v1_HardNeg",
+                    "repo": "torchgeo/floodnet",
+                    "license": "CDLA-Permissive-1.0",
+                },
+                {
+                    "name": "FLAIR-1_HardNeg",
+                    "repo": "IGN/FLAIR-1",
+                    "license": "OPEN LICENCE 2.0 (etalab-2.0)",
+                },
+            ]
+        )
     train_sources.append(
         {"name": "VertiRTA_Procedural_Catenary_Horizon", "repo": "internal/vertirta", "license": "Apache-2.0"}
     )
@@ -81,6 +109,126 @@ def build_forward_license_manifest(
         {"name": "D-FINE-N", "repo": "internal/vertirta_dfine_nano", "license": "Apache-2.0"},
     ]
     return train_sources, eval_only_sources, models
+
+
+def encode_dfine_grid_targets(
+    boxes_list: list[tuple[float, float, float, float, int]],
+    *,
+    grid_size: int = 10,
+    num_classes: int = 3,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Assign GT boxes (x0, y0, x1, y1, cls_id) into DFineNanoDetector's 10x10x3=300 query grid.
+
+    Each spatial cell `(gy, gx)` owns 3 queries `q = (gy * 10 + gx) * 3 + cls_id`, matching
+    `DFineNanoDetector.forward`'s `[bsz, 3, C, 100].permute(0, 3, 1, 2).reshape(bsz, 300, C)` layout.
+    Returns:
+      - `target_boxes`: `(300, 4)` float32 normalized `[x0, y0, x1, y1]`
+      - `target_cls_bin`: `(300, 3)` float32 multi-label binary targets (all zeros on empty frames!)
+    """
+    n_queries = grid_size * grid_size * num_classes
+    target_boxes = np.zeros((n_queries, 4), dtype=np.float32)
+    target_cls_bin = np.zeros((n_queries, num_classes), dtype=np.float32)
+    for x0, y0, x1, y1, cid in boxes_list:
+        c = int(cid)
+        if not (0 <= c < num_classes):
+            continue
+        bx0, by0 = float(np.clip(min(x0, x1), 0.0, 1.0)), float(np.clip(min(y0, y1), 0.0, 1.0))
+        bx1, by1 = float(np.clip(max(x0, x1), 0.0, 1.0)), float(np.clip(max(y0, y1), 0.0, 1.0))
+        if (bx1 - bx0) < 1e-3 or (by1 - by0) < 1e-3:
+            continue
+        cx = 0.5 * (bx0 + bx1)
+        cy = 0.5 * (by0 + by1)
+        gx = int(np.clip(int(cx * grid_size), 0, grid_size - 1))
+        gy = int(np.clip(int(cy * grid_size), 0, grid_size - 1))
+        q_idx = (gy * grid_size + gx) * num_classes + c
+        target_boxes[q_idx] = [bx0, by0, bx1, by1]
+        target_cls_bin[q_idx, c] = 1.0
+    return target_boxes, target_cls_bin
+
+
+def decode_dfine_sigmoid_boxes(
+    boxes_out: np.ndarray,
+    cls_logits_out: np.ndarray,
+    *,
+    img_size: int = 512,
+    conf_thresh: float = 0.55,
+    nms_iou_thresh: float = 0.45,
+    min_box_px: int = 12,
+    max_area_frac: float = 0.60,
+    max_detections: int = 20,
+    class_names: tuple[str, ...] = WIRE_CLASS_NAMES,
+) -> list[tuple[int, int, int, int, str, float]]:
+    """Decode D-FINE-N `[1, 300, 4]` + `[1, 300, 3]` via per-class sigmoid across ALL 300 queries + NMS.
+
+    Replaces the legacy 3-class softmax on queries `0..2` (which forced probs to sum to 1.0 and
+    spammed false boxes on empty rooftops). Empty frames with negative logits emit 0 detections.
+    """
+    boxes_np = np.asarray(boxes_out, dtype=np.float32)
+    logits_np = np.asarray(cls_logits_out, dtype=np.float32)
+    if boxes_np.ndim == 3:
+        boxes_np = boxes_np[0]
+    if logits_np.ndim == 3:
+        logits_np = logits_np[0]
+    if boxes_np.ndim != 2 or logits_np.ndim != 2 or boxes_np.shape[0] != logits_np.shape[0]:
+        return []
+
+    logits_clean = np.clip(np.nan_to_num(logits_np, nan=-20.0, posinf=20.0, neginf=-20.0), -20.0, 20.0)
+    probs = 1.0 / (1.0 + np.exp(-logits_clean))
+
+    candidates: list[tuple[float, int, int, int, int, int]] = []
+    n_q, n_c = probs.shape
+    scale = float(img_size)
+    area_denom = float(img_size * img_size)
+    for q_i in range(n_q):
+        c_id = int(np.argmax(probs[q_i]))
+        conf = float(probs[q_i, c_id])
+        if conf < float(conf_thresh) or c_id >= len(class_names):
+            continue
+        b = np.clip(np.nan_to_num(boxes_np[q_i], nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
+        x1 = int(round(float(min(b[0], b[2])) * scale))
+        y1 = int(round(float(min(b[1], b[3])) * scale))
+        x2 = int(round(float(max(b[0], b[2])) * scale))
+        y2 = int(round(float(max(b[1], b[3])) * scale))
+        bw = x2 - x1
+        bh = y2 - y1
+        if bw <= min_box_px or bh <= min_box_px:
+            continue
+        if (float(bw * bh) / area_denom) >= float(max_area_frac):
+            continue
+        candidates.append((conf, c_id, x1, y1, x2, y2))
+
+    if not candidates:
+        return []
+
+    # Per-class greedy NMS
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    kept: list[tuple[int, int, int, int, str, float]] = []
+    kept_raw: list[tuple[int, int, int, int, int]] = []
+    for conf, c_id, x1, y1, x2, y2 in candidates:
+        suppressed = False
+        area_a = float(max(1, x2 - x1) * max(1, y2 - y1))
+        for kc, kx1, ky1, kx2, ky2 in kept_raw:
+            if kc != c_id:
+                continue
+            ix1 = max(x1, kx1)
+            iy1 = max(y1, ky1)
+            ix2 = min(x2, kx2)
+            iy2 = min(y2, ky2)
+            iw = max(0, ix2 - ix1)
+            ih = max(0, iy2 - iy1)
+            if iw > 0 and ih > 0:
+                inter = float(iw * ih)
+                area_b = float(max(1, kx2 - kx1) * max(1, ky2 - ky1))
+                iou = inter / max(1.0, area_a + area_b - inter)
+                if iou >= float(nms_iou_thresh):
+                    suppressed = True
+                    break
+        if not suppressed:
+            kept.append((x1, y1, x2, y2, class_names[c_id], conf))
+            kept_raw.append((c_id, x1, y1, x2, y2))
+            if len(kept) >= int(max_detections):
+                break
+    return kept
 
 
 def horizon_split_stack_1280x720_to_640x640(
@@ -150,12 +298,10 @@ def _rasterize_ttpla_labelme_pair(
     mask_pil = Image.new("L", (640, 640), 0)
     draw = ImageDraw.Draw(mask_pil)
     junc_map = np.zeros((5, 160, 160), dtype=np.float32)
-    boxes = np.zeros((300, 4), dtype=np.float32)
-    cls_ids = np.zeros((300,), dtype=np.int64)
+    gt_boxes: list[tuple[float, float, float, float, int]] = []
     sx = 640.0 / float(orig_w)
     sy = 640.0 / float(orig_h)
 
-    box_idx = 0
     has_cable = False
     for shape in ann.get("shapes", []):
         lbl = str(shape.get("label", "")).strip().lower()
@@ -179,22 +325,24 @@ def _rasterize_ttpla_labelme_pair(
             junc_map[2, my, mx] = (p0[1] - 0.5 * (p0[1] + p1[1])) / 640.0
             junc_map[3, my, mx] = (p1[0] - 0.5 * (p0[0] + p1[0])) / 640.0
             junc_map[4, my, mx] = (p1[1] - 0.5 * (p0[1] + p1[1])) / 640.0
-        elif "tower" in lbl and box_idx < 300:
+        elif "tower" in lbl:
             xs = [p[0] for p in scaled]
             ys = [p[1] for p in scaled]
-            boxes[box_idx] = [
-                max(0.0, min(xs) / 640.0),
-                max(0.0, min(ys) / 640.0),
-                min(1.0, max(xs) / 640.0),
-                min(1.0, max(ys) / 640.0),
-            ]
-            cls_ids[box_idx] = 2  # Tower_Crane class
-            box_idx += 1
+            gt_boxes.append(
+                (
+                    max(0.0, min(xs) / 640.0),
+                    max(0.0, min(ys) / 640.0),
+                    min(1.0, max(xs) / 640.0),
+                    min(1.0, max(ys) / 640.0),
+                    2,  # Tower_Crane class
+                )
+            )
 
     if not has_cable:
         return None
     wire_mask = (np.asarray(mask_pil, dtype=np.float32) / 255.0)[None, :, :]
-    return img_chw, wire_mask, junc_map, boxes, cls_ids
+    boxes, cls_bin = encode_dfine_grid_targets(gt_boxes)
+    return img_chw, wire_mask, junc_map, boxes, cls_bin
 
 
 def ingest_real_ttpla_apache2(
@@ -265,11 +413,9 @@ def ingest_real_ttpla_apache2(
                             mask_pil = Image.new("L", (640, 640), 0)
                             draw = ImageDraw.Draw(mask_pil)
                             junc_map = np.zeros((5, 160, 160), dtype=np.float32)
-                            boxes = np.zeros((300, 4), dtype=np.float32)
-                            cls_ids = np.zeros((300,), dtype=np.int64)
+                            gt_boxes: list[tuple[float, float, float, float, int]] = []
                             bboxes = objs.get("bbox", [])
                             cats = objs.get("category", [])
-                            box_idx = 0
                             for bb, cat in zip(bboxes, cats):
                                 if len(bb) < 4:
                                     continue
@@ -283,13 +429,12 @@ def ingest_real_ttpla_apache2(
                                     mx = int(np.clip(0.5 * (x0 + x1) / 4.0, 0, 159))
                                     my = int(np.clip(0.5 * (y0 + y1) / 4.0, 0, 159))
                                     junc_map[0, my, mx] = 1.0
-                                elif box_idx < 300:
-                                    boxes[box_idx] = [x0 / 640.0, y0 / 640.0, x1 / 640.0, y1 / 640.0]
-                                    cls_ids[box_idx] = 2
-                                    box_idx += 1
+                                else:
+                                    gt_boxes.append((x0 / 640.0, y0 / 640.0, x1 / 640.0, y1 / 640.0, 2))
                             wire_mask = (np.asarray(mask_pil, dtype=np.float32) / 255.0)[None, :, :]
                             if wire_mask.max() > 0.0:
-                                records.append((img_chw, wire_mask, junc_map, boxes, cls_ids))
+                                boxes, cls_bin = encode_dfine_grid_targets(gt_boxes)
+                                records.append((img_chw, wire_mask, junc_map, boxes, cls_bin))
                         if records:
                             info["origin"] = f"hf_datasets://{repo_id}"
                             info["frames_ingested"] = len(records)
@@ -326,7 +471,7 @@ def synthesize_catenary_split_batch(
     wire_masks = np.zeros((batch_size, 1, 640, 640), dtype=np.float32)
     junc_maps = np.zeros((batch_size, 5, 160, 160), dtype=np.float32)
     target_boxes = np.zeros((batch_size, 300, 4), dtype=np.float32)
-    target_cls = np.zeros((batch_size, 300), dtype=np.int64)
+    target_cls = np.zeros((batch_size, 300, 3), dtype=np.float32)
 
     xs = np.linspace(0.0, 1.0, 640, dtype=np.float32)
     for b in range(batch_size):
@@ -357,6 +502,7 @@ def synthesize_catenary_split_batch(
             junc_maps[b, 3, my, mx] = 0.5
             junc_maps[b, 4, my, mx] = (float(yi[639] - yi[320])) / 640.0
 
+        box_list: list[tuple[float, float, float, float, int]] = []
         for obj_i in range(3):
             cx = float(rng.uniform(0.15, 0.85))
             cy = float(rng.uniform(0.15, 0.85))
@@ -367,8 +513,10 @@ def synthesize_catenary_split_batch(
             px0, px1 = int(x0 * 639), max(int(x0 * 639) + 2, int(x1 * 639))
             py0, py1 = int(y0 * 639), max(int(y0 * 639) + 2, int(y1 * 639))
             imgs[b, :, py0:py1, px0:px1] = 0.12 + 0.1 * obj_i
-            target_boxes[b, obj_i] = [x0, y0, x1, y1]
-            target_cls[b, obj_i] = obj_i
+            box_list.append((x0, y0, x1, y1, obj_i))
+        tb, tc_bin = encode_dfine_grid_targets(box_list)
+        target_boxes[b] = tb
+        target_cls[b] = tc_bin
 
     return imgs, wire_masks, junc_maps, target_boxes, target_cls
 
@@ -477,7 +625,7 @@ def _build_torch_models() -> tuple[Any, Any, Any]:
             return wire_mask_logits, line_junction_map
 
     class DFineNanoDetector(nn.Module):
-        """Compact Apache-2.0 small-object detector (<4.0M params, static 300 queries, zero AdaptiveAvgPool)."""
+        """Compact Apache-2.0 small-object detector (<4.0M params, static 300 queries, sigmoid focal prior)."""
 
         def __init__(self, num_queries: int = 300, num_classes: int = 3) -> None:
             super().__init__()
@@ -493,21 +641,75 @@ def _build_torch_models() -> tuple[Any, Any, Any]:
             self.neck = ConvBnAct(256, 192, 3, 1, 1)
             self.box_head = nn.Conv2d(192, 3 * 4, kernel_size=1)
             self.cls_head = nn.Conv2d(192, 3 * num_classes, kernel_size=1)
+            # Static 10x10 cell-center anchor grid [1, 300, 2] for translation-equivariant localization
+            gy = (torch.arange(10, dtype=torch.float32) + 0.5) / 10.0
+            gx = (torch.arange(10, dtype=torch.float32) + 0.5) / 10.0
+            yy, xx = torch.meshgrid(gy, gx, indexing="ij")
+            grid_cells = torch.stack([xx.reshape(-1), yy.reshape(-1)], dim=-1)  # [100, 2]
+            grid_q = grid_cells.unsqueeze(1).expand(100, 3, 2).reshape(1, num_queries, 2).contiguous()
+            self.register_buffer("grid_xy", grid_q, persistent=True)
+            # RetinaNet/D-FINE foreground prior bias (p0=0.01 -> logit=-4.595) so background queries stay quiet
+            nn.init.constant_(self.cls_head.bias, -4.59512)
+            # Initialize width/height bias to small reasonable boxes (~0.12)
+            nn.init.zeros_(self.box_head.bias)
 
         def forward(self, rgb_split_nchw: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
             feat = self.neck(self.pool_10(self.stem(rgb_split_nchw)))
             bsz = feat.shape[0]
-            raw_boxes = torch.sigmoid(self.box_head(feat))
-            raw_boxes = raw_boxes.view(bsz, 3, 4, 100).permute(0, 3, 1, 2).reshape(bsz, self.num_queries, 4)
-            x0 = torch.minimum(raw_boxes[..., 0], raw_boxes[..., 2])
-            y0 = torch.minimum(raw_boxes[..., 1], raw_boxes[..., 3])
-            x1 = torch.maximum(raw_boxes[..., 0], raw_boxes[..., 2])
-            y1 = torch.maximum(raw_boxes[..., 1], raw_boxes[..., 3])
+            raw_boxes = self.box_head(feat).view(bsz, 3, 4, 100).permute(0, 3, 1, 2).reshape(bsz, self.num_queries, 4)
+            cx = torch.clamp(self.grid_xy[..., 0] + (torch.sigmoid(raw_boxes[..., 0]) - 0.5) * 0.20, 0.0, 1.0)
+            cy = torch.clamp(self.grid_xy[..., 1] + (torch.sigmoid(raw_boxes[..., 1]) - 0.5) * 0.20, 0.0, 1.0)
+            bw = torch.sigmoid(raw_boxes[..., 2]) * 0.65
+            bh = torch.sigmoid(raw_boxes[..., 3]) * 0.65
+            x0 = torch.clamp(cx - 0.5 * bw, 0.0, 1.0)
+            y0 = torch.clamp(cy - 0.5 * bh, 0.0, 1.0)
+            x1 = torch.clamp(cx + 0.5 * bw, 0.0, 1.0)
+            y1 = torch.clamp(cy + 0.5 * bh, 0.0, 1.0)
             boxes_xyxy = torch.stack([x0, y0, x1, y1], dim=-1)
             raw_cls = self.cls_head(feat).view(bsz, 3, 3, 100).permute(0, 3, 1, 2).reshape(bsz, self.num_queries, 3)
             return boxes_xyxy, raw_cls
 
     return SoftClDiceLoss, MLsdWireSegNet, DFineNanoDetector
+
+
+def compute_dfine_sigmoid_focal_loss(
+    pred_boxes: Any,
+    pred_cls_logits: Any,
+    target_boxes: Any,
+    target_cls_bin: Any,
+    *,
+    alpha: float = 0.50,
+    gamma: float = 2.0,
+) -> Any:
+    """All-300-query per-class Sigmoid Focal BCE + positive-query Smooth-L1 box loss.
+
+    Supervises ALL 300x3 class logits (including empty hard-negative frames where `target_cls_bin == 0`)
+    so background scenes emit near-zero sigmoid probabilities instead of forced softmax false positives.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    logits_f = pred_cls_logits.float()
+    tgt_f = target_cls_bin.float()
+    bce = F.binary_cross_entropy_with_logits(logits_f, tgt_f, reduction="none")
+    prob = torch.sigmoid(logits_f)
+    p_t = prob * tgt_f + (1.0 - prob) * (1.0 - tgt_f)
+    alpha_t = alpha * tgt_f + (1.0 - alpha) * (1.0 - tgt_f)
+    focal = alpha_t * ((1.0 - p_t).clamp(min=0.0, max=1.0) ** gamma) * bce
+    pos_queries = tgt_f.sum(dim=-1) > 0.5
+    num_pos = pos_queries.float().sum().clamp(min=1.0)
+    # Normalize focal loss by number of positive objects (plus gentle floor on all-empty batches)
+    cls_loss = focal.sum() / num_pos.clamp(min=2.0)
+
+    if bool(pos_queries.any()):
+        box_loss = F.smooth_l1_loss(
+            pred_boxes.float()[pos_queries],
+            target_boxes.float()[pos_queries],
+            reduction="mean",
+        )
+    else:
+        box_loss = pred_boxes.float().sum() * 0.0
+    return cls_loss + 4.0 * box_loss
 
 
 def _evaluate_heldout_forward_val(
@@ -555,10 +757,17 @@ def _evaluate_heldout_forward_val(
                 batch_cldice = float(cldice_loss_fn.cldice_score(prob, gt_bin).item())
 
                 pred_boxes, pred_cls = det_net(imgs_t)
-                batch_box_l1 = float(F.l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]).item())
-                pred_labels = pred_cls[:, :3, :].argmax(dim=-1)
-                batch_cls_correct = int((pred_labels == cls_t[:, :3]).sum().item())
-                batch_cls_total = int(cls_t[:, :3].numel())
+                pos_mask = cls_t.sum(dim=-1) > 0.5
+                if bool(pos_mask.any()):
+                    batch_box_l1 = float(F.l1_loss(pred_boxes.float()[pos_mask], box_t.float()[pos_mask]).item())
+                    pred_labels = pred_cls.float()[pos_mask].argmax(dim=-1)
+                    gt_labels = cls_t.float()[pos_mask].argmax(dim=-1)
+                    batch_cls_correct = int((pred_labels == gt_labels).sum().item())
+                    batch_cls_total = int(gt_labels.numel())
+                else:
+                    batch_box_l1 = 0.0
+                    batch_cls_correct = 0
+                    batch_cls_total = 0
 
                 inter_sum += batch_inter
                 union_sum += batch_union
@@ -776,9 +985,7 @@ def run_job(args: Any) -> dict[str, Any]:
             opt_det.zero_grad(set_to_none=True)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled):
                 pred_boxes, pred_cls = det_net(imgs_t)
-                loss_d = F.smooth_l1_loss(pred_boxes[:, :3, :].float(), box_t[:, :3, :]) + F.cross_entropy(
-                    pred_cls[:, :3, :].float().reshape(-1, 3), cls_t[:, :3].reshape(-1)
-                )
+                loss_d = compute_dfine_sigmoid_focal_loss(pred_boxes, pred_cls, box_t, cls_t)
             loss_d.backward()
             d_val = float(loss_d.detach().cpu().item())
 

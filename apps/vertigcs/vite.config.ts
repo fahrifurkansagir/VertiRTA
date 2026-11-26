@@ -1,7 +1,14 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
+
+const hasBundledWasm = existsSync(resolve(__dirname, "public/wasm/libvertirta_flight_core.mjs"));
 
 export default defineConfig({
   base: "./",
+  define: {
+    __VERTIRTA_HAS_WASM__: JSON.stringify(hasBundledWasm),
+  },
   resolve: {
     // Strip unused WGSL/WebGPU shader payloads for compact WebGL2 GitHub Pages cold load (DR-13)
     conditions: ["visgl:webgl-only", "import", "module", "browser", "default"],

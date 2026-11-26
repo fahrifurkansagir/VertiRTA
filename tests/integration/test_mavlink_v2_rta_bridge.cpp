@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Catch2 verification suite for Zero-GPL Native C++20 MAVLink v2 Codec, Offboard RTA Shield, & Live UDP Loopback.
 
+#include <netinet/in.h>
+
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <span>
+#include <thread>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -347,4 +353,168 @@ TEST_CASE("Live 3-endpoint POSIX UDP loopback stress proof (>= 2,000 packets, 0 
   REQUIRE(rep.latency_us.sample_count >= 2000u);
   REQUIRE(rep.latency_us.p99_us < 10'000.0);  // Well under 10 ms even under ASan/UBSan
   REQUIRE(rep.report_sha256.size() == 64u);
+}
+
+TEST_CASE("OffboardRtaShield rejects non-LOCAL_NED frames, FORCE_SET bit, NaN/Inf disarm, pre-heartbeat & expired-deadman disarm, and binds FCU socket for LAN hosts",
+          "[mavlink_rta_shield][safety_hardening]") {
+  const float qnan = std::numeric_limits<float>::quiet_NaN();
+  const float pinf = std::numeric_limits<float>::infinity();
+  const float ninf = -std::numeric_limits<float>::infinity();
+  std::array<uint8_t, kMaxFrameBytes> buf{};
+
+  // 1. Pre-heartbeat disarm on brand-new shield MUST fail closed (unknown altitude == protected/airborne!).
+  {
+    OffboardRtaShield cold_shield;
+    CommandLong disarm{};
+    disarm.command = kMavCmdComponentArmDisarm;
+    disarm.param1 = 0.0f;
+    const std::size_t n = encode_command_long(disarm, 1u, 255u, 190u, buf);
+    const auto out = cold_shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n), 100'000u);
+    REQUIRE(out.action == ShieldAction::kDeniedCommand);
+    REQUIRE(out.to_fcu.empty());
+    REQUIRE(out.to_offboard.size() == 2u);
+    REQUIRE(decode_command_ack(decode_frame(out.to_offboard[0]).frame).result == kMavResultDenied);
+  }
+
+  // 2. Heartbeat-only without LOCAL_POSITION_NED MUST still deny disarm fail-closed.
+  {
+    OffboardRtaShield hb_only_shield;
+    Heartbeat hb{};
+    hb.base_mode = kMavModeFlagSafetyArmed;
+    const std::size_t nhb = encode_heartbeat(hb, 1u, 1u, 1u, buf);
+    REQUIRE(hb_only_shield.process_fcu_packet(std::span<const uint8_t>(buf.data(), nhb), 1'000'000u).action ==
+            ShieldAction::kForwardedNominal);
+
+    CommandLong disarm{};
+    disarm.command = kMavCmdComponentArmDisarm;
+    disarm.param1 = 0.0f;
+    const std::size_t n = encode_command_long(disarm, 2u, 255u, 190u, buf);
+    const auto out = hb_only_shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n), 1'010'000u);
+    REQUIRE(out.action == ShieldAction::kDeniedCommand);
+    REQUIRE(out.to_fcu.empty());
+  }
+
+  OffboardRtaShield shield;
+  auto feed_fcu = [&](uint64_t t_us, float x, float y, float z) {
+    Heartbeat hb{};
+    hb.base_mode = kMavModeFlagSafetyArmed;
+    const std::size_t nhb = encode_heartbeat(hb, 1u, 1u, 1u, buf);
+    REQUIRE(shield.process_fcu_packet(std::span<const uint8_t>(buf.data(), nhb), t_us).action ==
+            ShieldAction::kForwardedNominal);
+
+    LocalPositionNed lp{static_cast<uint32_t>(t_us / 1000u), x, y, z, 2.0f, 0.0f, 0.0f};
+    const std::size_t nlp = encode_local_position_ned(lp, 2u, 1u, 1u, buf);
+    REQUIRE(shield.process_fcu_packet(std::span<const uint8_t>(buf.data(), nlp), t_us).action ==
+            ShieldAction::kForwardedNominal);
+  };
+
+  // 3. Airborne & grounded NaN/Inf param1 disarm MUST be denied (never bypassing disarm block!).
+  feed_fcu(1'000'000u, 500.0f, -400.0f, -60.0f);
+  for (const float bad_p1 : {qnan, pinf, ninf}) {
+    CommandLong disarm{};
+    disarm.command = kMavCmdComponentArmDisarm;
+    disarm.param1 = bad_p1;
+    const std::size_t n = encode_command_long(disarm, 3u, 255u, 190u, buf);
+    const auto out = shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n), 1'020'000u);
+    REQUIRE(out.action == ShieldAction::kDeniedCommand);
+    REQUIRE(out.to_fcu.empty());
+  }
+
+  // 4. Expired deadman after a grounded packet MUST default fail-closed (deny disarm!).
+  feed_fcu(2'000'000u, 500.0f, -400.0f, -0.3f);
+  {
+    // Even while freshly grounded, NaN param1 is still rejected fail-closed!
+    CommandLong nan_ground{};
+    nan_ground.command = kMavCmdComponentArmDisarm;
+    nan_ground.param1 = qnan;
+    const std::size_t n_nan = encode_command_long(nan_ground, 4u, 255u, 190u, buf);
+    REQUIRE(shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n_nan), 2'010'000u).action ==
+            ShieldAction::kDeniedCommand);
+
+    // After > 500 ms deadman expiry, valid param1=0.0f disarm is DENIED because ground state is stale!
+    CommandLong stale_disarm{};
+    stale_disarm.command = kMavCmdComponentArmDisarm;
+    stale_disarm.param1 = 0.0f;
+    const std::size_t n_stale = encode_command_long(stale_disarm, 5u, 255u, 190u, buf);
+    const auto out = shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n_stale), 2'600'000u);
+    REQUIRE(out.action == ShieldAction::kDeniedCommand);
+    REQUIRE(out.to_fcu.empty());
+  }
+
+  // 5. Non-LOCAL_NED setpoints (BODY_NED=8, LOCAL_OFFSET_NED=7, GLOBAL=0) clamped fail-closed to LOCAL_NED hover!
+  feed_fcu(3'000'000u, 500.0f, 95.0f, -60.0f);  // Right next to LTFJ CTR western wall
+  for (const uint8_t bad_frame : {uint8_t{8u}, uint8_t{7u}, uint8_t{9u}, uint8_t{0u}}) {
+    SetPositionTargetLocalNed sp{};
+    sp.vx = 5.0f;
+    sp.vy = 0.0f;
+    sp.vz = 0.0f;
+    sp.type_mask = kTypeMaskVelocityOnly;
+    sp.coordinate_frame = bad_frame;
+    const std::size_t n = encode_set_position_target_local_ned(sp, 6u, 255u, 190u, buf);
+    const auto out = shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n), 3'010'000u);
+    REQUIRE(out.action == ShieldAction::kClampedSafeSetpoint);
+    REQUIRE(out.to_fcu.size() == 1u);
+    const DecodeResult dec = decode_frame(out.to_fcu[0]);
+    REQUIRE(dec.ok());
+    const SetPositionTargetLocalNed safe = decode_set_position_target_local_ned(dec.frame);
+    REQUIRE(safe.coordinate_frame == kMavFrameLocalNed);
+    REQUIRE((safe.type_mask & kTypeMaskForce) == 0u);
+    REQUIRE(safe.vx == Catch::Approx(0.0f));
+    REQUIRE(safe.vy == Catch::Approx(0.0f));
+    REQUIRE(safe.vz == Catch::Approx(0.0f));
+    REQUIRE(out.to_offboard.size() == 1u);
+    REQUIRE(decode_statustext(decode_frame(out.to_offboard[0]).frame).severity == kMavSeverityCritical);
+  }
+
+  // 6. FORCE_SET bit (0x0200) MUST be rejected/cleared fail-closed into LOCAL_NED zero-velocity hover!
+  feed_fcu(3'100'000u, 500.0f, -400.0f, -60.0f);
+  {
+    SetPositionTargetLocalNed sp{};
+    sp.vx = 4.0f;
+    sp.vy = 0.0f;
+    sp.vz = 0.0f;
+    sp.afx = 2.0f;
+    sp.type_mask = static_cast<uint16_t>(kTypeMaskVelocityOnly | kTypeMaskForce);
+    sp.coordinate_frame = kMavFrameLocalNed;
+    const std::size_t n = encode_set_position_target_local_ned(sp, 7u, 255u, 190u, buf);
+    const auto out = shield.process_offboard_packet(std::span<const uint8_t>(buf.data(), n), 3'110'000u);
+    REQUIRE(out.action == ShieldAction::kClampedSafeSetpoint);
+    REQUIRE(out.to_fcu.size() == 1u);
+    const DecodeResult dec = decode_frame(out.to_fcu[0]);
+    REQUIRE(dec.ok());
+    const SetPositionTargetLocalNed safe = decode_set_position_target_local_ned(dec.frame);
+    REQUIRE(safe.coordinate_frame == kMavFrameLocalNed);
+    REQUIRE((safe.type_mask & kTypeMaskForce) == 0u);
+    REQUIRE(safe.vx == Catch::Approx(0.0f));
+    REQUIRE(safe.vy == Catch::Approx(0.0f));
+    REQUIRE(safe.vz == Catch::Approx(0.0f));
+  }
+
+  // 7. Non-loopback FCU host selects INADDR_ANY (0.0.0.0) bind while loopback preserves INADDR_LOOPBACK.
+  {
+    const auto lb = select_fcu_socket_bind_addr_host_order("127.0.0.1");
+    REQUIRE(lb.has_value());
+    REQUIRE(*lb == static_cast<uint32_t>(INADDR_LOOPBACK));
+
+    const auto lb2 = select_fcu_socket_bind_addr_host_order("127.0.1.1");
+    REQUIRE(lb2.has_value());
+    REQUIRE(*lb2 == static_cast<uint32_t>(INADDR_LOOPBACK));
+
+    const auto lan = select_fcu_socket_bind_addr_host_order("192.168.1.50");
+    REQUIRE(lan.has_value());
+    REQUIRE(*lan == static_cast<uint32_t>(INADDR_ANY));
+
+    const auto lan2 = select_fcu_socket_bind_addr_host_order("10.42.0.2");
+    REQUIRE(lan2.has_value());
+    REQUIRE(*lan2 == static_cast<uint32_t>(INADDR_ANY));
+
+    REQUIRE_FALSE(select_fcu_socket_bind_addr_host_order("not-an-ipv4").has_value());
+
+    // Live proxy smoke check: invalid host returns 2; non-loopback LAN IP binds cleanly and exits 0 on stop.
+    ShieldConfig proxy_cfg{};
+    std::atomic<bool> stop_immediate{true};
+    REQUIRE(run_live_udp_proxy(0u, "not-an-ipv4", 14540u, proxy_cfg, &stop_immediate) == 2);
+    REQUIRE(run_live_udp_proxy(0u, "192.0.2.1", 14540u, proxy_cfg, &stop_immediate) == 0);
+    REQUIRE(run_live_udp_proxy(0u, "127.0.0.1", 14540u, proxy_cfg, &stop_immediate) == 0);
+  }
 }

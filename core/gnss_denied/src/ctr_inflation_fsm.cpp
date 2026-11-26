@@ -12,6 +12,17 @@ namespace {
   return core::enu_to_ned(core::geodetic_to_local_enu(g, core::kKartalDatum));
 }
 
+[[nodiscard]] bool is_valid_psd_cov(const Cov2D& c) noexcept {
+  if (!std::isfinite(c.p_nn) || !std::isfinite(c.p_ne) || !std::isfinite(c.p_ee)) {
+    return false;
+  }
+  if (c.p_nn < 0.0 || c.p_ee < 0.0) {
+    return false;
+  }
+  const double det = c.p_nn * c.p_ee - c.p_ne * c.p_ne;
+  return std::isfinite(det) && det >= -1e-12;
+}
+
 }  // namespace
 
 CtrInflationFsm::CtrInflationFsm(const CtrInflationConfig& cfg) noexcept : cfg_(cfg) {
@@ -19,6 +30,18 @@ CtrInflationFsm::CtrInflationFsm(const CtrInflationConfig& cfg) noexcept : cfg_(
 }
 
 void CtrInflationFsm::reset(double sigma_init_m) noexcept {
+  if (!std::isfinite(sigma_init_m)) {
+    const double s = std::max(0.5, cfg_.sigma_abort_m);
+    cov_ = {s * s, 0.0, s * s};
+    cov_rate_ = {0.0, 0.0, 0.0};
+    open_loop_dist_m_ = 0.0;
+    prev_ltfj_delta_r_m_ = 3.0 * s + cfg_.b_map_m;
+    prev_ltbx_delta_r_m_ = 3.0 * s + cfg_.b_map_m;
+    has_prev_delta_ = false;
+    nav_state_ = GnssDeniedNavState::kDeterministicVisualSlzAbort;
+    abort_latched_ = true;
+    return;
+  }
   const double s = std::max(0.5, sigma_init_m);
   cov_ = {s * s, 0.0, s * s};
   cov_rate_ = {0.0, 0.0, 0.0};
@@ -42,6 +65,12 @@ void CtrInflationFsm::propagate_open_loop(double dt_s, double horiz_speed_mps) n
   const double d_sys = k2 * (2.0 * open_loop_dist_m_ * ds + ds * ds);
   const double d_rw = cfg_.q_rw_m2_per_s * dt_s;
   const double dp = d_rw + d_sys;
+  if (!std::isfinite(ds) || !std::isfinite(dp) || !std::isfinite(cov_.p_nn + dp) ||
+      !std::isfinite(cov_.p_ee + dp)) {
+    abort_latched_ = true;
+    nav_state_ = GnssDeniedNavState::kDeterministicVisualSlzAbort;
+    return;
+  }
 
   open_loop_dist_m_ += ds;
   cov_.p_nn += dp;
@@ -52,6 +81,11 @@ void CtrInflationFsm::propagate_open_loop(double dt_s, double horiz_speed_mps) n
 }
 
 void CtrInflationFsm::apply_reloc_update(const Cov2D& updated_cov) noexcept {
+  if (!is_valid_psd_cov(updated_cov)) {
+    // Fail-closed: reject non-finite or non-PSD reloc covariance rather than corrupting
+    // cov_ / resetting open_loop_dist_m_ and silently emitting 0 CTR hazards!
+    return;
+  }
   cov_ = updated_cov;
   cov_rate_ = {0.0, 0.0, 0.0};
   open_loop_dist_m_ = 0.0;
@@ -64,13 +98,16 @@ CtrInflationStatus CtrInflationFsm::evaluate_and_build_hazards(
     std::span<rta::HazardPoint> out_hazards) noexcept {
   CtrInflationStatus st{};
 
-  const double sigma_pos = cov_.sigma_max();
+  const bool cov_ok = is_valid_psd_cov(cov_);
+  const double raw_sigma_pos = cov_ok ? cov_.sigma_max() : cfg_.sigma_abort_m;
+  const bool sigma_ok = cov_ok && std::isfinite(raw_sigma_pos);
+  const double sigma_pos = sigma_ok ? raw_sigma_pos : cfg_.sigma_abort_m;
   st.sigma_pos_m = sigma_pos;
   st.three_sigma_pos_m = 3.0 * sigma_pos;
-  st.nominal_3sigma_met = (st.three_sigma_pos_m < cfg_.nominal_3sigma_target_m);
+  st.nominal_3sigma_met = sigma_ok && (st.three_sigma_pos_m < cfg_.nominal_3sigma_target_m);
 
   // --- 3-State GNSS-Denied Navigation FSM (with hysteresis & latched deterministic Visual-SLZ abort) ---
-  if (abort_latched_ || sigma_pos >= cfg_.sigma_abort_m) {
+  if (!sigma_ok || abort_latched_ || sigma_pos >= cfg_.sigma_abort_m) {
     abort_latched_ = true;
     nav_state_ = GnssDeniedNavState::kDeterministicVisualSlzAbort;
   } else if (nav_state_ == GnssDeniedNavState::kDegradedCaution) {
@@ -88,6 +125,17 @@ CtrInflationStatus CtrInflationFsm::evaluate_and_build_hazards(
     st.v_max_cap_mps = cfg_.v_max_nominal_mps;
   } else {
     st.v_max_cap_mps = std::clamp(cfg_.v_max_caution_mps, 12.0, 15.0);
+  }
+
+  if (!own_pos_ned.is_finite() || !std::isfinite(alt_amsl_m)) {
+    abort_latched_ = true;
+    nav_state_ = GnssDeniedNavState::kDeterministicVisualSlzAbort;
+    st.nav_state = nav_state_;
+    st.visual_slz_abort_latched = true;
+    st.westward_bias_active = true;
+    st.v_max_cap_mps = std::clamp(cfg_.v_max_caution_mps, 12.0, 15.0);
+    st.nominal_3sigma_met = false;
+    return st;
   }
 
   // Convert own local Kartal NED to WGS84 strictly via pure vertirta::core::geodesy (zero libproj).
@@ -119,18 +167,23 @@ CtrInflationStatus CtrInflationFsm::evaluate_and_build_hazards(
     const double er_n = -to_arp_n / d_arp;
     const double er_e = -to_arp_e / d_arp;
 
-    const double var_n = cov_.directional_variance(er_n, er_e);
-    const double sigma_n = std::sqrt(std::max(0.04, var_n));
+    const double raw_var_n = cov_ok ? cov_.directional_variance(er_n, er_e) : (sigma_pos * sigma_pos);
+    const double sigma_n =
+        std::isfinite(raw_var_n) ? std::sqrt(std::max(0.04, raw_var_n)) : cfg_.sigma_abort_m;
     const double delta_r = 3.0 * sigma_n + cfg_.b_map_m;
 
     // Analytic outward wall-expansion rate: d/dt [3*sqrt(er^T P er)] = 3*(er^T P_dot er)/(2*sigma_n)
-    const double var_dot = std::max(0.0, cov_rate_.directional_variance(er_n, er_e));
+    const double raw_var_dot = cov_rate_.directional_variance(er_n, er_e);
+    const double var_dot = std::isfinite(raw_var_dot) ? std::max(0.0, raw_var_dot) : 0.0;
     const double r_dot_analytic = 3.0 * var_dot / (2.0 * std::max(sigma_n, 0.25));
     double r_dot_fd = 0.0;
-    if (has_prev_delta_ && std::isfinite(dt_s) && dt_s > 1e-4) {
+    if (has_prev_delta_ && std::isfinite(dt_s) && dt_s > 1e-4 && std::isfinite(prev_delta_r)) {
       r_dot_fd = std::max(0.0, (delta_r - prev_delta_r) / dt_s);
     }
-    const double r_dot = std::clamp(std::max(r_dot_analytic, r_dot_fd), 0.0, cfg_.max_r_dot_infl_mps);
+    const double r_dot_candidate = std::max(r_dot_analytic, r_dot_fd);
+    const double r_dot = std::isfinite(r_dot_candidate)
+                             ? std::clamp(r_dot_candidate, 0.0, cfg_.max_r_dot_infl_mps)
+                             : cfg_.max_r_dot_infl_mps;
 
     prev_delta_r = delta_r;
     out_delta_r = delta_r;
@@ -138,8 +191,9 @@ CtrInflationStatus CtrInflationFsm::evaluate_and_build_hazards(
     out_inflated_margin = nominal_margin_m - delta_r;
 
     // Activate hazard whenever inflated wall lies within 500 m of aircraft (handles large 3sigma safely!).
-    if (n_emit < out_hazards.size() && out_inflated_margin < cfg_.ctr_base_activation_m) {
-      const double wall_dist = std::max(nominal_margin_m, 0.5);
+    if (n_emit < out_hazards.size() &&
+        (!std::isfinite(out_inflated_margin) || out_inflated_margin < cfg_.ctr_base_activation_m)) {
+      const double wall_dist = std::isfinite(nominal_margin_m) ? std::max(nominal_margin_m, 0.5) : 0.5;
       // Place virtual wall along direction toward ARP at nominal wall distance, then inflate by delta_r
       // and give outward expansion velocity +r_dot * er -> CbvfSafetyFilter computes:
       //   r_eff = wall_dist - delta_r

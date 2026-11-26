@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -258,4 +259,112 @@ TEST_CASE("GnssSpoofGuard H3 100-seed Monte Carlo slow ramps (0.5-2.0 m/s): P95 
     }
   }
   REQUIRE(sea_caught);
+}
+
+TEST_CASE("GnssSpoofGuard fails closed on NaN/Inf in GNSS pos, vel, cn0, agc, hdop without resetting MCUSUM or poisoning b_lag",
+          "[gnss_denied][spoof_guard][safety_hardening]") {
+  const double qnan = std::numeric_limits<double>::quiet_NaN();
+  const double pinf = std::numeric_limits<double>::infinity();
+  const double ninf = -std::numeric_limits<double>::infinity();
+
+  enum class FaultField { kPosXNan, kPosYInf, kVelXNan, kVelYNinf, kCn0Nan, kAgcNan, kHdopInf };
+  const FaultField cases[] = {
+      FaultField::kPosXNan,
+      FaultField::kPosYInf,
+      FaultField::kVelXNan,
+      FaultField::kVelYNinf,
+      FaultField::kCn0Nan,
+      FaultField::kAgcNan,
+      FaultField::kHdopInf,
+  };
+
+  for (const FaultField fault : cases) {
+    GnssSpoofGuard guard{};
+    VioStateEstimate vio{};
+    vio.valid = true;
+    vio.water_fraction = 0.05;
+
+    // Warm up 80 epochs with a small non-latching velocity residual so MCUSUM > 0 and ring buffer is populated.
+    double prev_mcusum = 0.0;
+    for (int k = 0; k < 80; ++k) {
+      const double t = 0.1 * static_cast<double>(k);
+      vio.stamp_ns = static_cast<uint64_t>(k) * 100'000'000ULL;
+      vio.pos_ned = {10.0 * t, 0.0, -40.0};
+      vio.vel_ned = {10.0, 0.0, 0.0};
+
+      GnssFixV116 g{};
+      g.stamp_ns = vio.stamp_ns;
+      g.pos_ned = vio.pos_ned;
+      // Small sub-threshold residual on final 2 epochs so MCUSUM accumulates > 0 without latching.
+      g.vel_ned = {10.0, (k >= 78) ? 0.60 : 0.0, 0.0};
+      g.valid = true;
+      const auto st = guard.step_10hz(g, vio);
+      REQUIRE_FALSE(st.latched);
+      REQUIRE(st.hypothesis == GnssHypothesis::kH0Nominal);
+      REQUIRE(st.gnss_fused_allowed);
+      prev_mcusum = st.mcusum_norm_mps;
+    }
+    REQUIRE(prev_mcusum > 0.1);
+
+    // Inject non-finite GNSS telemetry on epoch 80 -> MUST latch fail-closed immediately!
+    vio.stamp_ns = 80ULL * 100'000'000ULL;
+    vio.pos_ned = {80.0, 0.0, -40.0};
+    vio.vel_ned = {10.0, 0.0, 0.0};
+    GnssFixV116 bad{};
+    bad.stamp_ns = vio.stamp_ns;
+    bad.pos_ned = vio.pos_ned;
+    bad.vel_ned = vio.vel_ned;
+    bad.valid = true;
+
+    switch (fault) {
+      case FaultField::kPosXNan:  bad.pos_ned.x = qnan; break;
+      case FaultField::kPosYInf:  bad.pos_ned.y = pinf; break;
+      case FaultField::kVelXNan:  bad.vel_ned.x = qnan; break;
+      case FaultField::kVelYNinf: bad.vel_ned.y = ninf; break;
+      case FaultField::kCn0Nan:   bad.cn0_avg_dbhz = qnan; break;
+      case FaultField::kAgcNan:   bad.agc_ratio = qnan; break;
+      case FaultField::kHdopInf:  bad.hdop = pinf; break;
+    }
+
+    const auto st_bad = guard.step_10hz(bad, vio);
+    REQUIRE(st_bad.latched);
+    REQUIRE_FALSE(st_bad.gnss_fused_allowed);
+    REQUIRE(st_bad.hypothesis != GnssHypothesis::kH0Nominal);
+    REQUIRE(std::isfinite(st_bad.mcusum_norm_mps));
+    REQUIRE(st_bad.mcusum_norm_mps == Approx(prev_mcusum));  // Never silently reset mcusum=0!
+    REQUIRE(st_bad.rollback_pos_ned.is_finite());
+
+    // Subsequent clean epoch MUST remain latched with finite VIO-propagated pose.
+    vio.stamp_ns = 81ULL * 100'000'000ULL;
+    vio.pos_ned = {81.0, 0.0, -40.0};
+    GnssFixV116 clean{};
+    clean.stamp_ns = vio.stamp_ns;
+    clean.pos_ned = vio.pos_ned;
+    clean.vel_ned = vio.vel_ned;
+    clean.valid = true;
+    const auto st_after = guard.step_10hz(clean, vio);
+    REQUIRE(st_after.latched);
+    REQUIRE_FALSE(st_after.gnss_fused_allowed);
+    REQUIRE(st_after.rollback_pos_ned.is_finite());
+  }
+
+  // Non-finite GNSS on epoch 0 (cold start) also latches fail-closed with finite rollback pose.
+  GnssSpoofGuard cold_guard{};
+  VioStateEstimate vio0{};
+  vio0.stamp_ns = 100'000'000ULL;
+  vio0.pos_ned = {12.0, -3.0, -40.0};
+  vio0.vel_ned = {0.0, 0.0, 0.0};
+  vio0.water_fraction = qnan;
+  vio0.valid = true;
+  GnssFixV116 g0{};
+  g0.stamp_ns = vio0.stamp_ns;
+  g0.pos_ned = {qnan, 0.0, -40.0};
+  g0.vel_ned = {0.0, 0.0, 0.0};
+  g0.valid = true;
+  const auto st0 = cold_guard.step_10hz(g0, vio0);
+  REQUIRE(st0.latched);
+  REQUIRE_FALSE(st0.gnss_fused_allowed);
+  REQUIRE(st0.hypothesis != GnssHypothesis::kH0Nominal);
+  REQUIRE(std::isfinite(st0.water_fraction));
+  REQUIRE(st0.rollback_pos_ned.is_finite());
 }

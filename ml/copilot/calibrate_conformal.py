@@ -1016,11 +1016,20 @@ def fit_temperature_scaled_mondrian_raps(
     for idx, grp in enumerate(cal_group_labels):
         by_group.setdefault(str(grp), []).append(idx)
 
+    # Seeded stratified permutation within each group restores exchangeability on periodic/sorted cal sets
+    split_rng = random.Random(int(seed))
     tau_idx: list[int] = []
     q_idx: list[int] = []
-    for _, idxs in sorted(by_group.items()):
-        tau_idx.extend(idxs[0::2])
-        q_idx.extend(idxs[1::2])
+    group_tau_idxs: dict[str, list[int]] = {}
+    for grp, idxs in sorted(by_group.items()):
+        perm = list(idxs)
+        split_rng.shuffle(perm)
+        mid = len(perm) // 2
+        g_tau = perm[:mid]
+        g_q = perm[mid:]
+        group_tau_idxs[grp] = g_tau
+        tau_idx.extend(g_tau)
+        q_idx.extend(g_q)
 
     global_ts = fit_temperature_scaling_nll(
         [cal_score_rows[i] for i in tau_idx],
@@ -1031,8 +1040,7 @@ def fit_temperature_scaled_mondrian_raps(
     global_tau = float(global_ts["tau_opt"])
 
     group_tau: dict[str, float] = {}
-    for grp, idxs in sorted(by_group.items()):
-        g_tau_idxs = idxs[0::2]
+    for grp, g_tau_idxs in sorted(group_tau_idxs.items()):
         if per_group_temperature and len(g_tau_idxs) >= 10:
             g_ts = fit_temperature_scaling_nll(
                 [cal_score_rows[i] for i in g_tau_idxs],

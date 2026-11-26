@@ -143,7 +143,26 @@ class VertiGnssDenied:
                 )
             )
 
-        wf = max(0.0, min(1.0, float(water_fraction)))
+        raw_vals = [
+            float(gnss_pos_ned[0]),
+            float(gnss_pos_ned[1]),
+            float(gnss_pos_ned[2]),
+            float(gnss_vel_ned[0]),
+            float(gnss_vel_ned[1]),
+            float(gnss_vel_ned[2]),
+            float(vio_pos_ned[0]),
+            float(vio_pos_ned[1]),
+            float(vio_pos_ned[2]),
+            float(vio_vel_ned[0]),
+            float(vio_vel_ned[1]),
+            float(vio_vel_ned[2]),
+            float(water_fraction),
+            float(cn0_dbhz),
+            float(hdop),
+        ]
+        inputs_finite = all(math.isfinite(v) for v in raw_vals)
+
+        wf = max(0.0, min(1.0, float(water_fraction))) if math.isfinite(float(water_fraction)) else 1.0
         if wf > 0.35:
             k_d, h_t = 0.35, 3.4
         elif wf >= 0.20:
@@ -151,6 +170,27 @@ class VertiGnssDenied:
             k_d, h_t = 0.25 + 0.10 * a, 2.0 + 1.4 * a
         else:
             k_d, h_t = 0.25, 2.0
+
+        if not inputs_finite:
+            if not self._latched:
+                self._latched = True
+                self._hyp = "H1_RF_JAMMING"
+                self._sigma_pos_m = max(self._sigma_pos_m, 2.0)
+            safe_vio = [
+                float(vio_pos_ned[i]) if math.isfinite(float(vio_pos_ned[i])) else 0.0
+                for i in range(3)
+            ]
+            return {
+                "hypothesis": self._hyp,
+                "gnss_fused_allowed": False,
+                "latched": True,
+                "rollback_executed": self._hyp in ("H2_STEP_MEACONING", "H3_SLOW_RAMP_SPOOF"),
+                "mcusum_norm_mps": math.hypot(self._mcusum_n, self._mcusum_e),
+                "active_k_d_mps": k_d,
+                "active_h_t_mps": h_t,
+                "sigma_init_m": 3.5 if self._hyp in ("H2_STEP_MEACONING", "H3_SLOW_RAMP_SPOOF") else 2.0,
+                "rollback_pos_ned": safe_vio,
+            }
 
         rv_n = float(gnss_vel_ned[0]) - float(vio_vel_ned[0])
         rv_e = float(gnss_vel_ned[1]) - float(vio_vel_ned[1])
@@ -220,8 +260,30 @@ class VertiGnssDenied:
                 )
             )
 
-        dt = max(1e-3, float(dt_s))
-        d_step = max(0.0, float(horiz_speed_mps)) * dt
+        dt_raw = float(dt_s)
+        spd_raw = float(horiz_speed_mps)
+        if not (math.isfinite(dt_raw) and math.isfinite(spd_raw)):
+            self._abort_latched = True
+            self._sigma_pos_m = max(self._sigma_pos_m, 65.0)
+            three_sigma = 3.0 * self._sigma_pos_m
+            delta_r = three_sigma + 2.0
+            return {
+                "nav_state": "DETERMINISTIC_VISUAL_SLZ_ABORT",
+                "sigma_pos_m": self._sigma_pos_m,
+                "three_sigma_pos_m": three_sigma,
+                "nominal_3sigma_met": False,
+                "visual_slz_abort_latched": True,
+                "westward_bias_active": True,
+                "v_max_cap_mps": 13.5,
+                "ltfj_inflated_margin_m": max(0.0, 1042.0 - delta_r),
+                "ltbx_inflated_margin_m": max(0.0, 2995.0 - delta_r),
+                "ltfj_delta_r_m": delta_r,
+                "ltfj_r_dot_infl_mps": 0.0,
+                "emitted_ctr_hazards": 2,
+            }
+
+        dt = max(1e-3, dt_raw)
+        d_step = max(0.0, spd_raw) * dt
         self._open_loop_dist_m += d_step
         var = (self._sigma_pos_m**2) + 0.04 * dt + 2.0 * (0.008**2) * self._open_loop_dist_m * d_step
         self._sigma_pos_m = math.sqrt(max(var, 0.25))
@@ -279,53 +341,158 @@ class VertiMondrianVoiceGate:
         mayday_acoustic_weight: float = 0.0,
         nospeech_prob: float = 0.0,
     ) -> dict[str, Any]:
+        snr_f = float(snr_db)
+        soc_f = float(soc_pct)
+        floor_f = float(soc_reserve_floor_pct)
+        mayday_f = float(mayday_acoustic_weight)
+        nospeech_f = float(nospeech_prob)
+        norm_lang = str(lang) if str(lang) in ("TR", "EN", "MIX") else "TR"
+
+        # Fail-closed on any non-finite signal input (prevents NaN bypass of abstain/MAYDAY
+        # and avoids C++ std::sort undefined behavior on NaN candidate scores).
+        lang_q_map = {"TR": 0.42, "EN": 0.42, "MIX": 0.50}
+        q_lang = lang_q_map[norm_lang]
+
+        if not (
+            math.isfinite(snr_f)
+            and math.isfinite(soc_f)
+            and math.isfinite(floor_f)
+            and math.isfinite(mayday_f)
+            and math.isfinite(nospeech_f)
+        ):
+            if math.isfinite(snr_f):
+                if snr_f > 15.0:
+                    stratum, q_snr = "S0_Clean", 0.35
+                elif snr_f >= 8.0:
+                    stratum, q_snr = "S1_Cruise", 0.45
+                elif snr_f >= 2.0:
+                    stratum, q_snr = "S2_Hover", 0.60
+                else:
+                    stratum, q_snr = "S3_Garbled", 0.78
+            else:
+                stratum, q_snr = "S3_Garbled", 0.78
+            eff_q = max(0.0, min(1.0, max(q_snr, q_lang)))
+            return {
+                "decision": "ABSTAIN_HOLD_SAFE",
+                "stratum": stratum,
+                "lang": norm_lang,
+                "effective_q_hat": eff_q,
+                "p_min_threshold": 0.0,
+                "conformal_set_size": 0,
+                "selected_action_id": "HOLD_LOITER",
+                "clarify_reason": "",
+            }
+
+        finite_candidates = [
+            (str(cid), float(p), bool(ok))
+            for cid, p, ok in candidates
+            if math.isfinite(float(p))
+        ]
+
         if self._native is not None:
-            norm = [(str(cid), float(p), bool(ok)) for cid, p, ok in candidates]
             return dict(
                 self._native.evaluate(
-                    float(snr_db),
-                    str(lang),
-                    norm,
-                    float(soc_pct),
-                    float(soc_reserve_floor_pct),
-                    float(mayday_acoustic_weight),
-                    float(nospeech_prob),
+                    snr_f,
+                    norm_lang,
+                    finite_candidates,
+                    soc_f,
+                    floor_f,
+                    mayday_f,
+                    nospeech_f,
                 )
             )
 
-        if snr_db > 15.0:
-            stratum, q_hat = "S0_Clean", 0.35
-        elif snr_db >= 8.0:
-            stratum, q_hat = "S1_Cruise", 0.45
-        elif snr_db >= 2.0:
-            stratum, q_hat = "S2_Hover", 0.60
+        if snr_f > 15.0:
+            stratum, q_snr = "S0_Clean", 0.35
+        elif snr_f >= 8.0:
+            stratum, q_snr = "S1_Cruise", 0.45
+        elif snr_f >= 2.0:
+            stratum, q_snr = "S2_Hover", 0.60
         else:
-            stratum, q_hat = "S3_Garbled", 0.78
+            stratum, q_snr = "S3_Garbled", 0.78
 
-        sat_sorted = sorted([c for c in candidates if c[2]], key=lambda x: x[1], reverse=True)
-        top_id = sat_sorted[0][0] if sat_sorted else ""
-        p_min = max(0.0, 1.0 - q_hat)
+        effective_q_hat = max(0.0, min(1.0, max(q_snr, q_lang)))
+        ns = max(0.0, min(1.0, nospeech_f))
+        acoustic_penalty = max(0.0, min(0.95, 0.25 * ns))
+
+        sat_sorted = sorted(
+            [c for c in finite_candidates if c[2]],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+
+        # Branch 1: MAYDAY / PAN-PAN asymmetric emergency priority (w_m >= 0.15)
+        if mayday_f >= 0.15:
+            p_min = 1.0 - effective_q_hat
+            selected = sat_sorted[0][0] if sat_sorted else "ABORT_RETURN:Kartal_Sahil"
+            return {
+                "decision": "EMERGENCY_PREEMPT",
+                "stratum": stratum,
+                "lang": norm_lang,
+                "effective_q_hat": effective_q_hat,
+                "p_min_threshold": p_min,
+                "conformal_set_size": 1 if sat_sorted else 0,
+                "selected_action_id": selected,
+                "clarify_reason": "",
+            }
+
+        p_min = max(0.0, min(1.0, 1.0 - effective_q_hat - acoustic_penalty))
         cset = [c for c in sat_sorted if c[1] >= p_min]
 
-        if mayday_acoustic_weight >= 0.15:
-            decision = "EMERGENCY_PREEMPT"
-        elif (soc_pct - soc_reserve_floor_pct) < 5.0:
-            decision = "LIVENESS_EMERGENCY_COMMIT"
-        elif nospeech_prob >= 0.70 or not sat_sorted:
-            decision = "ABSTAIN_HOLD_SAFE"
-        elif len(cset) == 1:
-            decision = "EXECUTE_SINGLE"
-        else:
-            decision = "REQUEST_CLARIFICATION"
+        # Branch 2: < 5.0% SoC margin LIVENESS_EMERGENCY_COMMIT override (only when |C| != 1)
+        if (soc_f - floor_f) < 5.0 and len(cset) != 1:
+            if cset:
+                selected = cset[0][0]
+            elif sat_sorted:
+                selected = sat_sorted[0][0]
+            else:
+                selected = "ABORT_RETURN:Kartal_Sahil"
+            return {
+                "decision": "LIVENESS_EMERGENCY_COMMIT",
+                "stratum": stratum,
+                "lang": norm_lang,
+                "effective_q_hat": effective_q_hat,
+                "p_min_threshold": p_min,
+                "conformal_set_size": len(cset),
+                "selected_action_id": selected,
+                "clarify_reason": "",
+            }
 
+        # Branch 3: High nospeech probability (> 0.70) or empty conformal set -> fail-closed abstain
+        if ns > 0.70 or not cset:
+            return {
+                "decision": "ABSTAIN_HOLD_SAFE",
+                "stratum": stratum,
+                "lang": norm_lang,
+                "effective_q_hat": effective_q_hat,
+                "p_min_threshold": p_min,
+                "conformal_set_size": len(cset),
+                "selected_action_id": "HOLD_LOITER",
+                "clarify_reason": "",
+            }
+
+        # Branch 4: Exact singleton Z3-SAT conformal set -> execute immediately
+        if len(cset) == 1:
+            return {
+                "decision": "EXECUTE_SINGLE",
+                "stratum": stratum,
+                "lang": norm_lang,
+                "effective_q_hat": effective_q_hat,
+                "p_min_threshold": p_min,
+                "conformal_set_size": 1,
+                "selected_action_id": cset[0][0],
+                "clarify_reason": "",
+            }
+
+        # Branch 5: Multi-element conformal set -> targeted bilingual clarification
         return {
-            "decision": decision,
+            "decision": "REQUEST_CLARIFICATION",
             "stratum": stratum,
-            "lang": lang if lang in ("TR", "EN", "MIX") else "TR",
-            "effective_q_hat": q_hat,
+            "lang": norm_lang,
+            "effective_q_hat": effective_q_hat,
             "p_min_threshold": p_min,
             "conformal_set_size": len(cset),
-            "selected_action_id": top_id,
+            "selected_action_id": "",
             "clarify_reason": "LOW_ASR" if stratum in ("S2_Hover", "S3_Garbled") else "AMBIG",
         }
 

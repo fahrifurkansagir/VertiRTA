@@ -14,6 +14,7 @@
 [![Zero-GPL](https://img.shields.io/badge/Runtime-Zero--GPL-10b981.svg)](scripts/ci/check_zero_gpl_symbols.py)
 
 [**Live 3D Console**](https://fahrifurkansagir.github.io/VertiRTA/) ·
+[**Reading Guide**](docs/README.md) ·
 [**System Card**](docs/SYSTEM_CARD.md) ·
 [**Safety Case**](docs/SAFETY_CASE.md) ·
 [**Benchmarks**](docs/MILESTONE_HISTORY.md) ·
@@ -22,9 +23,9 @@
 
 <br>
 
-<img src="docs/assets/vertirta_real_drone_hud_preview.gif" width="840" alt="Real Moving NASA Goddard Drone Video — GTX 1650 SUPER Causal Temporal SLZ HUD">
+<img src="docs/assets/vertirta_real_drone_hud_preview.gif" width="840" alt="Real Moving NASA Goddard Drone Video — GTX 1650 SUPER 3D Surface-Normal Veto & Temporal SLZ HUD">
 
-<sub>Real moving aerial footage (NASA Goddard, PD-USGov) running live on GTX 1650 SUPER: raw PIDNet-S v2.1 (center) vs. causal homography EMA + hysteresis (right) — <strong>-56.25%</strong> flicker, <strong>-62.15%</strong> SLZ centroid jitter, <strong>77.4 FPS</strong>.</sub>
+<sub>Real moving aerial footage (NASA Goddard, PD-USGov) running live on GTX 1650 SUPER: real aerial camera (left) vs. <code>PIDNet-S v2.1</code> + Apache-2.0 <code>Depth-Anything-V2-Small</code> 3D surface-normal &amp; OOD fail-closed veto + causal homography EMA (right) — vertical facades vetoed to orange Hazard (<strong>-25.68%</strong> frame area), <strong>-53.26%</strong> flicker, <strong>-88.86%</strong> SLZ centroid jitter, <strong>0/240</strong> center-crop WireSeg/D-FINE FPs.</sub>
 
 </div>
 
@@ -37,7 +38,7 @@
 - **Bare-Metal Simplex Flight Core (C++17, 400 Hz):** Freestanding `libvertirta_flight_core` compiles to **28,886 B** Cortex-M7 Flash, **0 B** library RAM, **0** heap symbols, **0** recursion, and a **2,960 B** max call-graph stack DAG — isolating the deterministic 3-tier priority arbiter (`CEL > CSFL > CBVF > CF`) from ROS 2, Python, and AI modules.
 - **Coupled eVTOL Fault Physics:** Models coaxial interference (0.85 thrust efficiency), asymmetric BLDC spool-up/coast-down inertia, and a 112S12P 1-RC Thevenin battery pack across **VertiRTA-X8-240** and **Lift+Cruise 8+1**, backed by a **102.85M-node** 4D HJI-CBVF PDE and a **1,000 + 180** seeded C++20 Monte Carlo failure-boundary campaign.
 - **Zero-GPL MAVLink v2 Offboard Shield:** Clean-room Apache-2.0 C++20 MAVLink v2 UDP bridge (`0xFD`, X.25 CRC-16/MCRF4XX, 8 official `common.xml` `CRC_EXTRA` messages) clamping unsafe setpoints, denying airborne disarm/flight-termination, and enforcing 500 ms deadman hover at **p50 = 18.0 us** with **0** unsafe leaks across 2,500 live kernel UDP packets.
-- **Real-World Evidence Without Cherry-Picking:** Verified on moving **NASA Goddard drone video** (-56.25% SLZ flicker on a 4 GB GTX 1650 SUPER), ETH Zurich **EuRoC MAV** (7/7), **PX4 ULog → W3C XSD E5X** forensics, live Istanbul METAR/Open-Meteo/ADS-B feeds, and zero-GPL **sherpa-onnx** voice ATC — with every negative ablation and open hardware gap published verbatim.
+- **Real-World Evidence Without Cherry-Picking:** Verified on moving **NASA Goddard drone video** (`Depth-Anything-V2-Small` 3D normal + OOD veto cutting flicker `-53.26%` and centroid jitter `-88.86%`, plus `0/240` center-crop forward-wire FPs on a 4 GB GTX 1650 SUPER), quarantined **AeroScapes** & **UAVScenes**, ETH Zurich **EuRoC MAV** (`7/7`), **PX4 ULog → W3C XSD E5X** forensics, live Istanbul METAR/Open-Meteo/ADS-B feeds, and zero-GPL **faster-whisper-large-v3-turbo + sherpa-onnx** voice ATC — with every negative ablation and open hardware gap published verbatim.
 
 ---
 
@@ -47,7 +48,7 @@
 
 <div align="center">
   <img src="docs/assets/vertirta_mc1000_envelope_dispersion.png" width="840" alt="1,000-Flight Native C++20 Monte Carlo Dispersion and 6x6 Thrust-Saturation Cliff">
-  <p><sub><strong>0 / 1,000</strong> airspace breaches (95% CP ≤ 0.30%). <strong>Lift+Cruise 8+1:</strong> 500/500 safe (CEP50 0.80 m, CEP95 1.97 m). <strong>X8-240:</strong> 429/500 safe — exposing ±5 cm CG-shift tipping under collinear 2-arm CEL spin (29/100) vs nominal-CG Tier-1 (1,500/1,500). Physical thrust wall begins at +14% overload @ 10 m/s and saturates at ≥ +21%.</sub></p>
+  <p><sub><strong>0 / 1,000</strong> airspace breaches (95% CP ≤ 0.30%). <strong>Lift+Cruise 8+1:</strong> 500/500 safe (CEP50 0.80 m, CEP95 1.97 m). <strong>X8-240:</strong> 429/500 safe — exposing the physical unactuated-axis CG-shift boundary (<code>cg_u ∈ [-3.50, +1.00] cm</code> vs. orthogonal <code>cg_v ∈ [-5.0, +5.0] cm</code> 100% safe) under collinear 2-arm CEL spin (29/100) vs nominal-CG Tier-1 (1,500/1,500). Physical thrust wall begins at +14% overload @ 10 m/s and saturates at ≥ +21%.</sub></p>
 </div>
 
 ### 2. Interactive 3D WebAssembly Flight Console & Local SLZ Perception Recovery
@@ -59,12 +60,12 @@
         <img src="docs/assets/vertirta_vertigcs_live_3d.png" width="100%" alt="Live VertiGCS 3D WebAssembly Console">
       </a>
       <br>
-      <sub><strong><a href="https://fahrifurkansagir.github.io/VertiRTA/">Launch VertiGCS 3D WASM Console</a> (38.5 KiB)</strong> — Istanbul LTFJ/LTBX corridor, live 1M/2M/CEL faults, 20-eVTOL fleet & Part-IS cyber-attack simulation.</sub>
+      <sub><strong><a href="https://fahrifurkansagir.github.io/VertiRTA/">Launch VertiGCS 3D WASM Console</a> (38.5 KiB)</strong> — Unified dark cockpit over the Istanbul LTFJ/LTBX 3D corridor, live 1M/2M/CEL faults, 20-eVTOL fleet &amp; Part-IS cyber-attack simulation (<code>18/18</code> Vitest).</sub>
     </td>
     <td width="50%" align="center" valign="top">
       <img src="docs/assets/vertirta_pidnet_v21_slz_grid.jpg" width="100%" alt="PIDNet-S v2.1 6-Scene Validation Grid">
       <br>
-      <sub><strong>PIDNet-S v2.1 (Local GTX 1650 SUPER)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes 0.2468.</sub>
+      <sub><strong>PIDNet-S v2.1 (Local GTX 1650 SUPER)</strong> — Zero-ShareAlike Val mIoU <strong>0.4669</strong>, FSR <strong>2.81%</strong> (≤ 3.0%), OOD AUROC <strong>0.7554</strong>, zero-shot AeroScapes <strong>0.2468</strong> &amp; UAVScenes <strong>0.2259</strong>.</sub>
     </td>
   </tr>
 </table>
@@ -80,11 +81,11 @@ Every figure below is backed by SHA-256-sealed JSON manifests in [`artifacts/v4.
 | **Cortex-M7 Flight Core & Formal** | **28,886 B** Flash, **0 B** RAM, **2,960 B** DAG, **0** heap; ESBMC **1,905/1,905**; Renode CAN-FD **3/3** (12.50 ms failover); x86_64↔arm64 **0.0** diff | [`bare_metal_size_cortex_m7.json`](artifacts/v1.0.0/benchmarks/bare_metal_size_cortex_m7.json) |
 | **4D HJI-CBVF PDE (X8 + LC 8+1)** | **102.85M** nodes (101×71×101×71 × 2): **0** soundness violations, 11.31 MB `VRTALUT1`; paired 30k atlas **95.98%** CSFL / **100%** CEL | [`g4_jax_4d_hires_and_lc_manifest.json`](artifacts/v4.0.0/g4_jax_4d_hires_and_lc_manifest.json) |
 | **1,000 + 180 Monte Carlo Suite** | **0 / 1,000** airspace breaches; **200/200** GNSS spoof detect (0.178 s TTD); LC 8+1 **500/500** (CEP95 1.97 m); 6×6 wall ≥ +21% mass | [`monte_carlo_1000_dispersion_report.json`](artifacts/v4.0.0/monte_carlo_1000_dispersion_report.json) |
-| **MAVLink v2 UDP RTA Shield** | 2,500 live UDP packets: **0** drops, **0** leaks, 1,181 clamped, 240 denied, 239 bad CRC rejected, **p50 = 18.0 us / p99 = 124.4 us** | [`mavlink_v2_rta_bridge_proof.json`](artifacts/v4.0.0/mavlink_v2_rta_bridge_proof.json) |
-| **Real Drone Video & Edge GPU** | 240-frame NASA video: flicker **-56.25%**, centroid jitter **-62.15%**; GTX 1650S Cruise **p99 = 19.83 ms** (56.3 FPS) | [`realworld_drone_video_temporal_proof.json`](artifacts/v4.0.0/realworld_drone_video_temporal_proof.json) |
-| **GNSS-Denied & Forensics** | ETH Zurich **EuRoC MAV 7/7** (0.1 s TTD); XFeat **CEP50 0.218 m**; PX4 `sample.ulg` → **W3C XSD E5X**; live Istanbul METAR/ADS-B | [`realworld_euroc_mav_gnss_audit.json`](artifacts/v4.0.0/realworld_euroc_mav_gnss_audit.json) |
-| **Co-Pilot & Zero-GPL Voice** | Qwen3-4B Z3-GRPO: **100%** grammar & Z3 SAT, **82.83%** AST-STL, RAPS conformal upgrade; `sherpa-onnx` TTS **71.7 ms** (0 GPL) | [`g4_qwen3_v3_vertibench_v2_eval.json`](artifacts/v4.0.0/g4_qwen3_v3_vertibench_v2_eval.json) |
-| **CI, SDK & Zero-GPL Gate** | **7/7** CI workflows green: **36/36** CTest (x86_64, arm64, ASan/TSan), `find_package(VertiRTA 1.0)`, 6/6 native SDK, **0** GPL across 23 targets | [`.github/workflows/`](.github/workflows/) |
+| **MAVLink v2 UDP RTA Shield** | 2,500 live UDP packets: **0** drops, **0** leaks, 1,181 clamped, 240 denied, 239 bad CRC rejected (`LOCAL_NED`/`FORCE_SET`/disarm/LAN hardened), **p50 = 18.0 us / p99 = 124.4 us** | [`mavlink_v2_rta_bridge_proof.json`](artifacts/v4.0.0/mavlink_v2_rta_bridge_proof.json) |
+| **Real Drone Video & Edge GPU** | 240f NASA: **3D normal + OOD veto** (`-53.26%` flicker, `-88.86%` jitter); TEIAS **WireSeg v1.1** (`0/240` crop, `11/240` full) & **D-FINE-N v1.1** (`0` crop, `1` full); TU116 Terminal **10.11 ms** & Cruise **14.13 ms** p99 PASS | [`realworld_drone_video_temporal_proof.json`](artifacts/v4.0.0/realworld_drone_video_temporal_proof.json), [`gtx1650s_m3_timesliced_edge_gate.json`](artifacts/v4.0.0/gtx1650s_m3_timesliced_edge_gate.json) |
+| **SLZ Transfer, GNSS & Forensics** | Zero-shot **AeroScapes** `0.2468` (`FSR 3.43%`) & **UAVScenes** `0.2259` (`FSR 12.55%`); **EuRoC MAV 7/7** (`0.1 s` TTD); XFeat **CEP50 0.218 m**; PX4 `sample.ulg` → **W3C XSD E5X** | [`realworld_uavscenes_zeroshot_eval.json`](artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json), [`realworld_euroc_mav_gnss_audit.json`](artifacts/v4.0.0/realworld_euroc_mav_gnss_audit.json) |
+| **Co-Pilot Conformal & Voice** | Qwen3-4B Z3-GRPO (**100%** Z3 SAT, **82.83%** AST-STL); exact FP32 local conformal (**ECE `0.174 → 0.032`**, **`\|C\| 7.80 → 2.50 / 2.06`**, **`40–45.5%`** singletons); `whisper-large-v3-turbo` TR WER ~2× lower + `sherpa-onnx` **67.2 ms** (0 GPL) | [`local_gtx1650s_qwen3_v3_conformal_raps.json`](artifacts/v4.0.0/local_gtx1650s_qwen3_v3_conformal_raps.json), [`local_voice_atc_live_proof.json`](artifacts/v4.0.0/local_voice_atc_live_proof.json) |
+| **CI, SDK, Console & Zero-GPL Gate** | **7/7** CI workflows green: **36/36** CTest (x86_64, arm64, ASan/TSan), **18/18** VertiGCS Vitest, `find_package(VertiRTA 1.0)`, full M1–M3 native sdist SDK (`11/11`) & `ubuntu:24.04` Docker parity, **0** GPL across runtime targets | [`.github/workflows/`](.github/workflows/) |
 
 ---
 
@@ -160,28 +161,30 @@ Download verified ONNX weights and 4D `VRTALUT1` tables from the [**v1.0.0 Relea
 
 ## Repository Structure
 
+> **New to VertiRTA?** Start with the chapter-by-chapter [**Documentation Reading Guide (`docs/README.md`)**](docs/README.md) and the [**Core Real-Time Architecture Map (`core/README.md`)**](core/README.md).
+
 | Path | Responsibility |
 | --- | --- |
-| [`core/flight_core/`](core/flight_core/) | Frozen freestanding C++17 400 Hz MCU core (28.8 KB Flash / 0 B RAM: TMR, INDI+WLS, FDI, CEL, `.vrta`) |
+| [`core/`](core/README.md) & [`core/flight_core/`](core/flight_core/) | Core architecture map + frozen freestanding C++17 400 Hz MCU core (28.8 KB Flash / 0 B RAM: TMR, INDI+WLS, FDI, CEL, `.vrta`) |
 | [`core/rta_companion/`](core/rta_companion/) | C++20 100 Hz RTA companion (`mmap` 4D CBVF & 2D CEL LUTs, ESDF, wire capsules, LTFJ/LTBX walls) |
 | [`core/airframes/lift_cruise/`](core/airframes/lift_cruise/) | Zero-heap Lift+Cruise 8+1 transition dynamics & 400 Hz Hermite INDI-WLS allocator |
 | [`core/wind_acoustics/`](core/wind_acoustics/) & [`core/uspace_fleet/`](core/uspace_fleet/) | `VRTAWND1` wind LUT, BVI acoustics, 20-eVTOL U-Space fleet, Part-IS crypto & [`core/fleet_z3/`](core/fleet_z3/) |
 | [`core/forward_hazard/`](core/forward_hazard/) & [`core/gnss_denied/`](core/gnss_denied/) | Forward wire/mmWave radar fusion, Basalt VIO adapter, MCUSUM spoof guard & CTR inflation |
 | [`core/voice/`](core/voice/), [`core/forensics/`](core/forensics/) & [`core/copilot/`](core/copilot/) | Zero-GPL voice ATC, ED-155A/ERCS E5X XML generator, [`core/stl/`](core/stl/) & [`core/slz_bayes/`](core/slz_bayes/) |
-| [`tools/mavlink_rta_bridge/`](tools/mavlink_rta_bridge/) | Clean-room Apache-2.0 MAVLink v2 UDP/Offboard RTA shield bridge & live loopback harness |
+| [`tools/mavlink_rta_bridge/`](tools/mavlink_rta_bridge/README.md) | Clean-room Apache-2.0 MAVLink v2 UDP/Offboard RTA shield bridge & live loopback harness |
 | [`benchmarks/monte_carlo_dispersion/`](benchmarks/monte_carlo_dispersion/) | Seeded native C++20 1,000+180 Monte Carlo dispersion & failure-boundary benchmark suite |
 | [`wasm/`](wasm/), [`apps/vertigcs/`](apps/vertigcs/) & [`sdk/python/`](sdk/python/) | 38.5 KiB Emscripten `.wasm`, live MapLibre/Deck.gl VertiGCS console & nanobind Python SDK |
 | [`firmware/`](firmware/), [`px4_overlay/`](px4_overlay/) & [`ros2_ws/`](ros2_ws/) | STM32H753 HITL + Renode CAN-FD SIL, PX4 v1.16 overlays, ROS 2 Jazzy lock-free nodes & [`sim/`](sim/) |
-| [`docs/`](docs/) & [`artifacts/v4.0.0/`](artifacts/v4.0.0/) | [`SYSTEM_CARD.md`](docs/SYSTEM_CARD.md), [`SAFETY_CASE.md`](docs/SAFETY_CASE.md), [`MILESTONE_HISTORY.md`](docs/MILESTONE_HISTORY.md), [`docs/research/`](docs/research/) & sealed JSON proofs |
+| [`docs/`](docs/README.md) & [`artifacts/v4.0.0/`](artifacts/v4.0.0/) | [`Reading Guide`](docs/README.md), [`SYSTEM_CARD.md`](docs/SYSTEM_CARD.md), [`SAFETY_CASE.md`](docs/SAFETY_CASE.md), [`MILESTONE_HISTORY.md`](docs/MILESTONE_HISTORY.md), [`docs/research/`](docs/research/) & sealed JSON proofs |
 
 ---
 
 ## Known Limitations & Regulatory Note
 
 - **Open Hardware & SITL:** Physical STM32H753 on-silicon `DWT->CYCCNT` (`PENDING_PHYSICAL_STM32H7_HITL`) and local PX4 v1.16 + Gazebo Harmonic closed-loop SITL (`PENDING_LOCAL_PX4_GZ_SITL`) remain open.
-- **Whisper Negative Ablation:** BVI-LoRA fine-tuning degraded WER vs. Zero-Shot (13.1%–31.7% Zero-Shot retained as default).
-- **Real-Video Domain Shift:** Procedurally trained `WireSeg` triggers false positives on building roofline seams in the NASA Goddard footage (240/240 conservative 15 m/s cap), and bright oblique walls motivate a 3D normal veto (`|n_z| < 0.85`).
-- **Conformal Set Size & Edge GPU Bounds:** Qwen3-4B v3 conformal set size (`|C| = 7.80`) is root-caused in [`qwen3_v3_conformal_raps_diagnostic.json`](artifacts/v4.0.0/qwen3_v3_conformal_raps_diagnostic.json); TU116 Cruise VRAM delta (366 MiB) and WDDM p99 (13.36 ms) are logged verbatim. See [`OPTIONAL_G4_V1_1_BATCH_SPEC.md`](docs/research/OPTIONAL_G4_V1_1_BATCH_SPEC.md) for the v1.1 roadmap.
+- **Whisper BVI-LoRA Negative Ablation:** Aggressive 3-epoch BVI-LoRA degraded WER vs. Zero-Shot (`13.1%–31.7%` Zero-Shot `whisper-large-v3-turbo` retained as runtime default; see [`OPTIONAL_G4_V1_1_BATCH_SPEC.md`](docs/research/OPTIONAL_G4_V1_1_BATCH_SPEC.md) for optional low-LR replay fine-tuning).
+- **Manual-Registration External SLZ Corpus (`ICG Drone`):** While `AeroScapes` and `UAVScenes` (`300` frames across all `20` scenes) are evaluated zero-shot, `ICG Drone` requires manual academic portal registration and remains `PENDING_EVAL_ONLY_REAL_IMAGERY`.
+- **X8-240 Rigid-Body CEL CG Boundary & TU116 Cruise VRAM Soft-Gate:** Under collinear same-arm dual-motor loss, `X8-240` obeys a physical unactuated-axis CG authority boundary (`cg_u ∈ [-3.50, +1.00] cm` safe at `240 kg`, vs. orthogonal `cg_v ∈ [-5.0, +5.0] cm` 100% safe); on physical TU116 (`4 GB`), Terminal (`10.11 ms < 12 ms`, `148 MiB`) and Cruise (`14.13 ms < 25 ms`) latency gates pass while Cruise VRAM delta (`354 MiB`) exceeds the `300 MiB` soft budget.
 - **Regulatory Boundary:** VertiRTA is open-source software provided as-is under Apache-2.0 without warranty. References to ASTM F3269, DO-178C, EASA SC-VTOL, Part-IAM, Part-IS, SORA 2.5, and SHGM SHT-İHA describe architectural alignment rather than airworthiness certification; hardware qualification (G5) and certification lifecycle (G6) remain open in [`docs/SAFETY_CASE.md`](docs/SAFETY_CASE.md).
 
 ---

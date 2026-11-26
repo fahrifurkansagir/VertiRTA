@@ -1,0 +1,346 @@
+{
+  "schema_version": "vertirta.realworld_uavscenes_zeroshot_eval/v1.0.0",
+  "mode": "LIVE_LOCAL_CPU_ONNX_ZERO_SHOT_EVAL",
+  "timestamp_utc": "2026-11-26T09:09:30.356212+00:00",
+  "colab_cu_consumed": 0.0,
+  "gpu_vram_touched_mib": 0.0,
+  "ort_providers_active": [
+    "CPUExecutionProvider"
+  ],
+  "host_platform": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "python_version": "3.12.16",
+    "cpu_threads_used": 6
+  },
+  "quarantine_policy": {
+    "dataset": "UAVScenes",
+    "hf_repo": "sijieaaa/UAVScenes",
+    "license": "CC-BY-NC-SA-4.0 / CC-BY-SA-4.0 (QUARANTINED_ZERO_SHOT_EVAL_ONLY)",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "raw_pixels_deleted": true,
+    "cmap_verified_via_assert_uavscenes_cmap_ids": true,
+    "cmap_url": "https://raw.githubusercontent.com/sijieaaa/UAVScenes/main/cmap.py",
+    "cmap_sha256": "c036b09be966bd21d26fad767a1392c2358a5e2ca2e7454f3f219056a4a108f6",
+    "cmap_id_count": 26,
+    "raw_mask_id_min_observed": 0,
+    "raw_mask_id_max_observed": 25,
+    "quarantined_eval_entries": [
+      "UAVScenes"
+    ],
+    "zero_sharealike_in_training_verified": true
+  },
+  "archive_metadata": {
+    "rgb_archive_url": "https://huggingface.co/datasets/sijieaaa/UAVScenes/resolve/main/interval5_CAM_LIDAR.zip",
+    "label_archive_url": "https://huggingface.co/datasets/sijieaaa/UAVScenes/resolve/main/interval5_CAM_label.zip",
+    "ingestion_method": "selective_http_range_remotezip_ephemeral_zero_persistence",
+    "total_available_labeled_pairs": 24126,
+    "evaluated_images": 300,
+    "scenes_covered": 20,
+    "scene_sample_counts": {
+      "interval5_AMtown01": 15,
+      "interval5_AMtown02": 15,
+      "interval5_AMtown03": 15,
+      "interval5_AMvalley01": 15,
+      "interval5_AMvalley02": 15,
+      "interval5_AMvalley03": 15,
+      "interval5_HKairport01": 15,
+      "interval5_HKairport02": 15,
+      "interval5_HKairport03": 15,
+      "interval5_HKairport_GNSS01": 15,
+      "interval5_HKairport_GNSS02": 15,
+      "interval5_HKairport_GNSS03": 15,
+      "interval5_HKairport_GNSS_Evening": 15,
+      "interval5_HKisland01": 15,
+      "interval5_HKisland02": 15,
+      "interval5_HKisland03": 15,
+      "interval5_HKisland_GNSS01": 15,
+      "interval5_HKisland_GNSS02": 15,
+      "interval5_HKisland_GNSS03": 15,
+      "interval5_HKisland_GNSS_Evening": 15
+    },
+    "bytes_streamed_rgb_mb": 284.77,
+    "bytes_streamed_label_mb": 8.33,
+    "eval_resolution_hw": [
+      512,
+      512
+    ]
+  },
+  "model_frozen": {
+    "filename": "pidnet_slz_v21_local_gtx_opset17.onnx",
+    "path": "/var/tmp/vertirta_v400_blobs/pidnet_slz_v21_local_gtx_opset17.onnx",
+    "sha256": "a0b0b99b3f68288b5366245b3b3a711ed569479d4c26dfc44eb638e6f65679ff",
+    "calibration_file": "ood_calibration_v21_local_gtx.json",
+    "calibration_sha256": "59f9a262b4f3eba691b9348811e2d10511339373521912ac8d65feb07d34c832",
+    "safe_logit_bias_delta_applied_from_permissive_id_val": -0.271367
+  },
+  "cpu_latency_ms": {
+    "mean_ms": 76.68,
+    "p50_ms": 55.88,
+    "p95_ms": 196.05
+  },
+  "quarantined_zero_shot_uavscenes_raw": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.080773,
+      "Safe_Flat_Roof": 0.210963,
+      "Hazard_Obstacle_Structure": 0.000392,
+      "Hazard_Dynamic_Human_Vehicle": 0.020601,
+      "Hazard_Water_Vegetation": 0.7734
+    },
+    "miou_present_classes": 0.217226,
+    "num_present_classes": 5,
+    "pixel_accuracy": 0.760397,
+    "false_safe_rate_fsr": 0.172925,
+    "safe_precision": 0.264891,
+    "slz_f1": 0.335629,
+    "total_eval_pixels": 64675858,
+    "true_hazard_pixels": 56929035,
+    "false_safe_pixels": 9844428,
+    "confusion_matrix_5x5": [
+      [
+        982841,
+        1051808,
+        97081,
+        1408,
+        3831605
+      ],
+      [
+        121148,
+        1391575,
+        17153,
+        1395,
+        250809
+      ],
+      [
+        32485,
+        371640,
+        303,
+        5151,
+        225744
+      ],
+      [
+        24265,
+        60229,
+        116,
+        2466,
+        23785
+      ],
+      [
+        6025269,
+        3330540,
+        24003,
+        886,
+        46802153
+      ]
+    ],
+    "dataset": "UAVScenes",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "evaluated_images": 300
+  },
+  "quarantined_zero_shot_uavscenes_bias_calibrated": {
+    "per_class_iou": {
+      "Safe_Flat_Ground": 0.079446,
+      "Safe_Flat_Roof": 0.216219,
+      "Hazard_Obstacle_Structure": 0.000813,
+      "Hazard_Dynamic_Human_Vehicle": 0.025394,
+      "Hazard_Water_Vegetation": 0.807598
+    },
+    "miou_present_classes": 0.225894,
+    "num_present_classes": 5,
+    "pixel_accuracy": 0.794824,
+    "false_safe_rate_fsr": 0.12554,
+    "safe_precision": 0.292338,
+    "slz_f1": 0.330873,
+    "total_eval_pixels": 64675858,
+    "true_hazard_pixels": 56929035,
+    "false_safe_pixels": 7146885,
+    "confusion_matrix_5x5": [
+      [
+        818590,
+        851951,
+        124083,
+        1824,
+        4168295
+      ],
+      [
+        86515,
+        1195344,
+        40627,
+        1857,
+        457737
+      ],
+      [
+        21205,
+        300090,
+        680,
+        7317,
+        306031
+      ],
+      [
+        16083,
+        51666,
+        463,
+        3126,
+        39523
+      ],
+      [
+        4215243,
+        2542598,
+        35598,
+        1241,
+        49388171
+      ]
+    ],
+    "dataset": "UAVScenes",
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "evaluated_images": 300,
+    "safe_logit_bias_delta_applied_from_permissive_id_val": -0.271367
+  },
+  "per_scene_bias_calibrated": {
+    "interval5_AMtown01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.302255,
+      "false_safe_rate_fsr": 0.04642,
+      "safe_precision": 0.745954,
+      "num_present_classes": 5
+    },
+    "interval5_AMtown02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.334216,
+      "false_safe_rate_fsr": 0.039406,
+      "safe_precision": 0.79165,
+      "num_present_classes": 5
+    },
+    "interval5_AMtown03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.301584,
+      "false_safe_rate_fsr": 0.065948,
+      "safe_precision": 0.700821,
+      "num_present_classes": 5
+    },
+    "interval5_AMvalley01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.147796,
+      "false_safe_rate_fsr": 0.354963,
+      "safe_precision": 0.063036,
+      "num_present_classes": 5
+    },
+    "interval5_AMvalley02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.118158,
+      "false_safe_rate_fsr": 0.485044,
+      "safe_precision": 0.056531,
+      "num_present_classes": 5
+    },
+    "interval5_AMvalley03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.114971,
+      "false_safe_rate_fsr": 0.49247,
+      "safe_precision": 0.057271,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.235496,
+      "false_safe_rate_fsr": 0.023005,
+      "safe_precision": 0.677931,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.199463,
+      "false_safe_rate_fsr": 0.02464,
+      "safe_precision": 0.670277,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.216595,
+      "false_safe_rate_fsr": 0.034612,
+      "safe_precision": 0.655018,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport_GNSS01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.24473,
+      "false_safe_rate_fsr": 0.024459,
+      "safe_precision": 0.741504,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport_GNSS02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.21789,
+      "false_safe_rate_fsr": 0.016782,
+      "safe_precision": 0.78607,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport_GNSS03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.240453,
+      "false_safe_rate_fsr": 0.024778,
+      "safe_precision": 0.79669,
+      "num_present_classes": 5
+    },
+    "interval5_HKairport_GNSS_Evening": {
+      "n_samples": 15,
+      "miou_present_classes": 0.21523,
+      "false_safe_rate_fsr": 0.02681,
+      "safe_precision": 0.703748,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.217868,
+      "false_safe_rate_fsr": 0.059239,
+      "safe_precision": 0.152621,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.24261,
+      "false_safe_rate_fsr": 0.060893,
+      "safe_precision": 0.294038,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.252061,
+      "false_safe_rate_fsr": 0.050725,
+      "safe_precision": 0.363102,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland_GNSS01": {
+      "n_samples": 15,
+      "miou_present_classes": 0.223114,
+      "false_safe_rate_fsr": 0.05831,
+      "safe_precision": 0.228959,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland_GNSS02": {
+      "n_samples": 15,
+      "miou_present_classes": 0.237421,
+      "false_safe_rate_fsr": 0.049602,
+      "safe_precision": 0.311824,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland_GNSS03": {
+      "n_samples": 15,
+      "miou_present_classes": 0.225555,
+      "false_safe_rate_fsr": 0.067016,
+      "safe_precision": 0.262968,
+      "num_present_classes": 5
+    },
+    "interval5_HKisland_GNSS_Evening": {
+      "n_samples": 15,
+      "miou_present_classes": 0.21505,
+      "false_safe_rate_fsr": 0.110867,
+      "safe_precision": 0.13838,
+      "num_present_classes": 5
+    }
+  },
+  "wall_clock_s": 612.99,
+  "report_sha256": "b1a60ba64e54bf38810074affcc3bc445d1e6d1523003b55631d1835c54ce2e5"
+}

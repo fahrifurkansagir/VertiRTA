@@ -164,3 +164,152 @@ def test_m3_cli_gnss_spoof_sim_and_m3_demo(tmp_path: Path) -> None:
     assert demo_data["voice_mayday"]["decision"] == "EMERGENCY_PREEMPT"
     assert demo_data["forensics_e5x"]["ok"] is True
     assert Path(demo_data["files"]["e5x"]).is_file()
+
+
+def test_m3_voice_and_gnss_nan_fail_closed_and_cpp_python_parity() -> None:
+    """Verify Python fallback parity with C++ MondrianVoiceConformalGate and NaN fail-closed."""
+    voice_py = VertiMondrianVoiceGate()
+    voice_py._native = None
+    voice_active = VertiMondrianVoiceGate()
+
+    parity_cases = [
+        # S0_Clean + TR: lang_q_hat=0.42 overrides snr_q_hat=0.35 -> p_min=0.58 -> singleton EXECUTE_SINGLE
+        dict(
+            snr_db=20.0,
+            lang="TR",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.72, True), ("HOLD_LOITER", 0.25, True)],
+            soc_pct=50.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.0,
+        ),
+        # S1_Cruise + MIX: lang_q_hat=0.50 overrides snr_q_hat=0.45 + nospeech acoustic_penalty=0.10 -> p_min=0.40
+        dict(
+            snr_db=10.0,
+            lang="MIX",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.45, True), ("HOLD_LOITER", 0.42, True)],
+            soc_pct=50.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.40,
+        ),
+        # < 5% SoC with singleton |C| == 1 must EXECUTE_SINGLE (NOT LIVENESS_EMERGENCY_COMMIT)
+        dict(
+            snr_db=18.0,
+            lang="EN",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.85, True), ("HOLD_LOITER", 0.10, True)],
+            soc_pct=15.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.0,
+        ),
+        # < 5% SoC with |C| == 2 must LIVENESS_EMERGENCY_COMMIT
+        dict(
+            snr_db=10.0,
+            lang="EN",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.60, True), ("HOLD_LOITER", 0.56, True)],
+            soc_pct=15.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.0,
+        ),
+        # Non-empty Z3-SAT candidates but all below p_min (empty conformal set) -> ABSTAIN_HOLD_SAFE
+        dict(
+            snr_db=20.0,
+            lang="TR",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.20, True), ("HOLD_LOITER", 0.15, True)],
+            soc_pct=50.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.0,
+        ),
+        # S2_Hover multi-set clarification -> clarify_reason == "LOW_ASR"
+        dict(
+            snr_db=5.0,
+            lang="TR",
+            candidates=[("DIVERT_SLZ:Kartal_Sahil", 0.52, True), ("HOLD_LOITER", 0.44, True)],
+            soc_pct=50.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.0,
+            nospeech_prob=0.0,
+        ),
+        # MAYDAY preemption with no Z3-SAT candidates -> ABORT_RETURN:Kartal_Sahil
+        dict(
+            snr_db=-2.0,
+            lang="TR",
+            candidates=[("UNSAFE_MOVE", 0.90, False)],
+            soc_pct=50.0,
+            soc_reserve_floor_pct=12.0,
+            mayday_acoustic_weight=0.25,
+            nospeech_prob=0.80,
+        ),
+    ]
+
+    expected_decisions = [
+        "EXECUTE_SINGLE",
+        "REQUEST_CLARIFICATION",
+        "EXECUTE_SINGLE",
+        "LIVENESS_EMERGENCY_COMMIT",
+        "ABSTAIN_HOLD_SAFE",
+        "REQUEST_CLARIFICATION",
+        "EMERGENCY_PREEMPT",
+    ]
+
+    for case, exp_dec in zip(parity_cases, expected_decisions, strict=True):
+        r_py = voice_py.evaluate(**case)
+        assert r_py["decision"] == exp_dec, f"Python fallback mismatch for {case}: {r_py}"
+        if voice_active.backend == "cpp_nanobind":
+            r_cpp = voice_active.evaluate(**case)
+            assert r_py["decision"] == r_cpp["decision"]
+            assert r_py["stratum"] == r_cpp["stratum"]
+            assert r_py["lang"] == r_cpp["lang"]
+            assert r_py["conformal_set_size"] == r_cpp["conformal_set_size"]
+            assert r_py["selected_action_id"] == r_cpp["selected_action_id"]
+            assert r_py["clarify_reason"] == r_cpp["clarify_reason"]
+            assert r_py["effective_q_hat"] == pytest.approx(r_cpp["effective_q_hat"], abs=1e-5)
+            assert r_py["p_min_threshold"] == pytest.approx(r_cpp["p_min_threshold"], abs=1e-5)
+
+    # Check exact lang_q_hat & acoustic_penalty values explicitly
+    r_s0_tr = voice_py.evaluate(**parity_cases[0])
+    assert r_s0_tr["effective_q_hat"] == pytest.approx(0.42)
+    assert r_s0_tr["p_min_threshold"] == pytest.approx(0.58)
+    r_s1_mix = voice_py.evaluate(**parity_cases[1])
+    assert r_s1_mix["effective_q_hat"] == pytest.approx(0.50)
+    assert r_s1_mix["p_min_threshold"] == pytest.approx(0.40)
+
+    # NaN / Inf fail-closed on BOTH active backend and forced Python fallback
+    for gate in (voice_active, voice_py):
+        for kwargs in (
+            dict(snr_db=float("nan"), lang="TR", candidates=[("HOLD_LOITER", 0.9, True)]),
+            dict(snr_db=20.0, lang="EN", candidates=[("HOLD_LOITER", 0.9, True)], nospeech_prob=float("nan")),
+            dict(
+                snr_db=20.0,
+                lang="EN",
+                candidates=[("HOLD_LOITER", 0.9, True)],
+                mayday_acoustic_weight=float("nan"),
+            ),
+            dict(snr_db=20.0, lang="EN", candidates=[("HOLD_LOITER", 0.9, True)], soc_pct=float("nan")),
+            dict(snr_db=20.0, lang="EN", candidates=[("BAD", float("nan"), True)]),
+        ):
+            dec = gate.evaluate(**kwargs)
+            assert dec["decision"] == "ABSTAIN_HOLD_SAFE", f"Expected fail-closed abstain for {kwargs}: {dec}"
+            assert dec["selected_action_id"] == "HOLD_LOITER"
+
+    # Python fallback GNSS spoof guard & CTR inflation NaN fail-closed
+    gnss_py = VertiGnssDenied()
+    gnss_py._native = None
+    gnss_py.reset(2.0)
+    st_nan = gnss_py.step_spoof_guard_10hz(
+        stamp_ns=100_000_000,
+        gnss_pos_ned=(float("nan"), 0.0, -45.0),
+        gnss_vel_ned=(0.0, 12.0, 0.0),
+        vio_pos_ned=(0.0, 0.0, -45.0),
+        vio_vel_ned=(0.0, 12.0, 0.0),
+    )
+    assert st_nan["latched"] is True
+    assert st_nan["gnss_fused_allowed"] is False
+    assert st_nan["hypothesis"] == "H1_RF_JAMMING"
+
+    ctr_nan = gnss_py.propagate_and_evaluate_ctr(float("nan"), 12.0, (0.0, -500.0, -45.0), 57.0)
+    assert ctr_nan["nav_state"] == "DETERMINISTIC_VISUAL_SLZ_ABORT"
+    assert ctr_nan["visual_slz_abort_latched"] is True

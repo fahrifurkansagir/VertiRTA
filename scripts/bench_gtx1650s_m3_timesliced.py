@@ -58,6 +58,7 @@ MODEL_SPECS: tuple[dict[str, Any], ...] = (
         "key": "pidnet_slz_v21",
         "filename": "pidnet_slz_v21_opset17.onnx",
         "manifest_json": "g4_pidnet_v21_xfeat_metrics.json",
+        "manifest_export_section": "onnx_exports",
         "manifest_export_key": "pidnet_slz_v21",
         "input_name": "rgb_nchw",
         "input_shape": (1, 3, 512, 512),
@@ -67,6 +68,7 @@ MODEL_SPECS: tuple[dict[str, Any], ...] = (
         "key": "mlsd_wireseg",
         "filename": "mlsd_wireseg_640_opset17.onnx",
         "manifest_json": "g4_forward_wire_metrics.json",
+        "manifest_export_section": "onnx_exports",
         "manifest_export_key": "mlsd_wireseg",
         "input_name": "rgb_split_nchw",
         "input_shape": (1, 3, 640, 640),
@@ -76,6 +78,7 @@ MODEL_SPECS: tuple[dict[str, Any], ...] = (
         "key": "dfine_n",
         "filename": "dfine_n_640_opset17.onnx",
         "manifest_json": "g4_forward_wire_metrics.json",
+        "manifest_export_section": "onnx_exports",
         "manifest_export_key": "dfine_n",
         "input_name": "rgb_split_nchw",
         "input_shape": (1, 3, 640, 640),
@@ -85,12 +88,144 @@ MODEL_SPECS: tuple[dict[str, Any], ...] = (
         "key": "xfeat_512",
         "filename": "xfeat_512_opset17.onnx",
         "manifest_json": "g4_pidnet_v21_xfeat_metrics.json",
+        "manifest_export_section": "onnx_exports",
         "manifest_export_key": "xfeat_512",
         "input_name": "gray_nchw",
         "input_shape": (1, 1, 512, 512),
         "phase": "cruise_1hz",
     },
 )
+
+LOCAL_GTX_V11_MODEL_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "key": "pidnet_slz_v21",
+        "filename": "pidnet_slz_v21_local_gtx_opset17.onnx",
+        "manifest_json": "local_gtx1650s_pidnet_v21_recovery_metrics.json",
+        "manifest_export_section": "onnx_export",
+        "manifest_export_key": "pidnet_slz_v21",
+        "input_name": "rgb_nchw",
+        "input_shape": (1, 3, 512, 512),
+        "phase": "terminal",
+    },
+    {
+        "key": "mlsd_wireseg",
+        "filename": "mlsd_wireseg_640_v11_local_gtx_opset17.onnx",
+        "manifest_json": "local_gtx1650s_forward_wire_v2_metrics.json",
+        "manifest_export_section": "onnx_exports",
+        "manifest_export_key": "mlsd_wireseg",
+        "input_name": "rgb_split_nchw",
+        "input_shape": (1, 3, 640, 640),
+        "phase": "cruise",
+    },
+    {
+        "key": "dfine_n",
+        "filename": "dfine_n_640_v11_local_gtx_opset17.onnx",
+        "manifest_json": "local_gtx1650s_forward_wire_v2_metrics.json",
+        "manifest_export_section": "onnx_exports",
+        "manifest_export_key": "dfine_n",
+        "input_name": "rgb_split_nchw",
+        "input_shape": (1, 3, 640, 640),
+        "phase": "cruise",
+    },
+    {
+        "key": "xfeat_512",
+        "filename": "xfeat_512_opset17.onnx",
+        "manifest_json": "g4_pidnet_v21_xfeat_metrics.json",
+        "manifest_export_section": "onnx_exports",
+        "manifest_export_key": "xfeat_512",
+        "input_name": "gray_nchw",
+        "input_shape": (1, 1, 512, 512),
+        "phase": "cruise_1hz",
+    },
+)
+
+MODEL_PROFILES: dict[str, tuple[dict[str, Any], ...]] = {
+    "g4": MODEL_SPECS,
+    "local_gtx_v11": LOCAL_GTX_V11_MODEL_SPECS,
+}
+
+
+def get_model_specs(model_profile: str = "g4") -> tuple[dict[str, Any], ...]:
+    """Return the 4-model manifest specification for the requested profile."""
+    if model_profile not in MODEL_PROFILES:
+        raise ValueError(f"Unknown model_profile={model_profile!r}; expected one of {sorted(MODEL_PROFILES)}")
+    return MODEL_PROFILES[model_profile]
+
+
+def _sanitize_model_path(path: Path) -> str:
+    """Return a clean /var/tmp or basename path with zero Windows drive or personal paths."""
+    s = path.as_posix()
+    if s.startswith("/var/tmp/"):
+        return s
+    return path.name
+
+
+def _preload_linux_nvidia_libs() -> None:
+    """Preload pip-installed NVIDIA shared libs globally on Linux/WSL2 for ORT CUDA EP."""
+    if platform.system() != "Linux":
+        return
+    import ctypes
+
+    roots: list[Path] = []
+    try:
+        import nvidia  # type: ignore[import-not-found]
+
+        for p in getattr(nvidia, "__path__", []):
+            roots.append(Path(p))
+    except ImportError:
+        pass
+    for sp in sys.path:
+        nv = Path(sp) / "nvidia"
+        if nv.is_dir():
+            roots.append(nv)
+
+    priority_prefixes = (
+        "libcudart",
+        "libnvrtc",
+        "libnvJitLink",
+        "libcublasLt",
+        "libcublas",
+        "libcufft",
+        "libcurand",
+        "libcusparse",
+        "libcusolver",
+        "libcudnn",
+    )
+    candidates: list[Path] = []
+    for nv_root in roots:
+        if not nv_root.is_dir():
+            continue
+        for sub in sorted(nv_root.iterdir()):
+            lib_dir = sub / "lib"
+            if not lib_dir.is_dir():
+                continue
+            for so in sorted(lib_dir.glob("*.so*")):
+                if so.is_file():
+                    candidates.append(so)
+
+    def _sort_key(p: Path) -> tuple[int, str]:
+        for idx, pref in enumerate(priority_prefixes):
+            if p.name.startswith(pref):
+                return (idx, p.name)
+        return (len(priority_prefixes), p.name)
+
+    loaded: set[str] = set()
+    for so in sorted(candidates, key=_sort_key):
+        key = str(so)
+        if key in loaded:
+            continue
+        try:
+            ctypes.CDLL(key, mode=ctypes.RTLD_GLOBAL)
+            loaded.add(key)
+        except OSError:
+            pass
+    try:
+        import onnxruntime as ort
+
+        if hasattr(ort, "preload_dlls"):
+            ort.preload_dlls()
+    except Exception:
+        pass
 
 
 def select_platform_cuda_provider_options(
@@ -114,10 +249,16 @@ def select_platform_cuda_provider_options(
     }
 
 
-def verify_onnx_sha256_parity(blob_dir: Path, artifacts_dir: Path) -> dict[str, dict[str, Any]]:
-    """Fail-closed SHA-256 verification of all 4 ONNX binaries against G4 manifests."""
+def verify_onnx_sha256_parity(
+    blob_dir: Path,
+    artifacts_dir: Path,
+    *,
+    model_profile: str = "g4",
+) -> dict[str, dict[str, Any]]:
+    """Fail-closed SHA-256 verification of all 4 ONNX binaries against canonical manifests."""
+    specs = get_model_specs(model_profile)
     verified: dict[str, dict[str, Any]] = {}
-    for spec in MODEL_SPECS:
+    for spec in specs:
         onnx_path = blob_dir / spec["filename"]
         if not onnx_path.is_file():
             raise FileNotFoundError(f"Missing ONNX binary: {onnx_path}")
@@ -125,16 +266,21 @@ def verify_onnx_sha256_parity(blob_dir: Path, artifacts_dir: Path) -> dict[str, 
 
         manifest_path = artifacts_dir / spec["manifest_json"]
         if not manifest_path.is_file():
-            raise FileNotFoundError(f"Missing G4 manifest JSON: {manifest_path}")
+            raise FileNotFoundError(f"Missing manifest JSON: {manifest_path}")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        expected_sha = manifest["onnx_exports"][spec["manifest_export_key"]]["sha256"]
+        section = spec.get("manifest_export_section", "onnx_exports")
+        if section == "onnx_export":
+            expected_sha = manifest["onnx_export"]["sha256"]
+        else:
+            expected_sha = manifest[section][spec["manifest_export_key"]]["sha256"]
         if actual_sha != expected_sha:
             raise ValueError(
                 f"SHA-256 mismatch for {spec['filename']}: actual={actual_sha} != expected={expected_sha}"
             )
         verified[spec["key"]] = {
-            "path": str(onnx_path),
+            "path": _sanitize_model_path(onnx_path),
             "filename": spec["filename"],
+            "manifest_json": spec["manifest_json"],
             "sha256": actual_sha,
             "sha256_verified": True,
             "size_bytes": onnx_path.stat().st_size,
@@ -219,8 +365,31 @@ def _run_timed_session(
     return _summarize_ms(samples_ms), outputs_finite
 
 
+def _query_cuda_mem_safe() -> tuple[float, float] | None:
+    """Query CUDA free/total MiB via shared helper with Linux RTLD_GLOBAL cudart fallback."""
+    res = _query_cuda_mem_get_info_mib()
+    if res is not None:
+        return res
+    if platform.system() == "Linux":
+        import ctypes
+
+        try:
+            proc_lib = ctypes.CDLL(None)
+            fn = getattr(proc_lib, "cudaMemGetInfo", None)
+            if fn is not None:
+                free_b = ctypes.c_size_t(0)
+                total_b = ctypes.c_size_t(0)
+                if fn(ctypes.byref(free_b), ctypes.byref(total_b)) == 0:
+                    mib = 1024.0 * 1024.0
+                    return (free_b.value / mib, total_b.value / mib)
+        except Exception:
+            pass
+    return None
+
+
 def _run_phase_b_timesliced(
     verified: dict[str, dict[str, Any]],
+    blob_dir: Path,
     *,
     use_cuda: bool,
     warmup: int,
@@ -229,26 +398,26 @@ def _run_phase_b_timesliced(
     rng: np.random.Generator,
 ) -> dict[str, Any]:
     """Execute Phase B single-context flight-phase time-slicing (Cruise -> Evict -> Terminal)."""
-    mem_before = _query_cuda_mem_get_info_mib() if use_cuda else None
+    mem_before = _query_cuda_mem_safe() if use_cuda else None
     pid = os.getpid()
 
     # 1) Cruise Phase: M-LSD-WireSeg + D-FINE-N @ 30 Hz + XFeat @ 1 Hz (1/30 frames)
     #    Use max_workspace_override=False for the 3 lightweight Cruise models so cuDNN does not
     #    allocate 3x redundant max workspaces simultaneously, and run proper warmup + IoBinding.
     sess_wire = _make_ort_session(
-        Path(verified["mlsd_wireseg"]["path"]),
+        blob_dir / verified["mlsd_wireseg"]["filename"],
         use_cuda=use_cuda,
         cuda_graph=bool(use_cuda and cruise_use_cg.get("mlsd_wireseg", False)),
         max_workspace_override=False if use_cuda else None,
     )
     sess_dfine = _make_ort_session(
-        Path(verified["dfine_n"]["path"]),
+        blob_dir / verified["dfine_n"]["filename"],
         use_cuda=use_cuda,
         cuda_graph=bool(use_cuda and cruise_use_cg.get("dfine_n", True)),
         max_workspace_override=False if use_cuda else None,
     )
     sess_xfeat = _make_ort_session(
-        Path(verified["xfeat_512"]["path"]),
+        blob_dir / verified["xfeat_512"]["filename"],
         use_cuda=use_cuda,
         cuda_graph=bool(use_cuda and cruise_use_cg.get("xfeat_512", True)),
         max_workspace_override=False if use_cuda else None,
@@ -323,7 +492,7 @@ def _run_phase_b_timesliced(
 
     cruise_vram_delta = 0.0
     if use_cuda and mem_before is not None:
-        mem_c = _query_cuda_mem_get_info_mib()
+        mem_c = _query_cuda_mem_safe()
         if mem_c is not None:
             cruise_vram_delta = max(0.0, mem_before[0] - mem_c[0])
     cruise_proc_vram = _query_process_vram_mib(pid) if use_cuda else 0.0
@@ -333,13 +502,17 @@ def _run_phase_b_timesliced(
     gc.collect()
 
     # 2) Terminal Approach Phase: PIDNet-S v2.1 (512x512) inside same CUDA context
-    sess_pidnet = _make_ort_session(Path(verified["pidnet_slz_v21"]["path"]), use_cuda=use_cuda, cuda_graph=use_cuda)
+    sess_pidnet = _make_ort_session(
+        blob_dir / verified["pidnet_slz_v21"]["filename"],
+        use_cuda=use_cuda,
+        cuda_graph=use_cuda,
+    )
     term_stats, term_finite = _run_timed_session(
         sess_pidnet, "rgb_nchw", (1, 3, 512, 512), warmup=warmup, iters=iters, use_cuda=use_cuda, rng=rng
     )
     term_vram_delta = 0.0
     if use_cuda and mem_before is not None:
-        mem_t = _query_cuda_mem_get_info_mib()
+        mem_t = _query_cuda_mem_safe()
         if mem_t is not None:
             term_vram_delta = max(0.0, mem_before[0] - mem_t[0])
     term_proc_vram = _query_process_vram_mib(pid) if use_cuda else 0.0
@@ -377,8 +550,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     use_cuda = not args.smoke_cpu
     if use_cuda:
         _register_nvidia_dll_dirs()
+        _preload_linux_nvidia_libs()
 
-    verified = verify_onnx_sha256_parity(args.blob_dir, args.artifacts_dir)
+    model_profile = getattr(args, "model_profile", "g4")
+    specs = get_model_specs(model_profile)
+    verified = verify_onnx_sha256_parity(args.blob_dir, args.artifacts_dir, model_profile=model_profile)
     rng = np.random.default_rng(20261124)
     warmup = 2 if args.smoke_cpu else int(args.warmup)
     iters = 5 if args.smoke_cpu else int(args.iters)
@@ -387,6 +563,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         cg_map = json.loads(args.cruise_cg_json) if getattr(args, "cruise_cg_json", "") else {}
         phase_b = _run_phase_b_timesliced(
             verified,
+            args.blob_dir,
             use_cuda=use_cuda,
             warmup=warmup,
             iters=iters,
@@ -401,8 +578,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     all_finite = True
     fp16_tmp_dir = args.blob_dir / "_fp16_bench_tmp"
     try:
-        for spec in MODEL_SPECS:
-            onnx_path = Path(verified[spec["key"]]["path"])
+        for spec in specs:
+            onnx_path = args.blob_dir / verified[spec["key"]]["filename"]
             sess_fp32 = _make_ort_session(onnx_path, use_cuda=use_cuda, cuda_graph=False)
             fp32_stats, fin32 = _run_timed_session(
                 sess_fp32, spec["input_name"], spec["input_shape"], warmup=warmup, iters=iters, use_cuda=use_cuda, rng=rng
@@ -476,6 +653,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.artifacts_dir),
                     "--out-json",
                     str(phase_b_tmp),
+                    "--model-profile",
+                    str(model_profile),
                     "--warmup",
                     str(warmup),
                     "--iters",
@@ -493,6 +672,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     else:
         phase_b = _run_phase_b_timesliced(
             verified,
+            args.blob_dir,
             use_cuda=False,
             warmup=warmup,
             iters=iters,
@@ -508,6 +688,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
 
     payload = {
         "schema_version": "vertirta.local_gtx1650s_m3_timesliced_proof/v4.0.0",
+        "model_profile": str(model_profile),
         "mode": "SMOKE_CPU_ONLY" if args.smoke_cpu else "LIVE_TU116_CUDA_TIMESLICED",
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "host_os": f"{platform.system()} {platform.release()} ({platform.machine()})",
@@ -548,6 +729,13 @@ def main() -> int:
     parser.add_argument("--blob-dir", type=Path, required=True)
     parser.add_argument("--artifacts-dir", type=Path, required=True)
     parser.add_argument("--out-json", type=Path, required=True)
+    parser.add_argument(
+        "--model-profile",
+        type=str,
+        default="g4",
+        choices=sorted(MODEL_PROFILES.keys()),
+        help="Model manifest profile: 'g4' (legacy G4 exports) or 'local_gtx_v11' (recovered local GTX models).",
+    )
     parser.add_argument("--warmup", type=int, default=200)
     parser.add_argument("--iters", type=int, default=500)
     parser.add_argument("--phase-b-only", action="store_true", help=argparse.SUPPRESS)

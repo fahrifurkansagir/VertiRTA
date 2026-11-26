@@ -18,6 +18,11 @@ Qwen3-4B v2 + GBNF + Z3 + NLL ($\tau=0.5066$) & \textbf{100.00} & 91.96 & 75.00 
 \midrule
 Qwen3-4B v3 Lang-Mondrian (v2 bench, 3-seed, $N_{\text{cal}}=2000$) & 100.00 & 82.83 $\pm$ 0.71 & 59.80 & 96.00 & 0.1744 & 7.803 & 0.00 \\
 Qwen3-4B v3 SNR-Mondrian (v2 bench, 3-seed, $N_{\text{cal}}=2000$) & 100.00 & 82.83 $\pm$ 0.71 & 59.80 & 95.25 & 0.1744 & 7.601 & 0.00 \\
+\midrule
+Qwen3-4B v3 Lang-APS (0\,CU exact-tree, per-grp $\tau_g$, seed0) & 100.00 & 83.42 & \text{--} & 96.00 & \textbf{0.0321} & 3.486 & 28.50 \\
+Qwen3-4B v3 SNR-APS (0\,CU exact-tree, per-grp $\tau_g$, seed0) & 100.00 & 83.42 & \text{--} & 95.08 & 0.0743 & 2.347 & 40.00 \\
+Qwen3-4B v3 Lang-LAC (0\,CU exact-tree, $\gamma=0$, seed0) & 100.00 & 83.42 & \text{--} & 96.08 & 0.0554 & 2.502 & 40.00 \\
+Qwen3-4B v3 SNR-LAC (0\,CU exact-tree, $\gamma=0$, seed0) & 100.00 & 83.42 & \text{--} & 95.58 & 0.0554 & \textbf{2.058} & \textbf{45.50} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -41,7 +46,7 @@ Stratum & SNR Band (dB) & $n_g$ (Cal) & ZS WER (\%) & LoRA WER (\%) & Guard Mode
 
 \begin{table*}[t]
 \centering
-\caption{Zero-ShareAlike Active Visual SLZ Distillation, Honest G4 Epoch-2 Collapse vs.\ Local 0\,CU Recovery, Quarantined Real-Imagery Zero-Shot Transfer (AeroScapes; ICG Drone \& UAVScenes unrun), Physical TU116 Edge Latency (GTX~1650~SUPER, 4\,GB), and XFeat+RANSAC 3-Gate Pass Rate (36 coastal 0.5\,m tiles, 0.218\,m CEP50).}
+\caption{Zero-ShareAlike Active Visual SLZ Distillation, Honest G4 Epoch-2 Collapse vs.\ Local 0\,CU Recovery, Quarantined Real-Imagery Zero-Shot Transfer (AeroScapes \& UAVScenes; ICG Drone unrun), Physical TU116 Edge Latency (GTX~1650~SUPER, 4\,GB), and XFeat+RANSAC 3-Gate Pass Rate (36 coastal 0.5\,m tiles, 0.218\,m CEP50).}
 \label{tab:corl_slz_transfer}
 \setlength{\tabcolsep}{3.6pt}
 \begin{tabular}{lcccccccc}
@@ -51,7 +56,7 @@ Model Variant & Val mIoU & Val FSR (\%) & Aero. mIoU & Aero. FSR (\%) & ICG / UA
 PIDNet-S v1 (3-src, L4) & 0.3764 & 21.11 & 0.3395 & 18.44 & \text{--} / \text{--} & 8.67 / 14.20 & 126.0 & \text{--} \\
 PIDNet-S v2 (+SkyScenes, FSR-gate) & 0.4848 & 4.03 & 0.2387 & 1.95 & \text{--} / \text{--} & 8.89 / \textbf{11.70} & 155.0 & \text{--} \\
 PIDNet-S v2.1 (G4 Ep.2 collapsed, ablation) & 0.1696 & 0.90 & 0.1616 & 0.45 & \text{--} / \text{--} & \text{--} / \text{--} & \text{--} & \text{--} \\
-PIDNet-S v2.1 (Local 0\,CU rec., $\delta=-0.271$) & 0.4669 & \textbf{2.81} & 0.2468 & 3.43 & \text{--} (\text{--}\%) / \text{--} (\text{--}\%) & 10.02 / 13.36 & 164.0 & 100.00 \\
+PIDNet-S v2.1 (Local 0\,CU rec., $\delta=-0.271$) & 0.4669 & \textbf{2.81} & 0.2468 & 3.43 & \text{--} (\text{--}\%) / 0.2259 (12.55\%) & 8.67 / 10.11 & 148.0 & 100.00 \\
 \bottomrule
 \end{tabular}
 \end{table*}

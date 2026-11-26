@@ -121,25 +121,29 @@ function stepFallbackIntoBuffer(ticks400Hz: number, buf: ArrayBuffer): void {
   view.setUint32(252, crc32c(new Uint8Array(buf, 0, 252)), true);
 }
 
+declare const __VERTIRTA_HAS_WASM__: boolean | undefined;
+
 async function initWasmIfPresent(): Promise<void> {
-  try {
-    const modUrl = resolveWasmModuleUrl(
-      import.meta.env.BASE_URL || "./",
-      Boolean(import.meta.env.DEV),
-      self.location.href
-    );
-    const loaded = await import(/* @vite-ignore */ modUrl);
-    const factory = loaded.default;
-    if (typeof factory === "function") {
-      const instance = (await factory()) as WasmExports;
-      if (instance._vertirta_init(40.8860, 29.1880, 12.0, 36.7) === 0) {
-        wasmMod = instance;
-        self.postMessage({ type: "status", detail: "WASM active: libvertirta_flight_core.wasm (single-threaded Worker)" });
-        return;
+  if (typeof __VERTIRTA_HAS_WASM__ === "undefined" || __VERTIRTA_HAS_WASM__) {
+    try {
+      const modUrl = resolveWasmModuleUrl(
+        import.meta.env.BASE_URL || "./",
+        Boolean(import.meta.env.DEV),
+        self.location.href
+      );
+      const loaded = await import(/* @vite-ignore */ modUrl);
+      const factory = loaded.default;
+      if (typeof factory === "function") {
+        const instance = (await factory()) as WasmExports;
+        if (instance._vertirta_init(40.8860, 29.1880, 12.0, 36.7) === 0) {
+          wasmMod = instance;
+          self.postMessage({ type: "status", detail: "WASM active: libvertirta_flight_core.wasm (single-threaded Worker)" });
+          return;
+        }
       }
+    } catch {
+      // Fallback mode stays active when optional Emscripten artifact is absent
     }
-  } catch {
-    // Fallback mode stays active when optional Emscripten artifact is absent
   }
   resetFallback();
   self.postMessage({ type: "status", detail: "Sandbox Worker active (deterministic TS kinematic fallback; build wasm/build_wasm.sh for native C++ WASM)" });

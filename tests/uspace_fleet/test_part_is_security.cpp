@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 
 #include "vertirta/uspace/part_is_security.hpp"
 
@@ -69,4 +70,88 @@ TEST_CASE("Mode B crypto and CyberResilienceFsm isolate spoofed peers and quaran
   const auto rtb_act = fsm.step_time(/*t_s=*/20.0, /*ussp_auth_restored=*/false);  // 10.0 s elapsed == RTO
   REQUIRE(fsm.state() == CyberState::SEC_AUTONOMOUS_RTB);
   REQUIRE(rtb_act.divert_to_nearest_fato_emg);
+}
+
+TEST_CASE("Part-IS Mode-B rejects signature downgrade attacks and CyberResilienceFsm fails closed on NaN/Inf") {
+  const double qnan = std::numeric_limits<double>::quiet_NaN();
+  const double pinf = std::numeric_limits<double>::infinity();
+  const double ninf = -std::numeric_limits<double>::infinity();
+
+  // 1. Mode-B Priority-0 signature downgrade MUST be rejected by header.flags_and_mode & 0x02U check!
+  PartIsCryptoContext ctx(/*key_epoch=*/1U);
+  uint8_t payload[64]{0x42U, 0x11U, 0x99U};
+  SecuredPacket p0_pkt{};
+  REQUIRE(ctx.seal_mode_b_priority0_signed(
+      payload, sizeof(payload), /*nonce=*/10ULL, /*tai_ns=*/2'000'000'000ULL, p0_pkt));
+  REQUIRE((p0_pkt.header.flags_and_mode & 0x02U) != 0U);
+  REQUIRE(p0_pkt.has_ed25519_sig);
+
+  // Attack A: strip unauthenticated bool has_ed25519_sig=false + corrupt signature bytes.
+  SecuredPacket stripped_sig = p0_pkt;
+  stripped_sig.ed25519_sig[0] ^= 0xFFU;
+  stripped_sig.has_ed25519_sig = false;
+  REQUIRE_FALSE(ctx.verify_mode_b(stripped_sig, /*now_tai_ns=*/2'000'000'000ULL));
+
+  // Attack B: tamper flags_and_mode to clear bit 0x02U (AAD mismatch rejects).
+  SecuredPacket cleared_flag = p0_pkt;
+  cleared_flag.header.flags_and_mode &= ~0x02U;
+  cleared_flag.has_ed25519_sig = false;
+  REQUIRE_FALSE(ctx.verify_mode_b(cleared_flag, /*now_tai_ns=*/2'000'000'000ULL));
+
+  // Attack C: tamper Ed25519 signature while leaving has_ed25519_sig=true.
+  SecuredPacket bad_sig = p0_pkt;
+  bad_sig.ed25519_sig[15] ^= 0x01U;
+  REQUIRE_FALSE(ctx.verify_mode_b(bad_sig, /*now_tai_ns=*/2'000'000'000ULL));
+
+  // Attack D: set has_ed25519_sig=true on an unsigned V2V packet (header bit 0x02U == 0).
+  SecuredPacket v2v_pkt{};
+  REQUIRE(ctx.seal_mode_b_v2v(
+      payload, sizeof(payload), /*nonce=*/11ULL, /*tai_ns=*/2'010'000'000ULL, v2v_pkt));
+  SecuredPacket forged_flag_bool = v2v_pkt;
+  forged_flag_bool.has_ed25519_sig = true;
+  REQUIRE_FALSE(ctx.verify_mode_b(forged_flag_bool, /*now_tai_ns=*/2'010'000'000ULL));
+
+  // Original unmodified packets still verify cleanly (replay window was NOT polluted by rejected attacks).
+  REQUIRE(ctx.verify_mode_b(p0_pkt, /*now_tai_ns=*/2'000'000'000ULL));
+  REQUIRE(ctx.verify_mode_b(v2v_pkt, /*now_tai_ns=*/2'010'000'000ULL));
+
+  // 2. Peer Mahalanobis anomaly gate MUST fail closed on NaN / +Inf / -Inf / negative sigma.
+  for (const double bad_sigma : {qnan, pinf, ninf, -1.0}) {
+    CyberResilienceFsm fsm{};
+    const auto act = fsm.on_peer_kinematic_anomaly(/*peer_id=*/42U, bad_sigma);
+    REQUIRE(fsm.state() == CyberState::SEC_SUSPECT_PEER);
+    REQUIRE(act.demote_to_non_cooperative);
+    REQUIRE(act.strip_priority0_rights);
+  }
+
+  // 3. USSP command check MUST quarantine fail-closed on NaN / Inf lon, AGL, or timestamp.
+  struct BadUsspCase {
+    double lon;
+    double agl;
+    double t;
+  };
+  const BadUsspCase bad_ussp_cases[] = {
+      {qnan, 60.0, 10.0},
+      {pinf, 60.0, 10.0},
+      {ninf, 60.0, 10.0},
+      {29.1500, qnan, 10.0},
+      {29.1500, pinf, 10.0},
+      {29.1500, ninf, 10.0},
+      {29.1500, 60.0, qnan},
+  };
+  for (const auto& tc : bad_ussp_cases) {
+    CyberResilienceFsm fsm{};
+    const auto act = fsm.on_ussp_command_check(/*sig_valid=*/true, tc.lon, tc.agl, tc.t);
+    REQUIRE(fsm.state() == CyberState::SEC_USSP_QUARANTINE);
+    REQUIRE(act.drop_ussp_directives);
+    REQUIRE(act.emit_is_or_230_draft);
+  }
+
+  // 4. Non-finite t_s in step_time while quarantined MUST NOT clear quarantine; escalates fail-closed to RTB.
+  CyberResilienceFsm fsm{};
+  (void)fsm.on_ussp_command_check(/*sig_valid=*/false, 29.1500, 60.0, 10.0);
+  REQUIRE(fsm.state() == CyberState::SEC_USSP_QUARANTINE);
+  const auto rtb_nan = fsm.step_time(qnan, /*ussp_auth_restored=*/true);
+  REQUIRE(fsm.state() == CyberState::SEC_AUTONOMOUS_RTB);
+  REQUIRE(rtb_nan.divert_to_nearest_fato_emg);
 }

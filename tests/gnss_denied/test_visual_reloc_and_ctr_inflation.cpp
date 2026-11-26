@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "vertirta/core/geodesy.hpp"
 #include "vertirta/gnss_denied/ctr_inflation_fsm.hpp"
@@ -237,4 +238,73 @@ TEST_CASE("CtrInflationFsm enforces verified DHMI AIP LTBX 40d59m26sN, exact dh/
   REQUIRE(saw_bounded);
   REQUIRE(saw_caution);
   REQUIRE(saw_abort);
+}
+
+TEST_CASE("CtrInflationFsm and VisualGeoRelocAdapter fail closed on NaN/Inf/non-PSD covariance instead of emitting 0 hazards",
+          "[gnss_denied][ctr_inflation][safety_hardening]") {
+  const double qnan = std::numeric_limits<double>::quiet_NaN();
+  const double pinf = std::numeric_limits<double>::infinity();
+
+  const vertirta::core::GeodeticWgs84 near_j2{
+      40.9050, 29.1920, vertirta::core::amsl_to_hae(52.0, 40.9050, 29.1920)};
+  const vertirta::core::Vec3Ned pos_near_j2 =
+      vertirta::core::enu_to_ned(vertirta::core::geodetic_to_local_enu(near_j2, vertirta::core::kKartalDatum));
+
+  // 1. CtrInflationFsm::apply_reloc_update MUST reject NaN/Inf/negative/non-PSD cov and preserve CTR hazards!
+  CtrInflationFsm fsm{};
+  fsm.reset(12.0);
+  fsm.propagate_open_loop(1.0, 18.0);
+  const Cov2D saved_cov = fsm.covariance();
+  const double saved_dist = fsm.open_loop_distance_m();
+  REQUIRE(saved_dist > 0.0);
+
+  const Cov2D invalid_covs[] = {
+      Cov2D{qnan, 0.0, 16.0},
+      Cov2D{16.0, qnan, 16.0},
+      Cov2D{16.0, 0.0, qnan},
+      Cov2D{pinf, 0.0, pinf},
+      Cov2D{-4.0, 0.0, 16.0},
+      Cov2D{1.0, 5.0, 1.0},  // det = -24 < 0 (non-PSD)
+  };
+  for (const Cov2D& bad_cov : invalid_covs) {
+    fsm.apply_reloc_update(bad_cov);
+    REQUIRE(fsm.covariance().p_nn == Approx(saved_cov.p_nn));
+    REQUIRE(fsm.covariance().p_ne == Approx(saved_cov.p_ne));
+    REQUIRE(fsm.covariance().p_ee == Approx(saved_cov.p_ee));
+    REQUIRE(fsm.open_loop_distance_m() == Approx(saved_dist));
+
+    std::array<vertirta::rta::HazardPoint, 2> hazards{};
+    const auto st = fsm.evaluate_and_build_hazards(0.1, pos_near_j2, 52.0, hazards);
+    REQUIRE(st.emitted_ctr_hazards >= 1u);
+    REQUIRE(std::isfinite(st.sigma_pos_m));
+    REQUIRE(std::isfinite(st.ltfj_delta_r_m));
+    REQUIRE(st.ltfj_delta_r_m > 3.0 * 12.0);
+  }
+
+  // 2. CtrInflationFsm::reset(NaN) and non-finite pose latch kDeterministicVisualSlzAbort fail-closed.
+  fsm.reset(qnan);
+  std::array<vertirta::rta::HazardPoint, 2> abort_hazards{};
+  const auto st_nan_reset = fsm.evaluate_and_build_hazards(0.1, pos_near_j2, 52.0, abort_hazards);
+  REQUIRE(st_nan_reset.visual_slz_abort_latched);
+  REQUIRE(st_nan_reset.nav_state == GnssDeniedNavState::kDeterministicVisualSlzAbort);
+  REQUIRE(st_nan_reset.emitted_ctr_hazards >= 1u);
+
+  fsm.reset(5.0);
+  const auto st_nan_pos = fsm.evaluate_and_build_hazards(0.1, {qnan, 0.0, -40.0}, 52.0, abort_hazards);
+  REQUIRE(st_nan_pos.visual_slz_abort_latched);
+  REQUIRE(st_nan_pos.nav_state == GnssDeniedNavState::kDeterministicVisualSlzAbort);
+
+  // 3. VisualGeoRelocAdapter rejects non-finite prior_cov cleanly with kInvalidInput.
+  VisualGeoRelocAdapter reloc{};
+  VisualMatchObservation obs{};
+  obs.matched_geo = near_j2;
+  obs.ransac_inliers = 48u;
+  obs.reproj_rmse_px = 1.2;
+  obs.convex_hull_ratio = 0.50;
+  obs.map_tier = OrthoMapTier::kLocalHighResOrtho05m;
+  obs.valid = true;
+
+  const auto bad_prior = reloc.fuse_observation(pos_near_j2, Cov2D{qnan, 0.0, 25.0}, obs);
+  REQUIRE_FALSE(bad_prior.accepted);
+  REQUIRE(bad_prior.reason == GeoRelocRejectReason::kInvalidInput);
 }

@@ -1,0 +1,398 @@
+{
+  "schema_version": "vertirta.local_gtx1650s_forward_wire_v2_metrics/v1.1.0",
+  "mode": "LOCAL_GTX1650S_CUDA_FP16_AMP_0CU",
+  "timestamp_utc": "2026-11-26T10:39:10.840724+00:00",
+  "colab_compute_units_consumed": 0.0,
+  "hardware": {
+    "device": "cuda:0",
+    "host_os": "Linux 6.18.58.1-microsoft-standard-WSL2 (x86_64)",
+    "gpu_name": "NVIDIA GeForce GTX 1650 SUPER",
+    "stage_a_wireseg_peak_cuda_allocated_mib": 2687.06,
+    "stage_b_dfine_peak_cuda_allocated_mib": 2098.41,
+    "nvidia_smi": {
+      "timestamp_utc": "2026-11-26T10:39:10.840829+00:00",
+      "available": true,
+      "name": "NVIDIA GeForce GTX 1650 SUPER",
+      "driver_version": "621.24",
+      "memory_used_mib": 1131.0,
+      "memory_total_mib": 4096.0,
+      "gpu_util_pct": 39.0,
+      "mem_util_pct": 26.0,
+      "power_w": 30.13,
+      "temp_c": 58.5,
+      "compute_apps": [
+        {
+          "pid": 448,
+          "process_name": "python3.12",
+          "used_gpu_memory_mib": 0.0
+        }
+      ]
+    }
+  },
+  "license_audit": {
+    "job_name": "local_gtx1650s_forward_wire_v2",
+    "zero_nc_sa_gpl_verified": true,
+    "zero_sharealike_verified": true,
+    "train_source_names": [
+      "Mendeley_TEIAS_Powerline_GT",
+      "SkyScenes_HardNeg_Rooftops",
+      "OpenEarthMap_Permissive_HardNeg",
+      "FloodNet_Supervised_v1_HardNeg",
+      "FLAIR-1_HardNeg",
+      "VertiRTA_Procedural_Catenary_Horizon"
+    ],
+    "eval_only_source_names": [],
+    "model_names": [
+      "M-LSD-WireSeg",
+      "D-FINE-N"
+    ]
+  },
+  "architecture_fixes": {
+    "dfine_background_rejection": "Replaced 3-class softmax over queries 0..2 with per-class Sigmoid Focal BCE (alpha=0.50, gamma=2.0, p0=0.01 prior bias=-4.59512) across all 300x3 spatial queries plus top-8 OHEM hard-negative query margin supervision and per-class NMS decode.",
+    "wireseg_rooftop_hardneg_suppression": "Replaced synthetic-sky-only training with real MIT TEIAS VL powerlines + real TEIAS TY_VL negatives + 40%+ real permissive urban rooftop hard negatives + positive-only Dice/clDice + top-0.5% OHEM rooftop false-positive pixel mining.",
+    "onnx_abi_preserved": true
+  },
+  "dataset_ingestion": {
+    "teias_license": "MIT",
+    "teias_source_url": "https://data.mendeley.com/datasets/twxp8xccsw/9",
+    "teias_zip_sha256": "68015e2b39987137b606287ca429e4d20464bc58870b816c2d9fc69958b3da65",
+    "teias_vl_pos_train": 160,
+    "teias_vl_pos_val": 40,
+    "teias_vl_neg_train": 160,
+    "teias_vl_neg_val": 40,
+    "urban_hardneg_train": 646,
+    "urban_hardneg_val": 153,
+    "urban_hardneg_source_breakdown": {
+      "FLAIR-1:train": 164,
+      "FLAIR-1:val": 36,
+      "OpenEarthMap-41:train": 138,
+      "OpenEarthMap-41:val": 19,
+      "FloodNet-Supervised-v1.0:train": 140,
+      "FloodNet-Supervised-v1.0:val": 60,
+      "SkyScenes:train": 204,
+      "SkyScenes:val": 38
+    },
+    "proc_wire_val": 60,
+    "det_pos_val": 120,
+    "det_hardneg_val": 273
+  },
+  "training": {
+    "seed": 20261126,
+    "wireseg": {
+      "epochs": 20,
+      "batch_size": 4,
+      "grad_accum": 2,
+      "effective_batch_size": 8,
+      "samples_per_epoch": 192,
+      "loss_start": 1.917994,
+      "loss_end": 0.950382,
+      "all_losses_finite": true,
+      "epoch_history": [
+        {
+          "epoch": 1,
+          "train_loss": 1.917994,
+          "teias_val_iou": 0.0,
+          "teias_val_cldice": 0.061361,
+          "urban_hn_fp_rate_120px": 0.0,
+          "teias_neg_fp_rate_120px": 0.0,
+          "composite_score": 0.033749
+        },
+        {
+          "epoch": 4,
+          "train_loss": 1.793808,
+          "teias_val_iou": 0.0,
+          "teias_val_cldice": 0.120914,
+          "urban_hn_fp_rate_120px": 0.0,
+          "teias_neg_fp_rate_120px": 0.0,
+          "composite_score": 0.074528
+        },
+        {
+          "epoch": 8,
+          "train_loss": 1.42564,
+          "teias_val_iou": 0.39731,
+          "teias_val_cldice": 0.621059,
+          "urban_hn_fp_rate_120px": 0.052288,
+          "teias_neg_fp_rate_120px": 0.0,
+          "composite_score": 0.409615
+        },
+        {
+          "epoch": 12,
+          "train_loss": 1.254331,
+          "teias_val_iou": 0.573125,
+          "teias_val_cldice": 0.780734,
+          "urban_hn_fp_rate_120px": 0.078431,
+          "teias_neg_fp_rate_120px": 0.0,
+          "composite_score": 0.521427
+        },
+        {
+          "epoch": 16,
+          "train_loss": 1.119943,
+          "teias_val_iou": 0.603452,
+          "teias_val_cldice": 0.862631,
+          "urban_hn_fp_rate_120px": 0.183007,
+          "teias_neg_fp_rate_120px": 0.1,
+          "composite_score": 0.272237
+        },
+        {
+          "epoch": 20,
+          "train_loss": 0.950382,
+          "teias_val_iou": 0.646879,
+          "teias_val_cldice": 0.880132,
+          "urban_hn_fp_rate_120px": 0.228758,
+          "teias_neg_fp_rate_120px": 0.05,
+          "composite_score": 0.276003
+        }
+      ]
+    },
+    "dfine_n": {
+      "epochs": 24,
+      "batch_size": 8,
+      "grad_accum": 1,
+      "effective_batch_size": 8,
+      "samples_per_epoch": 320,
+      "loss_start": 1.276179,
+      "loss_end": 0.331617,
+      "all_losses_finite": true,
+      "epoch_history": [
+        {
+          "epoch": 1,
+          "train_loss": 1.276179,
+          "val_det_f1": 0.0,
+          "val_det_box_l1": 1.0,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.081207,
+          "composite_score": -0.5
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.676829,
+          "val_det_f1": 0.317003,
+          "val_det_box_l1": 0.037673,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.533092,
+          "composite_score": 0.298167
+        },
+        {
+          "epoch": 6,
+          "train_loss": 0.576256,
+          "val_det_f1": 0.422164,
+          "val_det_box_l1": 0.026641,
+          "hardneg_fp_boxes": 16,
+          "hardneg_max_prob": 0.923448,
+          "composite_score": 0.308111
+        },
+        {
+          "epoch": 9,
+          "train_loss": 0.514127,
+          "val_det_f1": 0.293706,
+          "val_det_box_l1": 0.017702,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.385286,
+          "composite_score": 0.284855
+        },
+        {
+          "epoch": 12,
+          "train_loss": 0.397887,
+          "val_det_f1": 0.470948,
+          "val_det_box_l1": 0.018098,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.384,
+          "composite_score": 0.461899
+        },
+        {
+          "epoch": 15,
+          "train_loss": 0.383378,
+          "val_det_f1": 0.461078,
+          "val_det_box_l1": 0.019402,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.39285,
+          "composite_score": 0.451377
+        },
+        {
+          "epoch": 18,
+          "train_loss": 0.360523,
+          "val_det_f1": 0.624642,
+          "val_det_box_l1": 0.020769,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.336847,
+          "composite_score": 0.614257
+        },
+        {
+          "epoch": 21,
+          "train_loss": 0.258938,
+          "val_det_f1": 0.541667,
+          "val_det_box_l1": 0.017024,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.368124,
+          "composite_score": 0.533155
+        },
+        {
+          "epoch": 24,
+          "train_loss": 0.331617,
+          "val_det_f1": 0.587209,
+          "val_det_box_l1": 0.016183,
+          "hardneg_fp_boxes": 0,
+          "hardneg_max_prob": 0.3736,
+          "composite_score": 0.579118
+        }
+      ]
+    }
+  },
+  "heldout_validation": {
+    "wireseg": {
+      "real_teias_pos_val": {
+        "count": 40,
+        "iou": 0.573125,
+        "f1": 0.728645,
+        "cldice": 0.780734,
+        "recall_at_50px": 0.925
+      },
+      "real_teias_neg_val": {
+        "count": 40,
+        "fp_frames_gt_120px": 0,
+        "fp_rate_gt_120px": 0.0,
+        "mean_fp_px": 2.67,
+        "max_fp_px": 51
+      },
+      "real_urban_hardneg_val": {
+        "count": 153,
+        "fp_frames_gt_120px": 12,
+        "fp_rate_gt_120px": 0.078431,
+        "mean_fp_px": 34.71,
+        "max_fp_px": 1683
+      },
+      "proc_horizon_val": {
+        "count": 60,
+        "iou": 0.408413,
+        "f1": 0.579962,
+        "cldice": 0.545751,
+        "recall_at_50px": 0.583333
+      },
+      "composite_selection_score": 0.521427,
+      "selected_epoch": 12
+    },
+    "dfine_n": {
+      "pos_val_samples": 120,
+      "val_det_precision": 0.879032,
+      "val_det_recall": 0.484444,
+      "val_det_f1": 0.624642,
+      "val_det_box_l1": 0.020769,
+      "hardneg_val_samples": 273,
+      "hardneg_val_total_fp_boxes": 0,
+      "hardneg_val_fp_frames": 0,
+      "hardneg_val_fp_rate": 0.0,
+      "hardneg_val_max_sigmoid_prob": 0.336847,
+      "composite_selection_score": 0.614257,
+      "selected_epoch": 18
+    }
+  },
+  "nasa_goddard_zeroshot_240f": {
+    "evaluated": true,
+    "used_in_training": false,
+    "used_in_calibration": false,
+    "local_gtx_v11_unfiltered": {
+      "evaluated": true,
+      "frames_evaluated": 240,
+      "start_frame": 120,
+      "frame_stride": 2,
+      "wireseg_onnx": "mlsd_wireseg_640_v11_local_gtx_opset17.onnx",
+      "dfine_onnx": "dfine_n_640_v11_local_gtx_opset17.onnx",
+      "dfine_decode_mode": "sigmoid_300q_nms",
+      "unfiltered_wireseg_frames_gt_120px": 11,
+      "unfiltered_wireseg_fp_rate_gt_120px": 0.045833,
+      "unfiltered_wireseg_mean_px_512": 64.77,
+      "unfiltered_wireseg_max_px_512": 204,
+      "unfiltered_wireseg_max_prob": 0.994106,
+      "unfiltered_dfine_total_boxes": 1,
+      "unfiltered_dfine_frames_with_boxes": 1,
+      "unfiltered_dfine_max_prob": 0.570467,
+      "unfiltered_dfine_class_counts": {
+        "Bird": 0,
+        "Rogue_UAV": 1,
+        "Tower_Crane": 0
+      }
+    },
+    "legacy_g4_unfiltered": {
+      "evaluated": true,
+      "frames_evaluated": 240,
+      "start_frame": 120,
+      "frame_stride": 2,
+      "wireseg_onnx": "mlsd_wireseg_640_opset17.onnx",
+      "dfine_onnx": "dfine_n_640_opset17.onnx",
+      "dfine_decode_mode": "legacy_softmax_q0_2",
+      "unfiltered_wireseg_frames_gt_120px": 240,
+      "unfiltered_wireseg_fp_rate_gt_120px": 1.0,
+      "unfiltered_wireseg_mean_px_512": 4679.54,
+      "unfiltered_wireseg_max_px_512": 6155,
+      "unfiltered_wireseg_max_prob": 0.999644,
+      "unfiltered_dfine_total_boxes": 628,
+      "unfiltered_dfine_frames_with_boxes": 240,
+      "unfiltered_dfine_max_prob": 0.999948,
+      "unfiltered_dfine_class_counts": {
+        "Bird": 230,
+        "Rogue_UAV": 162,
+        "Tower_Crane": 236
+      }
+    },
+    "gates": {
+      "wireseg_nasa_fp_frames_lt_10pct": true,
+      "dfine_nasa_spurious_boxes_lt_15": true
+    }
+  },
+  "legacy_g4_reference": {
+    "artifact": "artifacts/v4.0.0/g4_forward_wire_metrics.json",
+    "report_sha256": "363a5e8c847844fe323a681cae7c12364f9f31cbff6187a86de554ea1b858604",
+    "real_frames_ingested": 0,
+    "val_wire_iou_procedural_only": 0.381922,
+    "mlsd_wireseg_sha256": "00919af2a42c0189eae4e8453279ff4dd87e81cb008a8fdbfc6403c883fbdbe5",
+    "dfine_n_sha256": "036990bbdb1d77d5d04c4f607631be5910d9bb75a957e9eb1e831a7302ca17da"
+  },
+  "onnx_exports": {
+    "mlsd_wireseg": {
+      "filename": "mlsd_wireseg_640_v11_local_gtx_opset17.onnx",
+      "path": "/var/tmp/vertirta_v400_blobs/mlsd_wireseg_640_v11_local_gtx_opset17.onnx",
+      "size_bytes": 8309270,
+      "sha256": "b520d025dc881be98729b7187afc8bb93101fbc1127c0de9f67a67eb1fa54418",
+      "opset_version": 17,
+      "deploy_parameters": 1257126,
+      "input_names": [
+        "rgb_split_nchw"
+      ],
+      "output_names": [
+        "wire_mask_logits",
+        "line_junction_map"
+      ],
+      "input_shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "onnx_checker_passed": true
+    },
+    "dfine_n": {
+      "filename": "dfine_n_640_v11_local_gtx_opset17.onnx",
+      "path": "/var/tmp/vertirta_v400_blobs/dfine_n_640_v11_local_gtx_opset17.onnx",
+      "size_bytes": 4827080,
+      "sha256": "1d027135dd316493dd2e354a572cac5b238490b4a0d78e16aff6734ee4e14a04",
+      "opset_version": 17,
+      "deploy_parameters": 1204725,
+      "input_names": [
+        "rgb_split_nchw"
+      ],
+      "output_names": [
+        "boxes_xyxy",
+        "class_logits"
+      ],
+      "input_shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "onnx_checker_passed": true
+    }
+  },
+  "wall_clock_s": 436.236,
+  "report_sha256": "fdb1c6b8b4a1d261384cfb349e1d7edd955a7175f1789af39027bff0ca1025c5"
+}

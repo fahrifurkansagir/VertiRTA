@@ -157,11 +157,58 @@ const COASTAL_ARTERIALS_GEOJSON = {
   ],
 };
 
+function buildTacticalGraticuleGeoJson() {
+  const features: Array<{
+    type: "Feature";
+    properties: { axis: "lat" | "lon" };
+    geometry: { type: "LineString"; coordinates: [number, number][] };
+  }> = [];
+
+  for (let lon = 29.0; lon <= 29.381; lon += 0.02) {
+    const x = Number(lon.toFixed(4));
+    features.push({
+      type: "Feature",
+      properties: { axis: "lon" },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [x, 40.82],
+          [x, 41.02],
+        ],
+      },
+    });
+  }
+  for (let lat = 40.82; lat <= 41.021; lat += 0.02) {
+    const y = Number(lat.toFixed(4));
+    features.push({
+      type: "Feature",
+      properties: { axis: "lat" },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [29.0, y],
+          [29.38, y],
+        ],
+      },
+    });
+  }
+  return {
+    type: "FeatureCollection" as const,
+    features,
+  };
+}
+
+const TACTICAL_GRATICULE_GEOJSON = buildTacticalGraticuleGeoJson();
+
 export function buildIstanbulTacticalStyle(): StyleSpecification {
   return {
     version: 8,
     name: "VertiGCS Zero-Token Istanbul Anatolian Tactical Dark",
     sources: {
+      "istanbul-graticule": {
+        type: "geojson",
+        data: TACTICAL_GRATICULE_GEOJSON,
+      },
       "istanbul-land": {
         type: "geojson",
         data: ANATOLIAN_LAND_GEOJSON,
@@ -175,15 +222,46 @@ export function buildIstanbulTacticalStyle(): StyleSpecification {
       {
         id: "bg-marmara-sea",
         type: "background",
-        paint: { "background-color": "#071422" },
+        paint: { "background-color": "#071424" },
+      },
+      {
+        id: "tactical-graticule-sea",
+        type: "line",
+        source: "istanbul-graticule",
+        paint: {
+          "line-color": "#16314c",
+          "line-width": 1,
+          "line-opacity": 0.55,
+        },
       },
       {
         id: "anatolian-land-fill",
         type: "fill",
         source: "istanbul-land",
         paint: {
-          "fill-color": "#132234",
+          "fill-color": "#172c43",
           "fill-opacity": 0.96,
+        },
+      },
+      {
+        id: "tactical-graticule-land",
+        type: "line",
+        source: "istanbul-graticule",
+        paint: {
+          "line-color": "#213f5d",
+          "line-width": 0.8,
+          "line-opacity": 0.32,
+        },
+      },
+      {
+        id: "anatolian-shoreline-glow",
+        type: "line",
+        source: "istanbul-land",
+        paint: {
+          "line-color": "#297cb3",
+          "line-width": 6,
+          "line-opacity": 0.28,
+          "line-blur": 2.5,
         },
       },
       {
@@ -191,8 +269,8 @@ export function buildIstanbulTacticalStyle(): StyleSpecification {
         type: "line",
         source: "istanbul-land",
         paint: {
-          "line-color": "#386287",
-          "line-width": 1.6,
+          "line-color": "#5cb6ec",
+          "line-width": 2.0,
         },
       },
       {
@@ -200,8 +278,24 @@ export function buildIstanbulTacticalStyle(): StyleSpecification {
         type: "line",
         source: "istanbul-arterials",
         paint: {
-          "line-color": "#264663",
-          "line-width": 1.4,
+          "line-color": [
+            "match",
+            ["get", "kind"],
+            "runway",
+            "#c3def7",
+            "sahil_yolu",
+            "#4e88b5",
+            "#375f83",
+          ],
+          "line-width": [
+            "match",
+            ["get", "kind"],
+            "runway",
+            3.5,
+            "sahil_yolu",
+            2.1,
+            1.6,
+          ],
           "line-dasharray": [3, 2],
         },
       },

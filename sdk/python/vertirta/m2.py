@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 try:
@@ -74,12 +75,29 @@ class VertiFleetSim:
         cmd_agl_m: float,
         t_s: float,
     ) -> dict[str, Any]:
+        lon = float(cmd_lon_deg)
+        agl = float(cmd_agl_m)
+        t = float(t_s)
+        inputs_finite = math.isfinite(lon) and math.isfinite(agl) and math.isfinite(t)
         if self._impl is not None:
-            return dict(self._impl.check_ussp_geofence(bool(sig_valid), float(cmd_lon_deg), float(cmd_agl_m), float(t_s)))
-        violated = (not sig_valid) or (cmd_lon_deg >= 29.1895) or (cmd_agl_m > 120.0) or (cmd_agl_m < 0.0)
+            return dict(
+                self._impl.check_ussp_geofence(
+                    bool(sig_valid) and inputs_finite,
+                    lon if math.isfinite(lon) else 29.9999,
+                    agl if math.isfinite(agl) else 999.0,
+                    t if math.isfinite(t) else 0.0,
+                )
+            )
+        violated = (
+            (not sig_valid)
+            or (not inputs_finite)
+            or (lon >= 29.1895)
+            or (agl > 120.0)
+            or (agl < 0.0)
+        )
         if violated:
             if self._quarantine_start_s is None:
-                self._quarantine_start_s = float(t_s)
+                self._quarantine_start_s = t if math.isfinite(t) else 0.0
             self._cyber_state = "SEC_USSP_QUARANTINE"
         return {
             "cyber_state": self._cyber_state,
@@ -88,22 +106,33 @@ class VertiFleetSim:
         }
 
     def step_cyber_time(self, t_s: float, ussp_auth_restored: bool = False) -> dict[str, Any]:
+        t = float(t_s)
         if self._impl is not None:
-            return dict(self._impl.step_cyber_time(float(t_s), bool(ussp_auth_restored)))
+            if not math.isfinite(t):
+                return dict(self._impl.step_cyber_time(1.0e9, False))
+            return dict(self._impl.step_cyber_time(t, bool(ussp_auth_restored)))
         elapsed = 0.0
         divert = False
         if self._cyber_state == "SEC_USSP_QUARANTINE" and self._quarantine_start_s is not None:
-            if ussp_auth_restored:
+            if not math.isfinite(t):
+                self._cyber_state = "SEC_AUTONOMOUS_RTB"
+                divert = True
+                elapsed = 10.0
+            elif ussp_auth_restored:
                 self._cyber_state = "SEC_NOMINAL"
                 self._quarantine_start_s = None
             else:
-                elapsed = max(0.0, float(t_s) - self._quarantine_start_s)
+                elapsed = max(0.0, t - self._quarantine_start_s)
                 if elapsed >= 10.0:
                     self._cyber_state = "SEC_AUTONOMOUS_RTB"
                     divert = True
         elif self._cyber_state == "SEC_AUTONOMOUS_RTB":
             divert = True
-            elapsed = max(10.0, float(t_s) - (self._quarantine_start_s or 0.0))
+            elapsed = (
+                max(10.0, t - (self._quarantine_start_s or 0.0))
+                if math.isfinite(t)
+                else 10.0
+            )
         return {
             "cyber_state": self._cyber_state,
             "divert_to_nearest_fato_emg": divert,
@@ -150,9 +179,16 @@ class VertiLiftCruiseSim:
         return float(self._impl.best_glide_ld_ratio) if self._impl is not None else 13.46
 
     def audit_oei_trim(self, v_airspeed_mps: float, failed_lift_rotor: int = 0) -> dict[str, Any]:
-        if self._impl is not None:
-            return dict(self._impl.audit_oei_trim(float(v_airspeed_mps), int(failed_lift_rotor)))
         v = float(v_airspeed_mps)
+        if not math.isfinite(v):
+            return {
+                "trim_feasible_4dof": False,
+                "peak_thrust_ratio": 999.0,
+                "effective_rank": 0,
+                "v_airspeed_mps": v,
+            }
+        if self._impl is not None:
+            return dict(self._impl.audit_oei_trim(v, int(failed_lift_rotor)))
         if self._layout == "8+1":
             return {
                 "trim_feasible_4dof": True,

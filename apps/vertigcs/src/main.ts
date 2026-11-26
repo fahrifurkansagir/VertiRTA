@@ -17,6 +17,7 @@ import type { TelemetrySnapshot } from "./types/telemetry";
 import { bindFaultPanel } from "./ui/fault_panel";
 import { HudRingStore } from "./ui/hud_store";
 import { VrtaReplayScrubber } from "./ui/replay_scrubber";
+import { initHudTabs } from "./ui/tabs";
 import { TelemetryHud } from "./ui/telemetry_hud";
 
 export { parseLaunchMode };
@@ -24,6 +25,8 @@ export { parseLaunchMode };
 async function bootstrapVertiGcs(): Promise<void> {
   const container = document.getElementById("map-viewport");
   if (!container) return;
+
+  const tabs = initHudTabs();
 
   const cfg = parseLaunchMode(window.location.search);
   const badge = document.getElementById("mode-badge");
@@ -101,12 +104,14 @@ async function bootstrapVertiGcs(): Promise<void> {
   });
 
   bindFleetPanel((fleetSnap) => {
+    tabs.setFleetBadge(fleetSnap ? fleetSnap.aircraft.length : 0);
     if (viewport instanceof MapLibreDeckAdapter) {
       viewport.updateFleetSnapshot(fleetSnap);
     }
   }, setStatus);
 
   bindM3Panel((m3Snap) => {
+    tabs.setM3AlertBadge(Boolean(m3Snap && m3Snap.scenario !== "nominal"));
     if (viewport instanceof MapLibreDeckAdapter) {
       viewport.updateM3Snapshot(m3Snap);
     }

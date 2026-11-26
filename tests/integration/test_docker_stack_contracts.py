@@ -53,6 +53,7 @@ def test_dockerfiles_are_multistage_nonroot_copy_full_viz_and_expose_healthz() -
     for req in (
         "ubuntu:24.04",
         "g++-14",
+        "COPY cmake ./cmake",
         "corridor_faults.vrta",
         "--vrta",
         "viz/geo",
@@ -61,6 +62,15 @@ def test_dockerfiles_are_multistage_nonroot_copy_full_viz_and_expose_healthz() -
         "config/istanbul_ltfj_airspace.yaml",
     ):
         assert req in sim_df, f"Dockerfile.sim missing runtime/build lock: {req}"
+
+    from_lines = [line.strip() for line in sim_df.splitlines() if line.strip().startswith("FROM ")]
+    assert len(from_lines) == 2, f"Expected 2 stages in Dockerfile.sim, got {from_lines}"
+    assert "ubuntu:24.04" in from_lines[0] and "ubuntu:24.04" in from_lines[1], (
+        f"Dockerfile.sim builder and runtime must share ubuntu:24.04 glibc/libstdc++ ABI: {from_lines}"
+    )
+    assert "bookworm" not in sim_df.lower(), (
+        "Dockerfile.sim must not copy Ubuntu 24.04 (glibc 2.39/GLIBCXX_3.4.32) binaries onto Debian bookworm"
+    )
 
     web_df = (REPO / "docker/Dockerfile.vertigcs").read_text(encoding="utf-8")
     assert "emscripten/emsdk:4.0.4" in web_df, "Dockerfile.vertigcs must pin emsdk 4.0.4 matching CI"

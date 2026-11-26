@@ -429,6 +429,55 @@ class FlatJsonParser {
     return true;
   }
 
+  static int hex_nibble(char c) noexcept {
+    if (c >= '0' && c <= '9') {
+      return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+      return 10 + (c - 'a');
+    }
+    if (c >= 'A' && c <= 'F') {
+      return 10 + (c - 'A');
+    }
+    return -1;
+  }
+
+  bool parse_hex4(uint16_t& out_unit, std::string& err) {
+    if (pos_ + 4U > s_.size()) {
+      err = "truncated \\uXXXX escape";
+      return false;
+    }
+    uint16_t val = 0U;
+    for (std::size_t i = 0U; i < 4U; ++i) {
+      const int nib = hex_nibble(s_[pos_++]);
+      if (nib < 0) {
+        err = "invalid hex digit in \\uXXXX escape";
+        return false;
+      }
+      val = static_cast<uint16_t>((val << 4U) | static_cast<uint16_t>(nib));
+    }
+    out_unit = val;
+    return true;
+  }
+
+  static void append_utf8(uint32_t cp, std::string& out) {
+    if (cp <= 0x7FU) {
+      out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FFU) {
+      out.push_back(static_cast<char>(0xC0U | (cp >> 6U)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else if (cp <= 0xFFFFU) {
+      out.push_back(static_cast<char>(0xE0U | (cp >> 12U)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else {
+      out.push_back(static_cast<char>(0xF0U | (cp >> 18U)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 12U) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    }
+  }
+
   bool parse_string(std::string& out, std::string& err) {
     if (!consume('"')) {
       err = "expected '\"'";
@@ -471,6 +520,35 @@ class FlatJsonParser {
           case 't':
             out.push_back('\t');
             break;
+          case 'u': {
+            uint16_t u1 = 0U;
+            if (!parse_hex4(u1, err)) {
+              return false;
+            }
+            uint32_t cp = u1;
+            if (u1 >= 0xD800U && u1 <= 0xDBFFU) {
+              if (pos_ + 2U > s_.size() || s_[pos_] != '\\' || s_[pos_ + 1U] != 'u') {
+                err = "unpaired high surrogate in \\uXXXX escape";
+                return false;
+              }
+              pos_ += 2U;
+              uint16_t u2 = 0U;
+              if (!parse_hex4(u2, err)) {
+                return false;
+              }
+              if (u2 < 0xDC00U || u2 > 0xDFFFU) {
+                err = "invalid low surrogate in \\uXXXX escape";
+                return false;
+              }
+              cp = 0x10000U + ((static_cast<uint32_t>(u1 - 0xD800U) << 10U) |
+                               static_cast<uint32_t>(u2 - 0xDC00U));
+            } else if (u1 >= 0xDC00U && u1 <= 0xDFFFU) {
+              err = "unexpected low surrogate in \\uXXXX escape";
+              return false;
+            }
+            append_utf8(cp, out);
+            break;
+          }
           default:
             err = "unsupported escape";
             return false;

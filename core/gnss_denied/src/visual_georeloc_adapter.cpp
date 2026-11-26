@@ -51,15 +51,24 @@ GeoRelocDecision VisualGeoRelocAdapter::fuse_observation(
   out.updated_pos_ned = prior_pos_ned;
   out.updated_cov = prior_cov;
 
-  const double prior_sigma = prior_cov.sigma_max();
-  out.megaloc_requested = (prior_sigma > cfg_.megaloc_trigger_sigma_m);
-
-  if (!obs.valid || !prior_pos_ned.is_finite() ||
+  const bool prior_cov_ok =
+      std::isfinite(prior_cov.p_nn) && std::isfinite(prior_cov.p_ne) && std::isfinite(prior_cov.p_ee) &&
+      prior_cov.p_nn >= 0.0 && prior_cov.p_ee >= 0.0 &&
+      (prior_cov.p_nn * prior_cov.p_ee - prior_cov.p_ne * prior_cov.p_ne) >= -1e-12;
+  if (!obs.valid || !prior_pos_ned.is_finite() || !prior_cov_ok ||
       !std::isfinite(obs.matched_geo.lat_deg) || !std::isfinite(obs.matched_geo.lon_deg) ||
+      !std::isfinite(obs.matched_geo.h_hae_m) ||
       !std::isfinite(obs.reproj_rmse_px) || !std::isfinite(obs.convex_hull_ratio)) {
     out.reason = GeoRelocRejectReason::kInvalidInput;
     return out;
   }
+
+  const double prior_sigma = prior_cov.sigma_max();
+  if (!std::isfinite(prior_sigma)) {
+    out.reason = GeoRelocRejectReason::kInvalidInput;
+    return out;
+  }
+  out.megaloc_requested = (prior_sigma > cfg_.megaloc_trigger_sigma_m);
 
   // Sentinel-2 10 m scale chasm lock (~45 m CEP50): GROSS-BLUNDER ONLY — NEVER tighten LTFJ/LTBX corridor P!
   if (obs.map_tier == OrthoMapTier::kSentinel2GrossBlunder10m &&
@@ -95,7 +104,7 @@ GeoRelocDecision VisualGeoRelocAdapter::fuse_observation(
   const double s_ne = prior_cov.p_ne;
   const double s_ee = prior_cov.p_ee + r_var;
   const double det_s = s_nn * s_ee - s_ne * s_ne;
-  if (det_s <= 1e-9) {
+  if (!std::isfinite(det_s) || det_s <= 1e-9) {
     out.reason = GeoRelocRejectReason::kInvalidInput;
     return out;
   }
@@ -107,6 +116,10 @@ GeoRelocDecision VisualGeoRelocAdapter::fuse_observation(
   const double yn = meas_ned.x - prior_pos_ned.x;
   const double ye = meas_ned.y - prior_pos_ned.y;
   const double chi2 = yn * yn * sinv_nn + 2.0 * yn * ye * sinv_ne + ye * ye * sinv_ee;
+  if (!std::isfinite(chi2)) {
+    out.reason = GeoRelocRejectReason::kInvalidInput;
+    return out;
+  }
   out.mahalanobis_chi2 = chi2;
 
   // Gate 3: 2D Mahalanobis innovation gate (chi^2 <= 9.21), bypassed ONLY by 2-keyframe corroborated MegaLoc.
@@ -159,6 +172,14 @@ GeoRelocDecision VisualGeoRelocAdapter::fuse_observation(
   const double p_ne_new = 0.5 * ((m00 * a10 + m01 * a11) + (m10 * a00 + m11 * a01)) +
                           r_var * (k00 * k10 + k01 * k11);
   const double p_ee_new = m10 * a10 + m11 * a11 + r_var * (k10 * k10 + k11 * k11);
+
+  if (!std::isfinite(out.updated_pos_ned.x) || !std::isfinite(out.updated_pos_ned.y) ||
+      !std::isfinite(p_nn_new) || !std::isfinite(p_ne_new) || !std::isfinite(p_ee_new)) {
+    out.updated_pos_ned = prior_pos_ned;
+    out.updated_cov = prior_cov;
+    out.reason = GeoRelocRejectReason::kInvalidInput;
+    return out;
+  }
 
   out.updated_cov.p_nn = std::max(0.25, p_nn_new);
   out.updated_cov.p_ne = p_ne_new;

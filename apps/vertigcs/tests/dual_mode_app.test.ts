@@ -140,4 +140,22 @@ describe("VertiGCS dual-mode controller, ring-buffer HUD, and frozen Istanbul co
     }
     expect(raw).not.toContain("29.2057"); // ISTMarina inside LTFJ CTR hard-banned
   });
+
+  it("enforces clean tabbed cockpit layout, updated sandbox disclaimer, and zero nested panel scroll collapse", () => {
+    const html = readFileSync(resolve(__dirname, "../index.html"), "utf-8");
+    expect(html).toContain("Open-Source WebAssembly Flight Sandbox &mdash; Not certified for flight.");
+    expect(html).not.toContain("Research & Simulation Testbed Only");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('id="tab-flight"');
+    expect(html).toContain('id="tab-fleet"');
+    expect(html).toContain('id="tab-m3"');
+    expect(html).toContain('id="hud-tick"');
+    expect(html).toContain('id="map-legend"');
+    expect(html).toContain('id="map-alert-banner"');
+
+    const css = readFileSync(resolve(__dirname, "../src/styles/vertigcs.css"), "utf-8");
+    expect(css).toContain("flex-shrink: 0");
+    expect(css).toContain("overflow-x: clip");
+    expect(css).toContain("overflow-x: hidden");
+  });
 });

@@ -36,6 +36,8 @@ struct ShieldConfig {
 struct VehicleTelemetryState {
   bool heartbeat_seen{false};
   uint64_t last_fcu_heartbeat_us{0u};
+  bool local_position_seen{false};
+  uint64_t last_local_position_us{0u};
   bool armed{false};
   uint8_t base_mode{0u};
   uint8_t system_status{0u};

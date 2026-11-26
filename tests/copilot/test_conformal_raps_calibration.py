@@ -215,3 +215,34 @@ def test_qwen3_v3_conformal_raps_diagnostic_artifact_is_honest_and_sha256_sealed
         json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     assert recorded_sha == expected_sha
+
+
+def test_mondrian_raps_disjoint_split_immune_to_periodic_parity_aliasing() -> None:
+    """Regression guard: periodic even/odd difficulty alternation must NOT cause q_hat=0 under-coverage."""
+    cal_scores: list[list[float]] = []
+    cal_golds: list[int] = []
+    cal_groups: list[str] = []
+    # Pathological even=hard, odd=trivial ordering inside every group (breaks naive idxs[0::2] / idxs[1::2])
+    for i in range(800):
+        grp = "S0_Clean" if (i // 2) % 2 == 0 else "S1_Cruise"
+        if i % 2 == 0:
+            # Hard row: gold at rank 2
+            logits = [-4.0] * 14
+            logits[0] = 2.0
+            logits[1] = 1.6
+            cal_golds.append(1)
+        else:
+            # Trivial row: gold at rank 1 with high confidence
+            logits = [-6.0] * 14
+            logits[0] = 5.0
+            cal_golds.append(0)
+        cal_scores.append(logits)
+        cal_groups.append(grp)
+
+    fit = fit_temperature_scaled_mondrian_raps(
+        cal_scores, cal_golds, cal_groups, alpha=0.05, k_reg=1, lam_reg=0.02, per_group_temperature=True, seed=42
+    )
+    for grp, q_g in fit["group_q_hat"].items():
+        assert q_g > 0.1, f"Parity aliasing collapsed q_hat[{grp}]={q_g} on periodic calibration stream"
+    ev = evaluate_temperature_scaled_mondrian_raps(cal_scores, cal_golds, cal_groups, fit, seed=43)
+    assert ev["overall_coverage_pct"] >= 94.0

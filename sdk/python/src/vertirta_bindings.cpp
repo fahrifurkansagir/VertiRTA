@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -13,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -458,11 +460,14 @@ class NativeVecSim {
       nb::ndarray<float, nb::ndim<2>, nb::c_contig, nb::device::cpu> obs_out,
       nb::ndarray<float, nb::ndim<1>, nb::c_contig, nb::device::cpu> rew_out,
       nb::ndarray<uint8_t, nb::ndim<1>, nb::c_contig, nb::device::cpu> term_out,
-      nb::ndarray<uint8_t, nb::ndim<1>, nb::c_contig, nb::device::cpu> cel_out) {
+      nb::ndarray<uint8_t, nb::ndim<1>, nb::c_contig, nb::device::cpu> cel_out,
+      std::optional<nb::ndarray<const uint8_t, nb::ndim<1>, nb::c_contig, nb::device::cpu>>
+          step_mask = std::nullopt) {
     const std::size_t n = envs_.size();
     if (actions.shape(0) != n || actions.shape(1) != kActDim ||
         obs_out.shape(0) != n || obs_out.shape(1) != kObsDim ||
-        rew_out.shape(0) != n || term_out.shape(0) != n || cel_out.shape(0) != n) {
+        rew_out.shape(0) != n || term_out.shape(0) != n || cel_out.shape(0) != n ||
+        (step_mask.has_value() && step_mask->shape(0) != n)) {
       throw std::invalid_argument("step_batch array shape mismatch");
     }
 
@@ -471,9 +476,16 @@ class NativeVecSim {
     float* rew_ptr = rew_out.data();
     uint8_t* term_ptr = term_out.data();
     uint8_t* cel_ptr = cel_out.data();
+    const uint8_t* mask_ptr = step_mask.has_value() ? step_mask->data() : nullptr;
 
     auto run_range = [&](std::size_t lo, std::size_t hi) noexcept {
       for (std::size_t i = lo; i < hi; ++i) {
+        if (mask_ptr != nullptr && mask_ptr[i] == 0U) {
+          rew_ptr[i] = 0.0f;
+          term_ptr[i] = 0U;
+          cel_ptr[i] = 0U;
+          continue;
+        }
         const float* a = act_ptr + i * kActDim;
         const StepOutcome res = envs_[i].step_400hz(
             n_ticks,
@@ -1132,7 +1144,8 @@ NB_MODULE(_vertirta_native, m) {
            nb::arg("obs_out"),
            nb::arg("rew_out"),
            nb::arg("term_out"),
-           nb::arg("cel_out"));
+           nb::arg("cel_out"),
+           nb::arg("step_mask") = nb::none());
 
 #if defined(VERTIRTA_SDK_HAS_M2) && VERTIRTA_SDK_HAS_M2
   m.attr("HAS_M2_BINDINGS") = true;

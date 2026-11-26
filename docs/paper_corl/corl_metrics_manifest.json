@@ -188,14 +188,16 @@
       "quarantined_zero_shot_eval_only": true
     },
     "uavscenes_miou": {
-      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
-      "value": null,
-      "quarantined_zero_shot_eval_only": true
+      "status": "LIVE_LOCAL_CPU_ONNX_ZERO_SHOT_EVAL",
+      "value": 0.225894,
+      "quarantined_zero_shot_eval_only": true,
+      "source_artifact": "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json"
     },
     "uavscenes_fsr": {
-      "status": "PENDING_EVAL_ONLY_REAL_IMAGERY",
-      "value": null,
-      "quarantined_zero_shot_eval_only": true
+      "status": "LIVE_LOCAL_CPU_ONNX_ZERO_SHOT_EVAL",
+      "value": 0.12554,
+      "quarantined_zero_shot_eval_only": true,
+      "source_artifact": "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json"
     }
   },
   "phase3_ablations_and_edge": {
@@ -226,6 +228,37 @@
       "bootstrap_snr_coverage_sd_pct": 0.73,
       "bootstrap_lang_coverage_mean_pct": 94.97,
       "bootstrap_lang_coverage_sd_pct": 0.74
+    },
+    "qwen3_v3_local_conformal_recovery": {
+      "source": "artifacts/v4.0.0/local_gtx1650s_qwen3_v3_conformal_raps.json",
+      "cu_consumed": 0.0,
+      "quantization_loss_zero": true,
+      "peak_vram_mib": 837.5,
+      "score_scope": "gbnf_tree",
+      "selected_track": "raw_split",
+      "selected_gamma": 0.0,
+      "test_branch_top1_overall_pct": 83.42,
+      "lang_raps_coverage_pct": 96.0,
+      "lang_raps_mean_set_size": 3.486,
+      "lang_raps_singleton_exec_pct": 28.5,
+      "lang_raps_ece": 0.032082,
+      "snr_raps_coverage_pct": 95.08,
+      "snr_raps_mean_set_size": 2.347,
+      "snr_raps_singleton_exec_pct": 40.0,
+      "snr_raps_ece": 0.074303,
+      "lang_lac_coverage_pct": 96.08,
+      "lang_lac_mean_set_size": 2.502,
+      "lang_lac_singleton_exec_pct": 40.0,
+      "lang_lac_ece": 0.055396,
+      "snr_lac_coverage_pct": 95.58,
+      "snr_lac_mean_set_size": 2.058,
+      "snr_lac_singleton_exec_pct": 45.5,
+      "snr_lac_ece": 0.055396,
+      "bootstrap_lang_coverage_mean_pct": 95.14,
+      "bootstrap_lang_coverage_sd_pct": 0.7,
+      "bootstrap_snr_coverage_mean_pct": 95.0,
+      "bootstrap_snr_coverage_sd_pct": 0.79,
+      "bootstrap_snr_mean_set_size_mean": 1.924
     },
     "whisper_bvi_lora_ablation": {
       "source": "artifacts/v4.0.0/g4_whisper_bvi_lora_eval.json",
@@ -301,20 +334,20 @@
     },
     "gtx1650s_timesliced_edge": {
       "source": "artifacts/v4.0.0/gtx1650s_m3_timesliced_edge_gate.json",
-      "cruise_mean_ms": 17.7765,
-      "cruise_p50_ms": 17.752,
-      "cruise_p99_ms": 19.8302,
-      "cruise_fps_mean": 56.25,
-      "cruise_vram_delta_mib": 366.0,
-      "terminal_mean_ms": 10.065,
-      "terminal_p50_ms": 10.0232,
-      "terminal_p99_ms": 13.357,
-      "terminal_fps_mean": 99.35,
-      "terminal_vram_delta_mib": 164.0,
-      "pidnet_v21_fp32_cg_p50_ms": 10.9772,
-      "pidnet_v21_fp32_cg_p99_ms": 12.5848,
-      "pidnet_v21_fp16_p50_ms": 28.2671,
-      "pidnet_v21_fp16_p99_ms": 33.3496
+      "cruise_mean_ms": 12.3663,
+      "cruise_p50_ms": 12.3443,
+      "cruise_p99_ms": 14.1335,
+      "cruise_fps_mean": 80.86,
+      "cruise_vram_delta_mib": 354.0,
+      "terminal_mean_ms": 8.7171,
+      "terminal_p50_ms": 8.6726,
+      "terminal_p99_ms": 10.1063,
+      "terminal_fps_mean": 114.72,
+      "terminal_vram_delta_mib": 148.0,
+      "pidnet_v21_fp32_cg_p50_ms": 9.0708,
+      "pidnet_v21_fp32_cg_p99_ms": 18.023,
+      "pidnet_v21_fp16_p50_ms": 32.6117,
+      "pidnet_v21_fp16_p99_ms": 50.5023
     },
     "g4_realworld_bf16_copilot": {
       "source": "artifacts/v4.0.0/g4_realworld_eval_report.json",
@@ -346,6 +379,20 @@
       "xsd_valid": true,
       "numeric_hallucination_count": 0,
       "cictt_category": "SCF-NP"
+    },
+    "realworld_uavscenes_zeroshot": {
+      "source": "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json",
+      "evaluated_images": 300,
+      "scenes_covered": 20,
+      "raw_miou": 0.217226,
+      "raw_fsr": 0.172925,
+      "cal_miou": 0.225894,
+      "cal_fsr": 0.12554,
+      "cal_safe_precision": 0.292338,
+      "cal_slz_f1": 0.330873,
+      "used_in_training": false,
+      "used_in_calibration": false,
+      "raw_pixels_deleted": true
     }
   }
 }

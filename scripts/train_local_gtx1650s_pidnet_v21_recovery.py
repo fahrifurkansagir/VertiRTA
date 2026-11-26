@@ -100,19 +100,19 @@ DEFAULT_G4_METRICS = REPO_ROOT / "artifacts" / "v4.0.0" / "g4_pidnet_v21_xfeat_m
 ONNX_FILENAME = "pidnet_slz_v21_local_gtx_opset17.onnx"
 CAL_FILENAME = "ood_calibration_v21_local_gtx.json"
 
-# RGB palette matching clear SLZ visual semantics:
-#   0: Safe_Flat_Ground              -> Green
-#   1: Safe_Flat_Roof                -> Yellow
-#   2: Hazard_Obstacle_Structure     -> Orange
+# Unified VertiRTA v1.0.0 5-class avionic RGB palette (shared verbatim with NASA drone HUD):
+#   0: Safe_Flat_Ground              -> Emerald Green
+#   1: Safe_Flat_Roof                -> Avionic Cyan (max contrast vs orange facade hazard)
+#   2: Hazard_Obstacle_Structure     -> Vivid Orange
 #   3: Hazard_Dynamic_Human_Vehicle  -> Magenta
-#   4: Hazard_Water_Vegetation       -> Blue
+#   4: Hazard_Water_Vegetation       -> Deep Cobalt Blue
 SLZ_CLASS_RGB: np.ndarray = np.array(
     [
-        [52, 208, 88],    # 0: Safe_Flat_Ground (Green)
-        [242, 214, 48],   # 1: Safe_Flat_Roof (Yellow)
-        [245, 130, 32],   # 2: Hazard_Obstacle_Structure (Orange)
+        [52, 208, 88],    # 0: Safe_Flat_Ground (Emerald Green)
+        [42, 212, 228],   # 1: Safe_Flat_Roof (Avionic Cyan)
+        [245, 130, 32],   # 2: Hazard_Obstacle_Structure (Vivid Orange)
         [225, 52, 185],   # 3: Hazard_Dynamic_Human_Vehicle (Magenta)
-        [45, 125, 225],   # 4: Hazard_Water_Vegetation (Blue)
+        [42, 98, 215],    # 4: Hazard_Water_Vegetation (Deep Cobalt Blue)
     ],
     dtype=np.uint8,
 )
@@ -530,7 +530,7 @@ def _draw_hud_frame_rgb(
     pred_rgb = _colorize_slz_mask_rgb(pred_mask_512)
     gt_rgb = _colorize_slz_mask_rgb(gt_mask_512)
     overlay_rgb = np.clip(
-        0.52 * rgb_512.astype(np.float32) + 0.48 * pred_rgb.astype(np.float32), 0, 255
+        0.66 * rgb_512.astype(np.float32) + 0.34 * pred_rgb.astype(np.float32), 0, 255
     ).astype(np.uint8)
 
     header_h = 64
@@ -549,7 +549,7 @@ def _draw_hud_frame_rgb(
     font = cv2.FONT_HERSHEY_SIMPLEX
 
     title = (
-        f"VERTIRTA PIDNet-S v2.1 LOCAL GTX 1650 SUPER RECOVERY (0.00 CU)  |  "
+        f"VertiRTA v1.0.0  |  PIDNet-S v2.1 Local GTX 1650 SUPER Validation  |  "
         f"Scene {scene_idx + 1:02d}/{total_scenes:02d}: {source_name}"
     )
     cv2.putText(bgr, title, (16, 26), font, 0.58, (240, 245, 250), 1, cv2.LINE_AA)
@@ -805,7 +805,7 @@ def render_hud_preview_and_contact_sheet(
 
         cv2.putText(
             sheet_bgr,
-            f"PIDNet-S v2.1 Local GTX 1650 SUPER Recovery (0.00 CU) - 6-Scene Permissive Validation Grid (bias={safe_bias:+.3f})",
+            f"VertiRTA v1.0.0 | PIDNet-S v2.1 6-Scene Permissive Validation Grid (GTX 1650 SUPER, bias={safe_bias:+.3f})",
             (pad, 28),
             font,
             0.70,
@@ -832,7 +832,7 @@ def render_hud_preview_and_contact_sheet(
 
             rgb_s = cv2.resize(item["rgb"], (tile_sz, tile_sz), interpolation=cv2.INTER_AREA)
             pred_col = _colorize_slz_mask_rgb(item["pred"])
-            ov_s = np.clip(0.50 * item["rgb"].astype(np.float32) + 0.50 * pred_col.astype(np.float32), 0, 255).astype(np.uint8)
+            ov_s = np.clip(0.66 * item["rgb"].astype(np.float32) + 0.34 * pred_col.astype(np.float32), 0, 255).astype(np.uint8)
             ov_s = cv2.resize(ov_s, (tile_sz, tile_sz), interpolation=cv2.INTER_AREA)
             gt_s = cv2.resize(_colorize_slz_mask_rgb(item["gt"]), (tile_sz, tile_sz), interpolation=cv2.INTER_NEAREST)
 
@@ -866,9 +866,12 @@ def render_hud_preview_and_contact_sheet(
             x_cur += 375
 
         grid_out.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(grid_out), sheet_bgr)
+        if grid_out.suffix.lower() in (".jpg", ".jpeg"):
+            cv2.imwrite(str(grid_out), sheet_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        else:
+            cv2.imwrite(str(grid_out), sheet_bgr)
         grid_sha = sha256_file(grid_out)
-        print(f"[Preview] Wrote 6-scene contact sheet PNG ({grid_w}x{grid_h}): {grid_out.name}", flush=True)
+        print(f"[Preview] Wrote 6-scene contact sheet ({grid_w}x{grid_h}): {grid_out.name}", flush=True)
 
     # Encode universal H.264 yuv420p +faststart MP4 via ffmpeg
     mp4_sha: str | None = None
@@ -1659,7 +1662,12 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Reuse existing prepared_manifest.json inside --work-dir if present.",
     )
     parser.add_argument("--preview-mp4", type=Path, default=None, help="Optional H.264 yuv420p HUD MP4 output.")
-    parser.add_argument("--preview-grid", type=Path, default=None, help="Optional 6-scene contact sheet PNG.")
+    parser.add_argument("--preview-grid", type=Path, default=None, help="Optional 6-scene contact sheet PNG/JPG.")
+    parser.add_argument(
+        "--render-grid-only",
+        action="store_true",
+        help="Re-render --preview-grid from existing ONNX + prepared validation manifest without retraining.",
+    )
     parser.add_argument("--preview-scenes", type=int, default=36)
     return parser
 
@@ -1675,6 +1683,34 @@ def run_recovery(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.smoke_cpu:
         return _run_smoke_cpu(args, license_audit, t0)
+
+    if getattr(args, "render_grid_only", False):
+        if args.preview_grid is None:
+            raise ValueError("--render-grid-only requires --preview-grid <path>.")
+        work_dir = Path(args.work_dir)
+        blob_dir = Path(args.blob_dir)
+        onnx_path = blob_dir / ONNX_FILENAME
+        cal_path = blob_dir / CAL_FILENAME
+        if not onnx_path.is_file():
+            raise FileNotFoundError(f"Missing ONNX blob for grid render: {onnx_path}")
+        if not cal_path.is_file():
+            raise FileNotFoundError(f"Missing calibration JSON for grid render: {cal_path}")
+        loaded = _load_prepared_manifest(work_dir)
+        if loaded is None:
+            raise FileNotFoundError(f"Missing prepared_manifest.json in {work_dir}")
+        all_records, _ = loaded
+        val_recs = [r for r in all_records if r.split == "val"]
+        calibration = json.loads(cal_path.read_text(encoding="utf-8"))
+        return render_hud_preview_and_contact_sheet(
+            onnx_path=onnx_path,
+            calibration=calibration,
+            val_recs=val_recs,
+            mp4_out=args.preview_mp4,
+            grid_out=args.preview_grid,
+            work_dir=work_dir,
+            num_scenes=int(args.preview_scenes),
+            use_cuda=True,
+        )
 
     import torch
 

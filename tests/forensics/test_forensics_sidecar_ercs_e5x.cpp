@@ -68,6 +68,52 @@ TEST_CASE("Frozen 256 B VRTA0001 wire format stays untouched while .vrta_events.
                     .valid);
 }
 
+TEST_CASE("Sidecar .vrta_events.jsonl round-trips ASCII control characters via \\uXXXX escape decoding and rejects malformed \\u sequences") {
+  VrtaEventsSidecarWriter writer;
+
+  SidecarEvent ev{};
+  ev.seq = 100U;
+  ev.t_sim_us = 1'000'000U;
+  ev.kind = SidecarEventKind::VOICE_CONFORMAL_TURN;
+  ev.snr_stratum = "S3_Garbled";
+  ev.conformal_set_size = 2U;
+  // Include NUL (0x00), SOH (0x01), BEL (0x07), VT (0x0b), ESC (0x1b), US (0x1f), plus standard escapes.
+  ev.asr_transcript_utf8 = std::string("ATC\x00\x01\x07\x0b\x1b\x1f\"\\line\n\t", 17U);
+  ev.audio_sha256_hex = std::string(64U, '1');
+  ev.z3_smt2_sha256_hex = std::string(64U, '2');
+  ev.z3_unsat_core = {std::string("CORE\x1b[31m_WALL", 14U), std::string("BEL\x07", 4U)};
+  ev.gsn_node_id = "G3.2-CTRL-ROUNDTRIP";
+
+  const std::string line = writer.append_serialized(ev);
+  REQUIRE(line.find("\\u0000") != std::string::npos);
+  REQUIRE(line.find("\\u001b") != std::string::npos);
+  REQUIRE(line.find("\\u001f") != std::string::npos);
+
+  const auto verified =
+      VrtaEventsSidecarReader::verify_chain(line + "\n", writer.public_key_hex());
+  REQUIRE(verified.valid);
+  REQUIRE(verified.events.size() == 1U);
+  REQUIRE(verified.events[0].asr_transcript_utf8 == ev.asr_transcript_utf8);
+  REQUIRE(verified.events[0].z3_unsat_core == ev.z3_unsat_core);
+
+  // Malformed \uXXXX escapes MUST fail closed during verification.
+  {
+    std::string bad_hex = line;
+    const std::size_t p = bad_hex.find("\\u001b");
+    REQUIRE(p != std::string::npos);
+    bad_hex.replace(p, 6U, "\\u00ZZ");
+    REQUIRE_FALSE(VrtaEventsSidecarReader::verify_chain(bad_hex + "\n", writer.public_key_hex()).valid);
+  }
+  {
+    std::string bad_surrogate = line;
+    const std::size_t p = bad_surrogate.find("\\u001b");
+    REQUIRE(p != std::string::npos);
+    bad_surrogate.replace(p, 6U, "\\ud800");
+    REQUIRE_FALSE(
+        VrtaEventsSidecarReader::verify_chain(bad_surrogate + "\n", writer.public_key_hex()).valid);
+  }
+}
+
 TEST_CASE("ERCS CDR (EU) 2020/2034 enforces SCF-NP, Barrier #8 = 0 on high-energy MAC/LOC-I, and draft/Incident ID 431 ONLY") {
   ErcsInput in{};
   in.trigger = Cir2026Trigger::CRITICAL_ENERGY_OR_ENVELOPE_PROT;

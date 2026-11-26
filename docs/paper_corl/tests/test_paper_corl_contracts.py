@@ -104,7 +104,7 @@ def test_verify_corl_numbers_and_figures_pass_zero_errors_in_phase2() -> None:
         assert strict_res["passed"] is True, f"Strict verification errors: {strict_res['errors']}"
         assert strict_res["errors"] == []
         assert strict_res["pending_g4_slot_count"] == 0
-        assert strict_res["external_eval_pending_count"] == 4
+        assert strict_res["external_eval_pending_count"] == 2
 
     # Verify all 3 double-anonymous vector PDF figures exist, are wired in tex, and leak-free
     tex = (CORL_DIR / "vertirta_corl_manuscript.tex").read_text(encoding="utf-8")
@@ -202,10 +202,18 @@ def test_phase3_live_v400_ingestion_matches_strict_manifest_and_honest_ablations
         assert slot["value"] is not None, f"Null slot: {key}"
 
     assert manifest["external_eval_only_slots"]["icg_drone_miou"]["value"] is None
-    assert manifest["external_eval_only_slots"]["uavscenes_miou"]["value"] is None
+    assert manifest["external_eval_only_slots"]["uavscenes_miou"]["value"] is not None
+    assert manifest["external_eval_only_slots"]["uavscenes_fsr"]["value"] is not None
     abl = manifest["phase3_ablations_and_edge"]
+    assert abl["realworld_uavscenes_zeroshot"]["used_in_training"] is False
+    assert abl["realworld_uavscenes_zeroshot"]["used_in_calibration"] is False
+    assert abl["realworld_uavscenes_zeroshot"]["raw_pixels_deleted"] is True
     assert abl["pidnet_v21_g4_collapsed_epoch2"]["selected_epoch"] == 2
     assert abl["pidnet_v21_local_recovery"]["cu_consumed"] == 0.0
+    assert abl["qwen3_v3_local_conformal_recovery"]["cu_consumed"] == 0.0
+    assert abl["qwen3_v3_local_conformal_recovery"]["quantization_loss_zero"] is True
+    assert abl["qwen3_v3_local_conformal_recovery"]["lang_raps_ece"] < 0.05
+    assert abl["qwen3_v3_local_conformal_recovery"]["snr_lac_mean_set_size"] < 2.2
     assert abl["whisper_bvi_lora_ablation"]["finding"] == (
         "NEGATIVE_ABLATION_ZERO_SHOT_BEATS_AGGRESSIVE_3EP_LORA"
     )

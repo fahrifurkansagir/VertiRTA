@@ -60,6 +60,9 @@ bool OffboardRtaShield::is_deadman_expired(uint64_t now_us) const noexcept {
 }
 
 bool OffboardRtaShield::violates_istanbul_nfz(const core::Vec3Ned& pos_ned) const noexcept {
+  if (!pos_ned.is_finite()) {
+    return true;
+  }
   // 1. LTFJ CTR western wall (lon >= 29.1895 deg E or within safety buffer)
   const core::Vec3Enu enu = core::ned_to_enu(pos_ned);
   const core::GeodeticWgs84 geo = core::local_enu_to_geodetic(enu, core::kKartalDatum);
@@ -223,6 +226,8 @@ ShieldStepOutput OffboardRtaShield::process_fcu_packet(
       const LocalPositionNed lp = decode_local_position_ned(f);
       if (is_finite_f32(lp.x) && is_finite_f32(lp.y) && is_finite_f32(lp.z) &&
           is_finite_f32(lp.vx) && is_finite_f32(lp.vy) && is_finite_f32(lp.vz)) {
+        state_.local_position_seen = true;
+        state_.last_local_position_us = now_us;
         state_.pos_ned = {lp.x, lp.y, lp.z};
         state_.vel_ned = {lp.vx, lp.vy, lp.vz};
       }
@@ -257,22 +262,38 @@ ShieldStepOutput OffboardRtaShield::process_offboard_packet(
   // 1. Intercept COMMAND_LONG (hazardous disarm / flight termination checks).
   if (f.msgid == kMsgIdCommandLong) {
     const CommandLong cmd = decode_command_long(f);
-    const bool is_airborne = state_.pos_ned.z < -cfg_.airborne_disarm_agl_m;
+    // Fail-closed ground confirmation: treat vehicle as airborne/protected until BOTH FCU heartbeat
+    // and LOCAL_POSITION_NED are fresh (within deadman timeout) AND confirm z >= -airborne_disarm_agl_m.
+    const bool local_pos_fresh =
+        state_.local_position_seen &&
+        ((now_us < state_.last_local_position_us) ||
+         ((now_us - state_.last_local_position_us) <= cfg_.deadman_timeout_us));
+    const bool confirmed_on_ground =
+        (!is_deadman_expired(now_us)) && local_pos_fresh &&
+        std::isfinite(state_.pos_ned.z) &&
+        (state_.pos_ned.z >= -cfg_.airborne_disarm_agl_m);
+    const bool is_airborne_or_unknown = !confirmed_on_ground;
+    const bool is_arm_disarm_cmd = (cmd.command == kMavCmdComponentArmDisarm);
+    const bool param1_non_finite = !is_finite_f32(cmd.param1);
+    const bool param1_is_explicit_arm =
+        is_finite_f32(cmd.param1) && (std::abs(cmd.param1 - 1.0f) < 0.5f);
+    const bool is_non_finite_arm_disarm = is_arm_disarm_cmd && param1_non_finite;
     const bool is_airborne_disarm =
-        (cmd.command == kMavCmdComponentArmDisarm) &&
-        is_finite_f32(cmd.param1) && (std::abs(cmd.param1) < 0.5f) &&
-        is_airborne;
+        is_arm_disarm_cmd && (!param1_is_explicit_arm) && is_airborne_or_unknown;
     const bool is_flight_termination = (cmd.command == kMavCmdDoFlightTermination);
 
-    if (is_airborne_disarm || is_flight_termination) {
+    if (is_non_finite_arm_disarm || is_airborne_disarm || is_flight_termination) {
       ++stats_.commands_denied;
       out.action = ShieldAction::kDeniedCommand;
       out.to_offboard.push_back(
           make_command_ack_packet(cmd.command, kMavResultDenied, f.sysid, f.compid));
-      out.to_offboard.push_back(make_statustext_packet(
-          kMavSeverityCritical,
-          is_airborne_disarm ? "RTA DENY: AIRBORNE DISARM BLOCKED"
-                             : "RTA DENY: FLIGHT TERMINATION BLOCKED"));
+      const char* deny_msg = "RTA DENY: FLIGHT TERMINATION BLOCKED";
+      if (is_non_finite_arm_disarm) {
+        deny_msg = "RTA DENY: NON-FINITE ARM/DISARM PARAM1 BLOCKED";
+      } else if (is_airborne_disarm) {
+        deny_msg = "RTA DENY: AIRBORNE/UNKNOWN-ALT DISARM BLOCKED";
+      }
+      out.to_offboard.push_back(make_statustext_packet(kMavSeverityCritical, deny_msg));
       return out;
     }
 
@@ -309,6 +330,28 @@ ShieldStepOutput OffboardRtaShield::process_offboard_packet(
       out.to_fcu.push_back(make_hover_setpoint_packet(raw));
       out.to_offboard.push_back(
           make_statustext_packet(kMavSeverityCritical, "RTA CLAMP: NON-FINITE SETPOINT -> HOVER"));
+      return out;
+    }
+
+    // 2b-ii. Enforce MAV_FRAME_LOCAL_NED (1) fail-closed so BODY_NED / offset frames cannot bypass NFZ/CBVF.
+    if (raw.coordinate_frame != kMavFrameLocalNed) {
+      ++stats_.setpoints_clamped;
+      ++stats_.setpoints_clamped_nfz;
+      out.action = ShieldAction::kClampedSafeSetpoint;
+      out.to_fcu.push_back(make_hover_setpoint_packet(raw));
+      out.to_offboard.push_back(
+          make_statustext_packet(kMavSeverityCritical, "RTA CLAMP: NON-LOCAL_NED FRAME -> HOVER"));
+      return out;
+    }
+
+    // 2b-iii. Reject FORCE_SET bit (0x0200) fail-closed into safe LOCAL_NED velocity hover (bit cleared).
+    if ((raw.type_mask & kTypeMaskForce) != 0u) {
+      ++stats_.setpoints_clamped;
+      ++stats_.setpoints_clamped_plunge_speed;
+      out.action = ShieldAction::kClampedSafeSetpoint;
+      out.to_fcu.push_back(make_hover_setpoint_packet(raw));
+      out.to_offboard.push_back(
+          make_statustext_packet(kMavSeverityCritical, "RTA CLAMP: FORCE_SET BIT BLOCKED -> HOVER"));
       return out;
     }
 

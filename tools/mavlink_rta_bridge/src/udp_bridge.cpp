@@ -40,7 +40,7 @@ class UdpSocket {
   UdpSocket(const UdpSocket&) = delete;
   UdpSocket& operator=(const UdpSocket&) = delete;
 
-  bool bind_loopback(uint16_t port = 0u) noexcept {
+  bool bind_ipv4(uint32_t addr_host_order, uint16_t port = 0u) noexcept {
     close_fd();
     fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd_ < 0) {
@@ -55,7 +55,7 @@ class UdpSocket {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_addr.s_addr = htonl(addr_host_order);
 
     if (::bind(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) {
       close_fd();
@@ -70,6 +70,14 @@ class UdpSocket {
     }
     port_ = ntohs(bound.sin_port);
     return true;
+  }
+
+  bool bind_loopback(uint16_t port = 0u) noexcept {
+    return bind_ipv4(INADDR_LOOPBACK, port);
+  }
+
+  bool bind_any(uint16_t port = 0u) noexcept {
+    return bind_ipv4(INADDR_ANY, port);
   }
 
   [[nodiscard]] int fd() const noexcept { return fd_; }
@@ -338,7 +346,8 @@ UdpLoopbackStressReport run_udp_loopback_stress_proof(
         if (dec.frame.msgid == kMsgIdCommandLong) {
           const CommandLong cmd = decode_command_long(dec.frame);
           if (cmd.command == kMavCmdDoFlightTermination ||
-              (cmd.command == kMavCmdComponentArmDisarm && std::abs(cmd.param1) < 0.5f)) {
+              (cmd.command == kMavCmdComponentArmDisarm &&
+               (!std::isfinite(cmd.param1) || std::abs(cmd.param1 - 1.0f) >= 0.5f))) {
             fcu_unsafe_leaked.fetch_add(1u, std::memory_order_relaxed);
           }
         } else if (dec.frame.msgid == kMsgIdSetPositionTargetLocalNed) {
@@ -349,7 +358,10 @@ UdpLoopbackStressReport run_udp_loopback_stress_proof(
                                  (static_cast<double>(sp.vz) < -cfg.max_ascent_rate_mps - 0.05);
           const bool bad_alt = ((sp.type_mask & kTypeMaskIgnoreZ) == 0u) &&
                                (static_cast<double>(sp.z) > -cfg.min_agl_m + 0.05);
-          if (!std::isfinite(sp.vx) || !std::isfinite(sp.vy) || !std::isfinite(sp.vz) || bad_speed || bad_alt) {
+          const bool bad_frame_or_force =
+              (sp.coordinate_frame != kMavFrameLocalNed) || ((sp.type_mask & kTypeMaskForce) != 0u);
+          if (!std::isfinite(sp.vx) || !std::isfinite(sp.vy) || !std::isfinite(sp.vz) ||
+              bad_speed || bad_alt || bad_frame_or_force) {
             fcu_unsafe_leaked.fetch_add(1u, std::memory_order_relaxed);
           }
         }
@@ -680,23 +692,43 @@ UdpLoopbackStressReport run_udp_loopback_stress_proof(
   return report;
 }
 
+std::optional<uint32_t> select_fcu_socket_bind_addr_host_order(
+    const std::string& fcu_host) noexcept {
+  in_addr addr{};
+  if (::inet_pton(AF_INET, fcu_host.c_str(), &addr) != 1) {
+    return std::nullopt;
+  }
+  const uint32_t host_ip = ntohl(addr.s_addr);
+  if ((host_ip & 0xFF000000u) == 0x7F000000u) {
+    return static_cast<uint32_t>(INADDR_LOOPBACK);
+  }
+  return static_cast<uint32_t>(INADDR_ANY);
+}
+
 int run_live_udp_proxy(
     uint16_t listen_offboard_port,
     const std::string& fcu_host,
     uint16_t fcu_port,
     const ShieldConfig& cfg,
     std::atomic<bool>* stop_flag) {
-  UdpSocket offboard_sock;
-  UdpSocket fcu_sock;
-  if (!offboard_sock.bind_loopback(listen_offboard_port) || !fcu_sock.bind_loopback(0u)) {
-    return 1;
-  }
-
   sockaddr_in fcu_addr{};
   fcu_addr.sin_family = AF_INET;
   fcu_addr.sin_port = htons(fcu_port);
   if (::inet_pton(AF_INET, fcu_host.c_str(), &fcu_addr.sin_addr) != 1) {
     return 2;
+  }
+  const auto fcu_bind_addr = select_fcu_socket_bind_addr_host_order(fcu_host);
+  if (!fcu_bind_addr.has_value()) {
+    return 2;
+  }
+
+  UdpSocket offboard_sock;
+  UdpSocket fcu_sock;
+  const bool fcu_bound = (*fcu_bind_addr == static_cast<uint32_t>(INADDR_LOOPBACK))
+                             ? fcu_sock.bind_loopback(0u)
+                             : fcu_sock.bind_any(0u);
+  if (!offboard_sock.bind_loopback(listen_offboard_port) || !fcu_bound) {
+    return 1;
   }
 
   sockaddr_in last_planner_addr{};

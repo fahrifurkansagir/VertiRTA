@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VertiGCS — VertiRTA-X8-240 Command &amp; .vrta Replay Console</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307101a'/%3E%3Cpath d='M16 5l9 18-9-4-9 4z' fill='%2300e5ff'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="./src/styles/vertigcs.css" />
   </head>
   <body>
@@ -11,155 +16,322 @@
       <header class="topbar">
         <div class="brand">
           <span class="badge-live" id="mode-badge">SANDBOX WASM</span>
-          <strong>VertiGCS</strong>
+          <strong class="brand-title">VertiGCS</strong>
           <span class="subtitle">VertiRTA-X8-240 &bull; Kartal–Maltepe Coastal ODD</span>
         </div>
-        <div class="disclaimer">
+        <div
+          class="disclaimer"
+          title="Elevation ref: Copernicus DEM GLO-30 (DOI: 10.5270/ESA-c5d3d65, EGM2008 -&gt; WGS84 HAE)."
+        >
           Open-Source WebAssembly Flight Sandbox &mdash; Not certified for flight.
-          Elevation ref: Copernicus DEM GLO-30 (DOI: 10.5270/ESA-c5d3d65, EGM2008 &rarr; WGS84 HAE).
         </div>
       </header>
 
       <main class="workspace">
-        <section id="map-viewport" class="viewport" aria-label="3D Tactical Corridor Map"></section>
+        <section class="viewport-stage" aria-label="3D Tactical Corridor Stage">
+          <div id="map-viewport" class="viewport" aria-label="3D Tactical Corridor Map"></div>
 
-        <aside class="hud-rail">
-          <section class="panel" id="telemetry-panel">
-            <h2>Flight &amp; RTA Telemetry</h2>
-            <dl class="kv-grid">
-              <dt>Regime</dt><dd id="hud-regime">NOMINAL_8_ROTOR</dd>
-              <dt>Altitude (AGL / HAE)</dt><dd id="hud-alt">35.0 / 83.7 m</dd>
-              <dt>400 V Pack (SoC / V)</dt><dd id="hud-batt">80.0% / 403.2 V</dd>
-              <dt>TMR / &chi;&sup2;</dt><dd id="hud-tmr">3/3_NOMINAL / 0.00</dd>
-              <dt>CBVF Margin h(x)</dt><dd id="hud-cbvf">+25.0 m</dd>
-              <dt>LTFJ / LTBX Margin</dt><dd id="hud-ctr">1042 / 2995 m</dd>
-              <dt>Active Rotors</dt><dd id="hud-mask">0xFF (8/8)</dd>
-              <dt>CEL Spin Latch</dt><dd id="hud-cel">DISARMED</dd>
+          <div class="map-hud-top" aria-live="polite">
+            <div class="map-chip map-chip-corridor">
+              <span class="chip-kicker">ANATOLIAN ODD</span>
+              <span class="chip-value">40.8860&deg;N 29.1880&deg;E &bull; &lt;29.1895&deg;E</span>
+            </div>
+            <div class="map-chip map-alert-chip" id="map-alert-banner" data-state="nominal">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="map-alert-text">RTA ENVELOPE NOMINAL &bull; LTFJ / LTBX CLEAR</span>
+            </div>
+          </div>
+
+          <div class="map-legend" id="map-legend" aria-label="3D Airspace Legend">
+            <div class="legend-title">Tactical Overlay</div>
+            <div class="legend-items">
+              <span class="legend-item"><i class="swatch swatch-ltfj"></i>LTFJ CTR (2500 ft)</span>
+              <span class="legend-item"><i class="swatch swatch-ltbx"></i>LTBX CTR (2000 ft)</span>
+              <span class="legend-item"><i class="swatch swatch-hosp"></i>Hospital Keepout (150 m)</span>
+              <span class="legend-item"><i class="swatch swatch-corridor"></i>U-Space Corridor</span>
+              <span class="legend-item"><i class="swatch swatch-ego"></i>Ego X8-240 / CEL</span>
+              <span class="legend-item"><i class="swatch swatch-fleet"></i>Fleet (70 m / 105 m)</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="hud-rail" aria-label="VertiGCS Flight Telemetry and Controls">
+          <section class="panel telemetry-pinned" id="telemetry-panel">
+            <div class="panel-head">
+              <h2>Flight &amp; RTA Telemetry</h2>
+              <span class="tick-pill" id="hud-tick">t=0.0s &bull; #0</span>
+            </div>
+
+            <div class="regime-banner" id="hud-regime-card" data-state="nominal">
+              <span class="kpi-label">Regime</span>
+              <strong class="regime-value" id="hud-regime">NOMINAL_8_ROTOR</strong>
+            </div>
+
+            <dl class="kpi-grid">
+              <div class="kpi-card">
+                <dt>AGL / HAE</dt>
+                <dd id="hud-alt">35.0 / 83.7 m</dd>
+              </div>
+              <div class="kpi-card" id="hud-ctr-card" data-state="nominal">
+                <dt>Airspace (LTFJ / LTBX)</dt>
+                <dd id="hud-ctr">1042 / 2995 m</dd>
+              </div>
+              <div class="kpi-card" id="hud-cel-card" data-state="nominal">
+                <dt>Fault / CEL Latch</dt>
+                <dd id="hud-cel">DISARMED</dd>
+              </div>
+              <div class="kpi-card" id="hud-cbvf-card" data-state="nominal">
+                <dt>CBVF Margin h(x)</dt>
+                <dd id="hud-cbvf">+25.0 m</dd>
+              </div>
+              <div class="kpi-card">
+                <dt>400 V Pack (SoC / V)</dt>
+                <dd id="hud-batt">80.0% / 403.2 V</dd>
+              </div>
+              <div class="kpi-card" id="hud-tmr-card" data-state="nominal">
+                <dt>TMR / &chi;&sup2;</dt>
+                <dd id="hud-tmr">3/3_NOMINAL / 0.00</dd>
+              </div>
             </dl>
+
+            <div class="rotor-header">
+              <span>Coaxial Propulsion Array</span>
+              <span class="rotor-mask" id="hud-mask">0xFF (8/8)</span>
+            </div>
             <div class="rotor-bars" id="hud-rotors" aria-label="8-Rotor RPM Bars"></div>
           </section>
 
-          <section class="panel" id="fault-panel">
-            <h2>Live Fault Injection (Sandbox)</h2>
-            <div class="btn-grid">
-              <button type="button" data-fault="single" data-target="2">Kill Rotor #3 (CSFL)</button>
-              <button type="button" data-fault="same_arm" data-target="0" class="danger">
-                Same-Arm Dual Kill (CEL 2.2 rad/s)
-              </button>
-              <button type="button" data-fault="imu" data-target="1">Inject IMU #1 Drift (TMR)</button>
-              <button type="button" data-fault="wind" data-target="0">12 m/s Coastal Wind Gust</button>
-              <button type="button" data-fault="reset" data-target="0" class="secondary">Reset Nominal Hover</button>
-            </div>
-          </section>
+          <nav class="hud-tabs" role="tablist" aria-label="VertiGCS Control Modes">
+            <button
+              type="button"
+              role="tab"
+              id="tab-flight"
+              class="hud-tab"
+              data-tab-target="pane-flight"
+              aria-selected="true"
+              aria-controls="pane-flight"
+            >
+              <span>Flight &amp; Faults</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-fleet"
+              class="hud-tab"
+              data-tab-target="pane-fleet"
+              aria-selected="false"
+              aria-controls="pane-fleet"
+              tabindex="-1"
+            >
+              <span>U-Space Fleet</span>
+              <span class="tab-badge" id="tab-badge-fleet" hidden>20</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-m3"
+              class="hud-tab"
+              data-tab-target="pane-m3"
+              aria-selected="false"
+              aria-controls="pane-m3"
+              tabindex="-1"
+            >
+              <span>Forensics &amp; M3</span>
+              <span class="tab-badge tab-badge-alert" id="tab-badge-m3" hidden>!</span>
+            </button>
+          </nav>
 
-          <section class="panel" id="replay-panel">
-            <h2>.vrta Black-Box Replay (VRTA0001)</h2>
-            <div class="btn-grid" style="margin-bottom: 8px">
-              <button type="button" id="btn-load-sample-vrta">
-                Load Sample Fault Flight (Kartal &rarr; Same-Arm 2M CEL)
-              </button>
-            </div>
-            <label class="dropzone" for="vrta-file-input" id="vrta-dropzone">
-              Drop <code>.vrta</code> log or click to inspect (128 B hdr + 256 B CRC32C frames)
-              <input id="vrta-file-input" type="file" accept=".vrta" hidden />
-            </label>
-            <div class="scrubber-row">
-              <button type="button" id="btn-play-pause">Pause</button>
-              <input type="range" id="replay-slider" min="0" max="100" value="0" />
-              <span id="replay-time">0.00 s</span>
-            </div>
-          </section>
+          <div class="hud-tab-body">
+            <div
+              class="tab-pane"
+              id="pane-flight"
+              role="tabpanel"
+              aria-labelledby="tab-flight"
+            >
+              <section class="panel" id="fault-panel">
+                <h2>Live Fault Injection (Sandbox)</h2>
+                <div class="btn-grid btn-grid-2">
+                  <button type="button" data-fault="single" data-target="2">
+                    Kill Rotor #3 (CSFL)
+                  </button>
+                  <button type="button" data-fault="same_arm" data-target="0" class="danger">
+                    Same-Arm Dual Kill (CEL)
+                  </button>
+                  <button type="button" data-fault="imu" data-target="1">
+                    IMU #1 Drift (TMR)
+                  </button>
+                  <button type="button" data-fault="wind" data-target="0">
+                    12 m/s Coastal Gust
+                  </button>
+                  <button type="button" data-fault="reset" data-target="0" class="secondary span-2">
+                    Reset Nominal Hover
+                  </button>
+                </div>
+              </section>
 
-          <section class="panel" id="fleet-panel">
-            <h2>20-eVTOL U-Space Fleet &amp; Part-IS Cyber</h2>
-            <p id="fleet-hud-summary" style="margin: 0 0 8px; font-size: 12px; opacity: 0.9">
-              Standby (0/20 active) &bull; 15&deg;C Chilled Stands Ready (4&times;4)
-            </p>
-            <div class="btn-grid">
-              <button type="button" id="btn-fleet-toggle">Enable 20-eVTOL U-Space Fleet</button>
-              <button type="button" id="btn-fleet-cel" class="danger">Trigger CEL P0 Preemption</button>
-              <button type="button" id="btn-fleet-replay">Inject Part-IS V2V Replay</button>
-              <button type="button" id="btn-fleet-spoof" class="danger">Spoof USSP &rarr; LTFJ Quarantine</button>
-              <button type="button" id="btn-fleet-reset" class="secondary">Reset Nominal Fleet</button>
-            </div>
-            <pre id="fleet-cyber-log" style="margin-top: 8px">Fleet overlay paused — click Enable to launch 20-eVTOL Anatolian U-Space ops.</pre>
-            <details id="fleet-table-details" class="fleet-details">
-              <summary>20-eVTOL Fleet Telemetry Table (ID | Mode | Part-IS | SoC | Temp | Stand)</summary>
-              <div class="fleet-table-wrap">
-                <table class="fleet-table" id="fleet-telemetry-table" aria-label="20-eVTOL Fleet Telemetry">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Mode</th>
-                      <th>Part-IS</th>
-                      <th>SoC%</th>
-                      <th>Temp&deg;C</th>
-                      <th>Stand</th>
-                    </tr>
-                  </thead>
-                  <tbody id="fleet-table-body"></tbody>
-                </table>
-              </div>
-            </details>
-          </section>
+              <section class="panel" id="replay-panel">
+                <h2>.vrta Black-Box Replay (VRTA0001)</h2>
+                <div class="btn-grid">
+                  <button type="button" id="btn-load-sample-vrta" class="accent-btn">
+                    Load Sample Fault Flight (Kartal &rarr; 2M CEL)
+                  </button>
+                </div>
+                <label class="dropzone" for="vrta-file-input" id="vrta-dropzone">
+                  Drop <code>.vrta</code> log or click to inspect (128 B hdr + 256 B CRC32C)
+                  <input id="vrta-file-input" type="file" accept=".vrta" hidden />
+                </label>
+                <div class="scrubber-row">
+                  <button type="button" id="btn-play-pause" class="compact-btn">Pause</button>
+                  <input
+                    type="range"
+                    id="replay-slider"
+                    min="0"
+                    max="100"
+                    value="0"
+                    aria-label="Replay Timeline Scrubber"
+                  />
+                  <span id="replay-time">0.00 s</span>
+                </div>
+              </section>
 
-          <section class="panel" id="m3-panel">
-            <h2>M3 Perception, GNSS-Denied &amp; Voice ATC</h2>
-            <p id="m3-hud-summary" style="margin: 0 0 8px; font-size: 12px; opacity: 0.9">
-              M3 NOMINAL &bull; Wires 3/64 (22.0 m/s) &bull; H0_NOMINAL / BOUNDED_GNSS_DENIED_CRUISE
-            </p>
-            <dl class="kv-grid m3-kv">
-              <dt>Forward Wire/mmWave</dt><dd id="m3-forward-status">Wires 3/64 &bull; RADAR LOCK &bull; 22.0 m/s</dd>
-              <dt>GNSS Spoof Guard</dt><dd id="m3-gnss-status">H0_NOMINAL &bull; MCUSUM 0.18 (LAND)</dd>
-              <dt>Visual Geo-Reloc</dt><dd id="m3-reloc-status">XFeat+LighterGlue (64 inliers)</dd>
-              <dt>Nav FSM &amp; 3&sigma; CTR</dt><dd id="m3-fsm-status">BOUNDED_GNSS_DENIED_CRUISE &bull; 3&sigma;=4.5 m</dd>
-              <dt>Voice ATC Mondrian</dt><dd id="m3-voice-status">S1_Cruise &bull; |C|=1 &bull; sherpa-onnx 154 ms</dd>
-            </dl>
-            <div class="btn-grid" style="margin-top: 8px">
-              <button type="button" id="btn-m3-compound" class="danger">
-                Trigger 6-Fault Compound Apex (E1 Istanbul Mission)
-              </button>
-              <button type="button" id="btn-m3-wire">Simulate Forward Wire + Grazing Cliff (15 m/s)</button>
-              <button type="button" id="btn-m3-spoof" class="danger">
-                Inject 1.0 m/s Slow-Ramp GNSS Spoof (H3 MCUSUM)
-              </button>
-              <button type="button" id="btn-m3-water" class="danger">
-                Simulate Marmara Open-Water VIO Drift (3&sigma; CTR Inflation)
-              </button>
-              <button type="button" id="btn-m3-voice-mayday" class="danger">
-                Voice ATC MAYDAY in S3_Garbled (Preempt + Readback)
-              </button>
-              <button type="button" id="btn-m3-e5x-preview">
-                Preview .e5x Draft Incident (ID 431 / SCF-NP)
-              </button>
-              <button type="button" id="btn-m3-e5x-download">
-                1-Click Download .e5x.xml Draft (W3C XSD Valid)
-              </button>
-              <button type="button" id="btn-m3-sample-sidecar">
-                Verify Sample .vrta_events.jsonl Chain (WebCrypto SHA-256)
-              </button>
-              <button type="button" id="btn-m3-reset" class="secondary">Reset M3 Nominal</button>
-            </div>
-            <label class="dropzone" for="m3-sidecar-file-input" id="m3-sidecar-dropzone" style="margin-top: 8px">
-              Drop <code>.vrta_events.jsonl</code> sidecar or click to verify SHA-256 chain
-              <input id="m3-sidecar-file-input" type="file" accept=".jsonl,.json,.txt" hidden />
-            </label>
-            <details id="m3-sidecar-details" class="fleet-details">
-              <summary>ED-155A Sidecar Chain Verifier &amp; Event Timeline</summary>
-              <p id="m3-sidecar-status" class="sidecar-status">Awaiting .vrta_events.jsonl drop or sample click.</p>
-              <ul id="m3-sidecar-timeline" class="sidecar-timeline"></ul>
-            </details>
-            <details id="m3-e5x-details" class="fleet-details">
-              <summary>ECCAIRS2 .e5x Draft Incident Preview (CIR 2026/1821 &bull; ID 431 Draft Only)</summary>
-              <pre id="m3-e5x-xml-preview">Click 1-Click .e5x Draft Incident Preview to inspect grounded XML.</pre>
-            </details>
-          </section>
-
-          <section class="panel" id="z3-panel">
-            <h2>Z3-STL Audit &amp; Viewport Adapter</h2>
-            <pre id="z3-audit-log">Adapter: MapLibre GL v6 + @deck.gl/maplibre v9.4 (MapView z&gt;=8, DPR&lt;=1.5)
+              <section class="panel" id="z3-panel">
+                <h2>Z3-STL Audit &amp; Engine Status</h2>
+                <pre id="z3-audit-log">Adapter: MapLibre GL v6 + @deck.gl/maplibre v9.4 (MapView z&gt;=8, DPR&lt;=1.5)
 Status: SAT — Kartal ODD verified outside LTFJ NW J2 &amp; LTBX.</pre>
-          </section>
+              </section>
+            </div>
+
+            <div
+              class="tab-pane"
+              id="pane-fleet"
+              role="tabpanel"
+              aria-labelledby="tab-fleet"
+              hidden
+            >
+              <section class="panel" id="fleet-panel">
+                <h2>20-eVTOL U-Space Fleet &amp; Part-IS Cyber</h2>
+                <p id="fleet-hud-summary" class="panel-summary">
+                  Standby (0/20 active) &bull; 15&deg;C Chilled Stands Ready (4&times;4)
+                </p>
+                <div class="btn-grid btn-grid-2">
+                  <button type="button" id="btn-fleet-toggle" class="accent-btn span-2">
+                    Enable 20-eVTOL U-Space Fleet
+                  </button>
+                  <button type="button" id="btn-fleet-cel" class="danger">
+                    Trigger CEL P0 Preemption
+                  </button>
+                  <button type="button" id="btn-fleet-replay">
+                    Inject Part-IS V2V Replay
+                  </button>
+                  <button type="button" id="btn-fleet-spoof" class="danger span-2">
+                    Spoof USSP &rarr; LTFJ Quarantine
+                  </button>
+                  <button type="button" id="btn-fleet-reset" class="secondary span-2">
+                    Reset Nominal Fleet
+                  </button>
+                </div>
+                <pre id="fleet-cyber-log" class="log-box">Fleet overlay paused — click Enable to launch 20-eVTOL Anatolian U-Space ops.</pre>
+                <details id="fleet-table-details" class="fleet-details">
+                  <summary>20-eVTOL Fleet Telemetry Table (ID | Mode | Part-IS | SoC | Temp | Stand)</summary>
+                  <div class="fleet-table-wrap">
+                    <table class="fleet-table" id="fleet-telemetry-table" aria-label="20-eVTOL Fleet Telemetry">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Mode</th>
+                          <th>Part-IS</th>
+                          <th>SoC%</th>
+                          <th>Temp&deg;C</th>
+                          <th>Stand</th>
+                        </tr>
+                      </thead>
+                      <tbody id="fleet-table-body"></tbody>
+                    </table>
+                  </div>
+                </details>
+              </section>
+            </div>
+
+            <div
+              class="tab-pane"
+              id="pane-m3"
+              role="tabpanel"
+              aria-labelledby="tab-m3"
+              hidden
+            >
+              <section class="panel" id="m3-panel">
+                <h2>M3 Perception, GNSS-Denied &amp; Voice ATC</h2>
+                <p id="m3-hud-summary" class="panel-summary">
+                  M3 NOMINAL &bull; Wires 3/64 (22.0 m/s) &bull; H0_NOMINAL / BOUNDED_GNSS_DENIED_CRUISE
+                </p>
+                <dl class="kv-grid m3-kv">
+                  <dt>Forward Wire/mmWave</dt>
+                  <dd id="m3-forward-status">Wires 3/64 &bull; RADAR LOCK &bull; 22.0 m/s</dd>
+                  <dt>GNSS Spoof Guard</dt>
+                  <dd id="m3-gnss-status">H0_NOMINAL &bull; MCUSUM 0.18 (LAND)</dd>
+                  <dt>Visual Geo-Reloc</dt>
+                  <dd id="m3-reloc-status">XFeat+LighterGlue (64 inliers)</dd>
+                  <dt>Nav FSM &amp; 3&sigma; CTR</dt>
+                  <dd id="m3-fsm-status">BOUNDED_GNSS_DENIED_CRUISE &bull; 3&sigma;=4.5 m</dd>
+                  <dt>Voice ATC Mondrian</dt>
+                  <dd id="m3-voice-status">S1_Cruise &bull; |C|=1 &bull; sherpa-onnx 154 ms</dd>
+                </dl>
+
+                <div class="subsection-label">Scenario Triggers</div>
+                <div class="btn-grid btn-grid-2">
+                  <button type="button" id="btn-m3-compound" class="danger span-2">
+                    6-Fault Compound Apex (E1 Istanbul Mission)
+                  </button>
+                  <button type="button" id="btn-m3-wire">
+                    Wire Grazing Cliff (15 m/s)
+                  </button>
+                  <button type="button" id="btn-m3-spoof" class="danger">
+                    H3 Slow-Ramp GNSS Spoof
+                  </button>
+                  <button type="button" id="btn-m3-water" class="danger">
+                    Open-Water VIO Drift (3&sigma;)
+                  </button>
+                  <button type="button" id="btn-m3-voice-mayday" class="danger">
+                    Voice MAYDAY (S3 Preempt)
+                  </button>
+                </div>
+
+                <div class="subsection-label">Forensics &amp; ECCAIRS2 Drafts</div>
+                <div class="btn-grid btn-grid-2">
+                  <button type="button" id="btn-m3-e5x-preview">
+                    Preview .e5x Draft (ID 431)
+                  </button>
+                  <button type="button" id="btn-m3-e5x-download" class="accent-btn">
+                    Download .e5x.xml (XSD)
+                  </button>
+                  <button type="button" id="btn-m3-sample-sidecar" class="span-2">
+                    Verify Sample .vrta_events.jsonl (WebCrypto SHA-256)
+                  </button>
+                  <button type="button" id="btn-m3-reset" class="secondary span-2">
+                    Reset M3 Nominal
+                  </button>
+                </div>
+
+                <label class="dropzone" for="m3-sidecar-file-input" id="m3-sidecar-dropzone">
+                  Drop <code>.vrta_events.jsonl</code> sidecar or click to verify SHA-256 chain
+                  <input id="m3-sidecar-file-input" type="file" accept=".jsonl,.json,.txt" hidden />
+                </label>
+
+                <details id="m3-sidecar-details" class="fleet-details">
+                  <summary>ED-155A Sidecar Chain Verifier &amp; Event Timeline</summary>
+                  <p id="m3-sidecar-status" class="sidecar-status">
+                    Awaiting .vrta_events.jsonl drop or sample click.
+                  </p>
+                  <ul id="m3-sidecar-timeline" class="sidecar-timeline"></ul>
+                </details>
+
+                <details id="m3-e5x-details" class="fleet-details">
+                  <summary>ECCAIRS2 .e5x Draft Preview (CIR 2026/1821 &bull; ID 431 Draft Only)</summary>
+                  <pre id="m3-e5x-xml-preview">Click Preview .e5x Draft to inspect grounded XML.</pre>
+                </details>
+              </section>
+            </div>
+          </div>
         </aside>
       </main>
     </div>

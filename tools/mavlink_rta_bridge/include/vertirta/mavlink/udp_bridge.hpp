@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -58,6 +59,13 @@ struct UdpLoopbackStressReport {
 [[nodiscard]] UdpLoopbackStressReport run_udp_loopback_stress_proof(
     uint32_t total_offboard_packets = 2400u,
     const std::string& out_json_path = "");
+
+// Select FCU UDP socket IPv4 bind address (host byte order) for target fcu_host:
+//   - std::nullopt if fcu_host is not a valid IPv4 literal
+//   - INADDR_LOOPBACK (0x7F000001) for 127.0.0.0/8 loopback targets
+//   - INADDR_ANY      (0x00000000) for non-loopback LAN/remote targets
+[[nodiscard]] std::optional<uint32_t> select_fcu_socket_bind_addr_host_order(
+    const std::string& fcu_host) noexcept;
 
 // Run a live long-running UDP proxy bridging an external Offboard planner port to a target FCU UDP host:port.
 int run_live_udp_proxy(

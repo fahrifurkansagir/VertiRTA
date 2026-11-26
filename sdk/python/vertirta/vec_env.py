@@ -167,7 +167,7 @@ class VertiVecEnv(VectorEnv):
                     self._fault_injected[i] = True
 
         if self._vec_sim is not None:
-            saved_reset_obs = self._obs_buf[~stepped_mask].copy() if not bool(stepped_mask.all()) else None
+            step_mask_u8 = np.ascontiguousarray(stepped_mask, dtype=np.uint8)
             self._vec_sim.step_batch(
                 act,
                 self.substeps_400hz,
@@ -175,12 +175,8 @@ class VertiVecEnv(VectorEnv):
                 self._rew_buf,
                 self._term_u8,
                 self._cel_u8,
+                step_mask_u8,
             )
-            if saved_reset_obs is not None:
-                self._obs_buf[~stepped_mask] = saved_reset_obs
-                self._rew_buf[~stepped_mask] = 0.0
-                self._term_u8[~stepped_mask] = 0
-                self._cel_u8[~stepped_mask] = 0
         else:
             for i in range(self.num_envs):
                 if not stepped_mask[i]:

@@ -53,6 +53,14 @@ wheel.packages = ["sdk/python/vertirta"]
 wheel.py-api = "cp312"
 sdist.include = [
   "core/flight_core/**",
+  "core/rta_companion/**",
+  "core/uspace_fleet/**",
+  "core/airframes/**",
+  "core/forward_hazard/**",
+  "core/gnss_denied/**",
+  "core/voice/**",
+  "core/forensics/**",
+  "include/**",
   "sdk/python/**",
   "cmake/**",
   "config/vehicle_x8_240.yaml",

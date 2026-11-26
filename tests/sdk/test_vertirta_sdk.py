@@ -42,6 +42,22 @@ def test_pyproject_locks_nanobind_abi3_and_skips_free_threaded_cp314t() -> None:
     assert "cp31?t-*" in cibw["skip"]
     assert cibw["build-frontend"] == "uv"
 
+    sdist_inc = set(cfg["tool"]["scikit-build"]["sdist"]["include"])
+    for req_glob in (
+        "core/flight_core/**",
+        "core/rta_companion/**",
+        "core/uspace_fleet/**",
+        "core/airframes/**",
+        "core/forward_hazard/**",
+        "core/gnss_denied/**",
+        "core/voice/**",
+        "core/forensics/**",
+        "include/**",
+        "sdk/python/**",
+        "cmake/**",
+    ):
+        assert req_glob in sdist_inc, f"Missing {req_glob} in pyproject.toml sdist.include"
+
 
 def test_gymnasium_single_and_vec_env_determinism_and_autoreset_modes() -> None:
     if os.environ.get("VERTIRTA_REQUIRE_NATIVE") == "1":
@@ -143,9 +159,25 @@ def test_vertirta_cli_subcommands_and_port_guard(tmp_path: Path) -> None:
     # Port isolation guard (5180/8891 allowed; 4173/4174/8765/9222/9223 rejected)
     res_ok_port = runner.invoke(app, ["gcs", "--port", "5180", "--ws-port", "8891", "--dry-run"])
     assert res_ok_port.exit_code == 0
+    gcs_payload = json.loads(res_ok_port.stdout)
+    assert gcs_payload["dry_run"] is True
+    assert gcs_payload["launch_commands"]
     for bad_port in ("4173", "4174", "8765", "9222", "9223"):
         res_bad = runner.invoke(app, ["gcs", "--port", bad_port, "--dry-run"])
         assert res_bad.exit_code != 0
+
+    # Live-mode HTTP/WS port collision rejected; --no-dry-run refuses to silently pretend launch
+    res_collide = runner.invoke(app, ["gcs", "--mode", "live", "--port", "5180", "--ws-port", "5180", "--dry-run"])
+    assert res_collide.exit_code == 2
+    res_no_dry = runner.invoke(app, ["gcs", "--port", "5180", "--ws-port", "8891", "--no-dry-run"])
+    assert res_no_dry.exit_code == 2
+
+    # Unsupported airframe error reports current SDK version (never stale v3.0.0)
+    res_bad_af = runner.invoke(app, ["sim", "--airframe", "quad"])
+    assert res_bad_af.exit_code == 2
+    combined_out = res_bad_af.stdout + getattr(res_bad_af, "stderr", "")
+    assert "v3.0.0" not in combined_out
+    assert f"v{vertirta.__version__}" in combined_out
 
     # Zero out-of-ODD Bosphorus examples in CLI help
     res_help = runner.invoke(app, ["verify-stl", "--help"])
@@ -194,3 +226,91 @@ def test_m2_fleet_sim_and_lift_cruise_sdk_bindings() -> None:
     assert oei4_hover["effective_rank"] == 3
     oei4_trans = lc4.audit_oei_trim(14.0, failed_lift_rotor=0)
     assert oei4_trans["trim_feasible_4dof"] is True
+
+    # NaN / Inf fail-closed across both active backend and forced Python fallback
+    for force_fallback in (False, True):
+        f_nan = VertiFleetSim(n_agents=4, threads=1)
+        lc_nan = VertiLiftCruiseSim(layout="8+1")
+        if force_fallback:
+            f_nan._impl = None
+            lc_nan._impl = None
+        q_lon = f_nan.check_ussp_geofence(sig_valid=True, cmd_lon_deg=float("nan"), cmd_agl_m=60.0, t_s=10.0)
+        assert q_lon["cyber_state"] == "SEC_USSP_QUARANTINE"
+        assert q_lon["drop_ussp_directives"] is True
+        assert q_lon["emit_is_or_230_draft"] is True
+
+        rtb_nan = f_nan.step_cyber_time(t_s=float("nan"), ussp_auth_restored=True)
+        assert rtb_nan["cyber_state"] == "SEC_AUTONOMOUS_RTB"
+        assert rtb_nan["divert_to_nearest_fato_emg"] is True
+
+        f_nan.reset(seed=20261123)
+        q_agl = f_nan.check_ussp_geofence(sig_valid=True, cmd_lon_deg=29.1800, cmd_agl_m=float("inf"), t_s=10.0)
+        assert q_agl["cyber_state"] == "SEC_USSP_QUARANTINE"
+        assert q_agl["drop_ussp_directives"] is True
+
+        oei_nan = lc_nan.audit_oei_trim(float("nan"), failed_lift_rotor=0)
+        assert oei_nan["trim_feasible_4dof"] is False
+
+
+def test_vec_env_next_step_autoreset_no_native_state_desync() -> None:
+    """Verify NEXT_STEP autoreset does NOT advance C++ state on reset-only indices."""
+    act = np.array([[0.6, -0.4, 0.25, 0.15], [-0.5, 0.3, -0.2, -0.1]], dtype=np.float32)
+
+    # 1) Full-mask NEXT_STEP reset after truncation at step 2
+    vec_ns = VertiVecEnv(num_envs=2, autoreset_mode=AutoresetMode.NEXT_STEP, max_steps=2, num_threads=2)
+    vec_ref = VertiVecEnv(num_envs=2, autoreset_mode=AutoresetMode.DISABLED, max_steps=10, num_threads=1)
+    vec_ns.reset(seed=42)
+    vec_ref.reset(seed=42)
+
+    # Advance vec_ns to truncation at step 2
+    _, _, _, trunc1, _ = vec_ns.step(act)
+    assert not bool(trunc1.any())
+    _, _, _, trunc2, _ = vec_ns.step(act)
+    assert bool(trunc2.all())
+
+    # Step 3 in NEXT_STEP must ONLY reset both envs without advancing physics
+    obs_reset, rew_reset, term_reset, trunc_reset, _ = vec_ns.step(act)
+    obs_ref_reset, _ = vec_ref.reset(seed=None)  # Advances exact same per-env RNGs once
+    np.testing.assert_array_equal(obs_reset, obs_ref_reset)
+    np.testing.assert_array_equal(rew_reset, np.zeros((2,), dtype=np.float32))
+    assert not bool(term_reset.any()) and not bool(trunc_reset.any())
+
+    # Step 4 in NEXT_STEP must match EXACTLY 1 physics step from obs_ref_reset (not 2!)
+    obs_step1, rew_step1, term_step1, trunc_step1, _ = vec_ns.step(act)
+    obs_ref_step1, rew_ref_step1, term_ref_step1, trunc_ref_step1, _ = vec_ref.step(act)
+    np.testing.assert_array_equal(obs_step1, obs_ref_step1)
+    np.testing.assert_array_equal(rew_step1, rew_ref_step1)
+    np.testing.assert_array_equal(term_step1, term_ref_step1)
+    np.testing.assert_array_equal(trunc_step1, trunc_ref_step1)
+
+    # 2) Partial step mask ([False, True]): env 0 resets only, env 1 advances continuously
+    vec_part = VertiVecEnv(num_envs=2, autoreset_mode=AutoresetMode.NEXT_STEP, max_steps=10, num_threads=2)
+    vec_ref2 = VertiVecEnv(num_envs=2, autoreset_mode=AutoresetMode.DISABLED, max_steps=10, num_threads=1)
+    vec_part.reset(seed=77)
+    vec_ref2.reset(seed=77)
+
+    vec_part.step(act)
+    vec_ref2.step(act)
+
+    # Mark ONLY env 0 as needing reset on next step
+    vec_part._needs_reset[0] = True
+    obs_p_mid, rew_p_mid, _, _, _ = vec_part.step(act)
+    obs_r_mid, rew_r_mid, _, _, _ = vec_ref2.step(act)
+    obs_r0_reset, _ = vec_ref2.reset(seed=None, options={"reset_mask": [True, False]})
+
+    # Env 0 stayed at freshly reset state (rew=0), env 1 advanced normally
+    np.testing.assert_array_equal(obs_p_mid[0], obs_r0_reset[0])
+    assert rew_p_mid[0] == 0.0
+    np.testing.assert_array_equal(obs_p_mid[1], obs_r_mid[1])
+    assert rew_p_mid[1] == pytest.approx(rew_r_mid[1])
+
+    # Next step: BOTH envs advance; env 0 matches 1 step from reset, env 1 matches 3 steps total
+    obs_p_next, rew_p_next, _, _, _ = vec_part.step(act)
+    obs_r_next, rew_r_next, _, _, _ = vec_ref2.step(act)
+    np.testing.assert_array_equal(obs_p_next, obs_r_next)
+    np.testing.assert_array_equal(rew_p_next, rew_r_next)
+
+    vec_ns.close()
+    vec_ref.close()
+    vec_part.close()
+    vec_ref2.close()

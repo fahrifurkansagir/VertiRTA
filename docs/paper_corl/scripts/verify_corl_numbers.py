@@ -143,6 +143,63 @@ def _verify_v400_slots_against_sources(errors: list[str], manifest: dict[str, An
             float(xd["kartal_reloc_eval"]["ransac_gate_pass_rate"]) * 100.0,
         )
 
+    ext = manifest.get("external_eval_only_slots", {})
+    uavs_p = REPO_ROOT / "artifacts" / "v4.0.0" / "realworld_uavscenes_zeroshot_eval.json"
+    if ext.get("uavscenes_miou", {}).get("value") is not None:
+        if not uavs_p.is_file():
+            errors.append("uavscenes_miou populated in manifest but realworld_uavscenes_zeroshot_eval.json missing")
+        else:
+            ud = json.loads(uavs_p.read_text(encoding="utf-8"))
+            ucal = ud["quarantined_zero_shot_uavscenes_bias_calibrated"]
+            uq = ud["quarantine_policy"]
+            if uq.get("used_in_training") is not False or uq.get("used_in_calibration") is not False:
+                errors.append("UAVScenes quarantine violation: used_in_training/used_in_calibration must be false")
+            if uq.get("raw_pixels_deleted") is not True:
+                errors.append("UAVScenes quarantine violation: raw_pixels_deleted must be true")
+            _check_close(
+                errors,
+                "uavscenes_miou",
+                ext["uavscenes_miou"]["value"],
+                ucal["miou_present_classes"],
+            )
+            _check_close(
+                errors,
+                "uavscenes_fsr",
+                ext["uavscenes_fsr"]["value"],
+                ucal["false_safe_rate_fsr"],
+            )
+
+    abl = manifest.get("phase3_ablations_and_edge", {})
+    loc_q_rec = abl.get("qwen3_v3_local_conformal_recovery")
+    loc_q_p = REPO_ROOT / "artifacts" / "v4.0.0" / "local_gtx1650s_qwen3_v3_conformal_raps.json"
+    if loc_q_rec is not None:
+        if not loc_q_p.is_file():
+            errors.append(
+                "qwen3_v3_local_conformal_recovery populated in manifest but local_gtx1650s_qwen3_v3_conformal_raps.json missing"
+            )
+        else:
+            lq = json.loads(loc_q_p.read_text(encoding="utf-8"))
+            if lq.get("zero_test_leakage_verified") is not True or lq.get("quantization_loss_zero") is not True:
+                errors.append("Local Qwen3 conformal recovery must preserve zero test leakage and zero quantization loss")
+            lq_sum = lq["summary"]
+            lq_lac = lq["paired_lac_on_fixed_scores"]
+            _check_close(errors, "local_qwen3.lang_raps_cov", loc_q_rec["lang_raps_coverage_pct"], lq_sum["lang_mondrian_raps_coverage_pct"])
+            _check_close(errors, "local_qwen3.lang_raps_ece", loc_q_rec["lang_raps_ece"], lq_sum["lang_mondrian_raps_ece"])
+            _check_close(errors, "local_qwen3.lang_raps_sz", loc_q_rec["lang_raps_mean_set_size"], lq_sum["lang_mondrian_raps_mean_set_size"])
+            _check_close(errors, "local_qwen3.snr_raps_sz", loc_q_rec["snr_raps_mean_set_size"], lq_sum["snr_mondrian_raps_mean_set_size"])
+            _check_close(errors, "local_qwen3.lang_lac_sz", loc_q_rec["lang_lac_mean_set_size"], lq_lac["lang_mondrian_lac_test"]["overall_mean_set_size"])
+            _check_close(errors, "local_qwen3.snr_lac_sz", loc_q_rec["snr_lac_mean_set_size"], lq_lac["snr_mondrian_lac_test"]["overall_mean_set_size"])
+
+    edge_rec = abl.get("gtx1650s_timesliced_edge")
+    edge_p = REPO_ROOT / "artifacts" / "v4.0.0" / "gtx1650s_m3_timesliced_edge_gate.json"
+    if edge_rec is not None and edge_p.is_file():
+        ed = json.loads(edge_p.read_text(encoding="utf-8"))
+        pb = ed["phase_b_timesliced_schedule"]
+        _check_close(errors, "edge.cruise_p99_ms", edge_rec["cruise_p99_ms"], pb["cruise_30hz_with_1hz_xfeat"]["p99_ms"])
+        _check_close(errors, "edge.terminal_p99_ms", edge_rec["terminal_p99_ms"], pb["terminal_pidnet_v21"]["p99_ms"])
+        _check_close(errors, "edge.cruise_vram", edge_rec["cruise_vram_delta_mib"], pb["cruise_vram_delta_mib"])
+        _check_close(errors, "edge.terminal_vram", edge_rec["terminal_vram_delta_mib"], pb["terminal_vram_delta_mib"])
+
 
 def verify_corl_manuscript(
     corl_dir: Path = DEFAULT_CORL_DIR,

@@ -76,6 +76,10 @@ def ingest_v400_into_manifest(manifest: dict[str, Any], v400_dir: Path) -> dict[
     out = copy.deepcopy(manifest)
     g4_slots = out["phase3_g4_slots"]
     ext_slots = out["external_eval_only_slots"]
+    for slot in ext_slots.values():
+        slot["status"] = "PENDING_EVAL_ONLY_REAL_IMAGERY"
+        slot["value"] = None
+        slot.pop("source_artifact", None)
     ablations: dict[str, Any] = {}
 
     qwen_path = v400_dir / "g4_qwen3_v3_vertibench_v2_eval.json"
@@ -216,6 +220,64 @@ def ingest_v400_into_manifest(manifest: dict[str, Any], v400_dir: Path) -> dict[
                     else None
                 ),
             }
+
+    local_qwen_raps_path = v400_dir / "local_gtx1650s_qwen3_v3_conformal_raps.json"
+    if local_qwen_raps_path.is_file():
+        lq = json.loads(local_qwen_raps_path.read_text(encoding="utf-8"))
+        lq_sum = lq.get("summary", {})
+        lq_lac = lq.get("paired_lac_on_fixed_scores", {})
+        lq_lang_lac = lq_lac.get("lang_mondrian_lac_test", {})
+        lq_snr_lac = lq_lac.get("snr_mondrian_lac_test", {})
+        lq_boot_l = lq.get("bootstrap_lang_resplit_100", {})
+        lq_boot_s = lq.get("bootstrap_snr_resplit_100", {})
+        lq_sel = lq.get("selected_calibration_config", {})
+        ablations["qwen3_v3_local_conformal_recovery"] = {
+            "source": "artifacts/v4.0.0/local_gtx1650s_qwen3_v3_conformal_raps.json",
+            "cu_consumed": lq.get("colab_cu_consumed", 0.0),
+            "quantization_loss_zero": lq.get("quantization_loss_zero"),
+            "peak_vram_mib": lq.get("host_platform", {}).get("peak_vram_mib"),
+            "score_scope": lq.get("score_scope"),
+            "selected_track": lq_sel.get("track"),
+            "selected_gamma": lq_sel.get("gamma"),
+            "test_branch_top1_overall_pct": lq_sum.get("test_branch_top1_overall_pct"),
+            "lang_raps_coverage_pct": lq_sum.get("lang_mondrian_raps_coverage_pct"),
+            "lang_raps_mean_set_size": lq_sum.get("lang_mondrian_raps_mean_set_size"),
+            "lang_raps_singleton_exec_pct": lq_sum.get("lang_mondrian_raps_singleton_exec_pct"),
+            "lang_raps_ece": lq_sum.get("lang_mondrian_raps_ece"),
+            "snr_raps_coverage_pct": lq_sum.get("snr_mondrian_raps_coverage_pct"),
+            "snr_raps_mean_set_size": lq_sum.get("snr_mondrian_raps_mean_set_size"),
+            "snr_raps_singleton_exec_pct": lq_sum.get("snr_mondrian_raps_singleton_exec_pct"),
+            "snr_raps_ece": lq_sum.get("snr_mondrian_raps_ece"),
+            "lang_lac_coverage_pct": lq_lang_lac.get("overall_coverage_pct"),
+            "lang_lac_mean_set_size": lq_lang_lac.get("overall_mean_set_size"),
+            "lang_lac_singleton_exec_pct": lq_lang_lac.get("overall_singleton_exec_pct"),
+            "lang_lac_ece": lq_lang_lac.get("overall_ece"),
+            "snr_lac_coverage_pct": lq_snr_lac.get("overall_coverage_pct"),
+            "snr_lac_mean_set_size": lq_snr_lac.get("overall_mean_set_size"),
+            "snr_lac_singleton_exec_pct": lq_snr_lac.get("overall_singleton_exec_pct"),
+            "snr_lac_ece": lq_snr_lac.get("overall_ece"),
+            "bootstrap_lang_coverage_mean_pct": (
+                round(float(lq_boot_l["overall_coverage_mean"]) * 100.0, 2)
+                if "overall_coverage_mean" in lq_boot_l
+                else None
+            ),
+            "bootstrap_lang_coverage_sd_pct": (
+                round(float(lq_boot_l["overall_coverage_sd"]) * 100.0, 2)
+                if "overall_coverage_sd" in lq_boot_l
+                else None
+            ),
+            "bootstrap_snr_coverage_mean_pct": (
+                round(float(lq_boot_s["overall_coverage_mean"]) * 100.0, 2)
+                if "overall_coverage_mean" in lq_boot_s
+                else None
+            ),
+            "bootstrap_snr_coverage_sd_pct": (
+                round(float(lq_boot_s["overall_coverage_sd"]) * 100.0, 2)
+                if "overall_coverage_sd" in lq_boot_s
+                else None
+            ),
+            "bootstrap_snr_mean_set_size_mean": lq_boot_s.get("overall_mean_set_size_mean"),
+        }
 
     whisper_path = v400_dir / "g4_whisper_bvi_lora_eval.json"
     if whisper_path.is_file():
@@ -533,6 +595,44 @@ def ingest_v400_into_manifest(manifest: dict[str, Any], v400_dir: Path) -> dict[
             "cictt_category": fe.get("cictt_category"),
         }
 
+    uavs_path = v400_dir / "realworld_uavscenes_zeroshot_eval.json"
+    if uavs_path.is_file():
+        ud = json.loads(uavs_path.read_text(encoding="utf-8"))
+        ustatus = str(ud.get("mode", "LIVE_LOCAL_CPU_ONNX_ZERO_SHOT_EVAL"))
+        ucal = ud.get("quarantined_zero_shot_uavscenes_bias_calibrated", {})
+        uraw = ud.get("quarantined_zero_shot_uavscenes_raw", {})
+        uq = ud.get("quarantine_policy", {})
+        ua = ud.get("archive_metadata", {})
+        if ucal.get("miou_present_classes") is not None:
+            _set_slot(
+                ext_slots,
+                "uavscenes_miou",
+                ucal.get("miou_present_classes"),
+                ustatus,
+                "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json",
+            )
+            _set_slot(
+                ext_slots,
+                "uavscenes_fsr",
+                ucal.get("false_safe_rate_fsr"),
+                ustatus,
+                "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json",
+            )
+            ablations["realworld_uavscenes_zeroshot"] = {
+                "source": "artifacts/v4.0.0/realworld_uavscenes_zeroshot_eval.json",
+                "evaluated_images": ua.get("evaluated_images"),
+                "scenes_covered": ua.get("scenes_covered"),
+                "raw_miou": uraw.get("miou_present_classes"),
+                "raw_fsr": uraw.get("false_safe_rate_fsr"),
+                "cal_miou": ucal.get("miou_present_classes"),
+                "cal_fsr": ucal.get("false_safe_rate_fsr"),
+                "cal_safe_precision": ucal.get("safe_precision"),
+                "cal_slz_f1": ucal.get("slz_f1"),
+                "used_in_training": uq.get("used_in_training"),
+                "used_in_calibration": uq.get("used_in_calibration"),
+                "raw_pixels_deleted": uq.get("raw_pixels_deleted"),
+            }
+
     if ablations:
         out["phase3_ablations_and_edge"] = ablations
     else:
@@ -574,6 +674,37 @@ def render_corl_tables_tex(manifest: dict[str, Any]) -> str:
         v3_snr_row = (
             f"Qwen3-4B v3 SNR-Mondrian (v2 bench, 3-seed, $N_{{\\text{{cal}}}}=2000$) & 100.00 & "
             f"{v3_ast} & {v3_b3} & {v3_snr_cov} & {v3_ece} & {v3_snr_sz} & {v3_snr_sng} \\\\\n"
+        )
+
+    q3_loc = abl.get("qwen3_v3_local_conformal_recovery", {})
+    v3_loc_rows = ""
+    if q3_loc.get("lang_raps_coverage_pct") is not None:
+        loc_top1 = _fmt(q3_loc.get("test_branch_top1_overall_pct"))
+        l_aps_cov = _fmt(q3_loc.get("lang_raps_coverage_pct"))
+        l_aps_ece = _fmt(q3_loc.get("lang_raps_ece"), "{:.4f}")
+        l_aps_sz = _fmt(q3_loc.get("lang_raps_mean_set_size"), "{:.3f}")
+        l_aps_sng = _fmt(q3_loc.get("lang_raps_singleton_exec_pct"))
+        s_aps_cov = _fmt(q3_loc.get("snr_raps_coverage_pct"))
+        s_aps_ece = _fmt(q3_loc.get("snr_raps_ece"), "{:.4f}")
+        s_aps_sz = _fmt(q3_loc.get("snr_raps_mean_set_size"), "{:.3f}")
+        s_aps_sng = _fmt(q3_loc.get("snr_raps_singleton_exec_pct"))
+        l_lac_cov = _fmt(q3_loc.get("lang_lac_coverage_pct"))
+        l_lac_ece = _fmt(q3_loc.get("lang_lac_ece"), "{:.4f}")
+        l_lac_sz = _fmt(q3_loc.get("lang_lac_mean_set_size"), "{:.3f}")
+        l_lac_sng = _fmt(q3_loc.get("lang_lac_singleton_exec_pct"))
+        s_lac_cov = _fmt(q3_loc.get("snr_lac_coverage_pct"))
+        s_lac_sz = _fmt(q3_loc.get("snr_lac_mean_set_size"), "{:.3f}")
+        s_lac_sng = _fmt(q3_loc.get("snr_lac_singleton_exec_pct"))
+        v3_loc_rows = (
+            "\\midrule\n"
+            f"Qwen3-4B v3 Lang-APS (0\\,CU exact-tree, per-grp $\\tau_g$, seed0) & 100.00 & "
+            f"{loc_top1} & \\text{{--}} & {l_aps_cov} & \\textbf{{{l_aps_ece}}} & {l_aps_sz} & {l_aps_sng} \\\\\n"
+            f"Qwen3-4B v3 SNR-APS (0\\,CU exact-tree, per-grp $\\tau_g$, seed0) & 100.00 & "
+            f"{loc_top1} & \\text{{--}} & {s_aps_cov} & {s_aps_ece} & {s_aps_sz} & {s_aps_sng} \\\\\n"
+            f"Qwen3-4B v3 Lang-LAC (0\\,CU exact-tree, $\\gamma=0$, seed0) & 100.00 & "
+            f"{loc_top1} & \\text{{--}} & {l_lac_cov} & {l_lac_ece} & {l_lac_sz} & {l_lac_sng} \\\\\n"
+            f"Qwen3-4B v3 SNR-LAC (0\\,CU exact-tree, $\\gamma=0$, seed0) & 100.00 & "
+            f"{loc_top1} & \\text{{--}} & {s_lac_cov} & {l_lac_ece} & \\textbf{{{s_lac_sz}}} & \\textbf{{{s_lac_sng}}} \\\\\n"
         )
 
     w_s0 = _fmt(g["whisper_s0_clean_wer_pct"]["value"])
@@ -625,6 +756,17 @@ def render_corl_tables_tex(manifest: dict[str, Any]) -> str:
             f"{term_vram} & {xfeat_r5} \\\\\n"
         )
 
+    uavs_done = ext["uavscenes_miou"]["value"] is not None
+    icg_done = ext["icg_drone_miou"]["value"] is not None
+    if uavs_done and icg_done:
+        ext_caption_note = "AeroScapes, ICG Drone \\& UAVScenes"
+    elif uavs_done:
+        ext_caption_note = "AeroScapes \\& UAVScenes; ICG Drone unrun"
+    elif icg_done:
+        ext_caption_note = "AeroScapes \\& ICG Drone; UAVScenes unrun"
+    else:
+        ext_caption_note = "AeroScapes; ICG Drone \\& UAVScenes unrun"
+
     t1_caption = (
         "Bilingual Neuro-Symbolic Mission Synthesis and Conformal Calibration Progression "
         "($\\alpha = 0.05$; v1 evaluated on $n_{\\text{test}}=560$, v3 3-seed Mondrian on "
@@ -664,6 +806,7 @@ def render_corl_tables_tex(manifest: dict[str, Any]) -> str:
         f"Qwen3-4B v3 Lang-Mondrian (v2 bench, 3-seed, $N_{{\\text{{cal}}}}=2000$) & 100.00 & {v3_ast} & "
         f"{v3_b3} & {v3_cov} & {v3_ece} & {v3_sz} & {v3_sng} \\\\\n"
         f"{v3_snr_row}"
+        f"{v3_loc_rows}"
         "\\bottomrule\n"
         "\\end{tabular}\n"
         "\\end{table*}\n"
@@ -690,8 +833,8 @@ def render_corl_tables_tex(manifest: dict[str, Any]) -> str:
         "\\begin{table*}[t]\n"
         "\\centering\n"
         "\\caption{Zero-ShareAlike Active Visual SLZ Distillation, Honest G4 Epoch-2 Collapse vs.\\ "
-        "Local 0\\,CU Recovery, Quarantined Real-Imagery Zero-Shot Transfer (AeroScapes; ICG Drone "
-        "\\& UAVScenes unrun), Physical TU116 Edge Latency (GTX~1650~SUPER, 4\\,GB), and XFeat+RANSAC "
+        f"Local 0\\,CU Recovery, Quarantined Real-Imagery Zero-Shot Transfer ({ext_caption_note}), "
+        "Physical TU116 Edge Latency (GTX~1650~SUPER, 4\\,GB), and XFeat+RANSAC "
         "3-Gate Pass Rate (36 coastal 0.5\\,m tiles, 0.218\\,m CEP50).}\n"
         "\\label{tab:corl_slz_transfer}\n"
         "\\setlength{\\tabcolsep}{3.6pt}\n"

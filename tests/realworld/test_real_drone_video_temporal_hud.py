@@ -18,10 +18,21 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.ci.check_public_hygiene import scan_public_hygiene
 from scripts.realworld.run_real_drone_video_temporal_hud import (
+    DEFAULT_DAV2_MODEL_ID,
+    DEFAULT_GIF_MAX_BYTES,
+    SLZ_CLASS_BGR,
+    SLZ_CLASS_RGB,
     TemporalSlzStabilizer,
     _compute_binary_iou,
+    apply_3d_normal_and_ood_veto,
+    compute_3d_surface_normals_from_disparity,
+    evaluate_forward_domain_gate,
     main as temporal_hud_main,
+    validate_depth_model_license,
     validate_permissive_license,
+)
+from scripts.train_local_gtx1650s_pidnet_v21_recovery import (
+    SLZ_CLASS_RGB as GRID_SLZ_CLASS_RGB,
 )
 
 LIVE_PROOF_JSON = REPO_ROOT / "artifacts" / "v4.0.0" / "realworld_drone_video_temporal_proof.json"
@@ -199,6 +210,80 @@ def test_permissive_license_gate_fail_closed() -> None:
             validate_permissive_license(bad_lic)
 
 
+def test_depth_model_apache2_allowlist_fail_closed() -> None:
+    assert validate_depth_model_license(DEFAULT_DAV2_MODEL_ID, "Apache-2.0") is True
+    for bad_id, bad_lic in (
+        ("depth-anything/Depth-Anything-V2-Base-hf", "CC-BY-NC-4.0"),
+        ("depth-anything/Depth-Anything-V2-Large-hf", "Apache-2.0"),
+        ("depth-anything/Depth-Anything-V2-Small-hf", "CC-BY-NC-4.0"),
+        ("depth-anything/Depth-Anything-V2-Small-hf", "GPL-3.0"),
+    ):
+        with pytest.raises(ValueError):
+            validate_depth_model_license(bad_id, bad_lic)
+
+
+def test_3d_surface_normal_and_ood_veto_rejects_vertical_facade_and_preserves_flat_roof() -> None:
+    # Construct oblique aerial scene: horizontal plane has disparity increasing downward (+v),
+    # while a vertical building facade in [48:96, 48:96] slopes away moving downward (dZ/dv > 0).
+    h, w = 128, 128
+    yy = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+    disp = np.broadcast_to(0.15 + 0.70 * yy, (h, w)).copy()
+    disp[48:96, 48:96] = 0.65 - 0.35 * np.linspace(0.0, 1.0, 48, dtype=np.float32)[:, None]
+
+    n3d = compute_3d_surface_normals_from_disparity(disp, blur_ksize=5, blur_sigma=1.0)
+    assert n3d["outputs_finite"] is True
+    assert 25.0 <= n3d["camera_pitch_deg"] <= 85.0
+    # Interior of flat horizontal roof/ground must NOT be steep
+    assert float(n3d["steep_soft_mask"][10:36, 10:118].mean()) < 0.05
+    # Interior of vertical building facade MUST be flagged steep (> 90%)
+    assert float(n3d["steep_soft_mask"][56:88, 56:88].mean()) > 0.90
+
+    # Raw 2D logits falsely predict Safe_Flat_Ground (0) across flat ground + vertical facade,
+    # and Hazard_Water_Vegetation (4) in a separate tree block [100:120, 10:40].
+    logits = np.full((5, h, w), -2.0, dtype=np.float32)
+    logits[0, :, :] = 3.0
+    logits[0, 100:120, 10:40] = -2.0
+    logits[4, 100:120, 10:40] = 4.0
+
+    ood_mask = np.zeros((h, w), dtype=bool)
+    ood_mask[16:30, 16:30] = True  # OOD anomaly sitting on flat roof
+
+    veto = apply_3d_normal_and_ood_veto(
+        logits,
+        safe_logit_bias_delta=-0.271367,
+        steep_soft_mask=n3d["steep_soft_mask"],
+        steep_hard_mask=n3d["steep_hard_mask"],
+        ood_mask=ood_mask,
+        min_slz_area_px=16,
+    )
+    # Vertical facade & OOD anomaly flipped fail-closed to Hazard_Obstacle_Structure (2)
+    assert bool((veto["vetoed_raw_pred"][56:88, 56:88] == 2).all())
+    assert bool((veto["vetoed_raw_pred"][16:30, 16:30] == 2).all())
+    # Flat horizontal area outside OOD remains Safe (0)
+    assert bool((veto["vetoed_raw_pred"][12:34, 60:115] == 0).all())
+    # Existing Water/Veg hazard subclass (4) preserved
+    assert bool((veto["vetoed_raw_pred"][102:118, 12:38] == 4).all())
+
+    # TemporalSlzStabilizer hard_veto_mask overrides locked Safe immediately (zero hysteresis lag)
+    stab = TemporalSlzStabilizer(
+        ema_alpha=0.20, p_enter_safe=0.60, p_exit_safe=0.40, min_slz_area_px=16, warp_with_homography=False
+    )
+    out0 = stab.update(_logits_for_safe_prob(0.92, h=32, w=32), mean_flow_px=0.0)
+    assert bool(out0.safe_mask.all())
+    hard_wall = np.zeros((32, 32), dtype=bool)
+    hard_wall[8:24, 8:24] = True
+    out1 = stab.update(_logits_for_safe_prob(0.92, h=32, w=32), mean_flow_px=1.0, hard_veto_mask=hard_wall)
+    assert not bool(out1.safe_mask[8:24, 8:24].any())
+    assert bool(out1.safe_mask[:6, :6].all())
+
+
+def test_forward_domain_gate_and_unified_palette_parity() -> None:
+    assert evaluate_forward_domain_gate(51.0, max_forward_pitch_deg=25.0)["in_domain"] is False
+    assert evaluate_forward_domain_gate(10.0, max_forward_pitch_deg=25.0)["in_domain"] is True
+    assert np.array_equal(SLZ_CLASS_RGB, GRID_SLZ_CLASS_RGB), "HUD and validation grid palettes diverged"
+    assert np.array_equal(SLZ_CLASS_BGR, SLZ_CLASS_RGB[:, ::-1]), "BGR/RGB palette mismatch"
+
+
 def test_smoke_cpu_offline_zero_network(tmp_path: Path) -> None:
     out_json = tmp_path / "smoke_temporal_proof.json"
     rc = temporal_hud_main(
@@ -215,14 +300,20 @@ def test_smoke_cpu_offline_zero_network(tmp_path: Path) -> None:
 
     data = _verify_canonical_sha256(out_json)
     assert data["schema_version"] == "vertirta.realworld_drone_video_temporal_proof/v4.0.0"
+    assert data["release_version"] == "v1.0.0"
     assert data["execution_mode"] == "SMOKE_CPU_ONLY"
     assert data["colab_cu_spent"] == 0.0
+    assert data["surface_normal_3d_veto"]["enabled"] is True
+    assert data["surface_normal_3d_veto"]["safe_pixels_vetoed_to_hazard_frac_mean"] > 0.0
+    assert data["forward_detector_domain_gate"]["enabled"] is True
     comp = data["temporal_stability_comparison"]
     assert comp["frames_evaluated"] == 10
     assert comp["safe_hazard_flicker_pixel_rate_pct"]["stabilized_mean_pct"] < comp["safe_hazard_flicker_pixel_rate_pct"]["raw_mean_pct"]
     assert data["gates"]["all_outputs_finite"] is True
     assert data["gates"]["zero_nan_inf"] is True
     assert data["gates"]["permissive_license_verified"] is True
+    assert data["gates"]["depth_model_apache2_verified"] is True
+    assert data["gates"]["surface_normal_3d_veto_active"] is True
     assert data["gates"]["temporal_flicker_reduced"] is True
 
 
@@ -231,12 +322,15 @@ def test_committed_live_gtx1650s_drone_temporal_proof_and_gif() -> None:
     data = _verify_canonical_sha256(LIVE_PROOF_JSON)
 
     assert data["schema_version"] == "vertirta.realworld_drone_video_temporal_proof/v4.0.0"
+    assert data["release_version"] == "v1.0.0"
     assert data["execution_mode"] == "LIVE_PHYSICAL_GTX1650S_CUDA"
     assert data["colab_cu_spent"] == 0.0
     assert "GTX 1650 SUPER" in str(data["gpu"]["name"])
     assert "CUDAExecutionProvider" in data["models"]["pidnet_slz_v21_local_gtx"]["active_providers"]
     assert data["models"]["pidnet_slz_v21_local_gtx"]["iobinding_enabled"] is True
     assert data["models"]["pidnet_slz_v21_local_gtx"]["filename"] == "pidnet_slz_v21_local_gtx_opset17.onnx"
+    assert data["models"]["depth_anything_v2_small"]["license"] == "Apache-2.0"
+    assert "CUDAExecutionProvider" in data["models"]["depth_anything_v2_small"]["active_providers"]
     assert data["ood_and_bias_calibration"]["safe_logit_bias_delta"] == pytest.approx(-0.271367, abs=1e-5)
 
     # Permissive provenance lock
@@ -245,7 +339,23 @@ def test_committed_live_gtx1650s_drone_temporal_proof_and_gif() -> None:
     assert prov["sha256"] and len(prov["sha256"]) == 64
     assert data["license_audit"]["zero_sharealike_verified"] is True
     assert data["license_audit"]["zero_noncommercial_verified"] is True
+    assert data["license_audit"]["depth_model_permissive_gate_passed"] is True
     assert validate_permissive_license(str(data["license_audit"]["license"])) is True
+    assert validate_depth_model_license(
+        str(data["license_audit"]["depth_model_id"]),
+        str(data["license_audit"]["depth_model_license"]),
+    ) is True
+
+    # 3D Surface-Normal + OOD veto & forward pitch domain gate proof
+    veto = data["surface_normal_3d_veto"]
+    assert veto["enabled"] is True
+    assert veto["ood_fail_closed_veto_enabled"] is True
+    assert veto["safe_pixels_vetoed_to_hazard_frac_mean"] >= 0.15
+    assert veto["stabilized_vetoed_safe_area_frac_mean"] < veto["raw_2d_safe_area_frac_mean"]
+    fgate = data["forward_detector_domain_gate"]
+    assert fgate["enabled"] is True
+    assert fgate["raw_forward_detections_logged_unfiltered"] is True
+    assert fgate["frames_gated_out_of_domain"] > 0
 
     # Temporal stability metrics
     comp = data["temporal_stability_comparison"]
@@ -260,6 +370,7 @@ def test_committed_live_gtx1650s_drone_temporal_proof_and_gif() -> None:
     hw = data["hardware_performance"]
     for key in ("p50_ms", "p95_ms", "p99_ms", "mean_ms", "fps_mean"):
         assert math.isfinite(float(hw["pidnet_cuda_latency_ms"][key])) and float(hw["pidnet_cuda_latency_ms"][key]) > 0.0
+        assert math.isfinite(float(hw["depth_3d_cuda_latency_ms"][key])) and float(hw["depth_3d_cuda_latency_ms"][key]) > 0.0
         assert math.isfinite(float(hw["full_stack_e2e_latency_ms"][key])) and float(hw["full_stack_e2e_latency_ms"][key]) > 0.0
 
     # Gates
@@ -268,21 +379,41 @@ def test_committed_live_gtx1650s_drone_temporal_proof_and_gif() -> None:
     assert gates["all_outputs_finite"] is True
     assert gates["zero_nan_inf"] is True
     assert gates["cuda_ep_active"] is True
+    assert gates["depth_3d_cuda_ep_active"] is True
     assert gates["permissive_license_verified"] is True
+    assert gates["depth_model_apache2_verified"] is True
+    assert gates["surface_normal_3d_veto_active"] is True
     assert gates["temporal_flicker_reduced"] is True
     assert gates["temporal_safe_iou_improved"] is True
-    assert gates["gif_under_900kb_if_rendered"] is True
+    assert gates["gif_under_budget_if_rendered"] is True
+    assert gates["gif_duration_and_frames_verified"] is True
 
-    # Committed README preview GIF budget & SHA-256 check
+    # Committed README preview GIF budget, ground-truth duration/frame count & SHA-256 check
     assert README_PREVIEW_GIF.is_file(), f"Missing README preview GIF: {README_PREVIEW_GIF}"
     gif_bytes = README_PREVIEW_GIF.read_bytes()
     assert gif_bytes[:6] in (b"GIF89a", b"GIF87a"), "Invalid GIF header"
-    assert len(gif_bytes) < 900_000, f"Preview GIF exceeds 900 KB budget: {len(gif_bytes)} bytes"
+    assert len(gif_bytes) <= DEFAULT_GIF_MAX_BYTES, (
+        f"Preview GIF exceeds {DEFAULT_GIF_MAX_BYTES} B budget: {len(gif_bytes)} bytes"
+    )
     gif_sha = hashlib.sha256(gif_bytes).hexdigest()
-    assert data["visual_renders"]["readme_preview_gif"]["rendered"] is True
-    assert data["visual_renders"]["readme_preview_gif"]["sha256"] == gif_sha
+    gif_meta = data["visual_renders"]["readme_preview_gif"]
+    assert gif_meta["rendered"] is True
+    assert gif_meta["sha256"] == gif_sha
+    assert int(gif_meta["frame_count"]) >= 24
+    assert float(gif_meta["actual_duration_s"]) >= 3.5
 
-    # Public hygiene gate on all newly created repo files
+    from PIL import Image
+
+    with Image.open(README_PREVIEW_GIF) as im:
+        disk_frames = int(getattr(im, "n_frames", 1))
+        disk_ms = sum(int(im.seek(fi) or im.info.get("duration", 100)) for fi in range(disk_frames))
+    disk_dur_s = round(disk_ms / 1000.0, 3)
+    assert disk_frames >= 24, f"GIF frame count too low: {disk_frames}"
+    assert disk_dur_s >= 3.5, f"GIF actual duration too short: {disk_dur_s}s"
+    assert disk_frames == int(gif_meta["frame_count"])
+    assert disk_dur_s == pytest.approx(float(gif_meta["actual_duration_s"]), abs=0.05)
+
+    # Public hygiene gate on all owned repo files
     hygiene = scan_public_hygiene(
         REPO_ROOT,
         tracked_files=[

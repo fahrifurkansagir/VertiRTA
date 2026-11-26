@@ -2,6 +2,7 @@
 #include "vertirta/uspace/part_is_security.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -441,6 +442,15 @@ bool PartIsCryptoContext::verify_mode_b(
   if (pkt.header.key_epoch != key_epoch_) {
     return false;
   }
+  // Enforce authenticated header mode bits: bit 0 (0x01U) = Mode B AEAD, bit 1 (0x02U) = Ed25519 signature required.
+  // Never trust unauthenticated struct boolean pkt.has_ed25519_sig alone (blocks Mode-B signature downgrade!).
+  if ((pkt.header.flags_and_mode & 0x01U) == 0U) {
+    return false;
+  }
+  const bool header_requires_sig = (pkt.header.flags_and_mode & 0x02U) != 0U;
+  if (header_requires_sig != pkt.has_ed25519_sig) {
+    return false;
+  }
 
   const auto* aad = reinterpret_cast<const uint8_t*>(&pkt.header);
   bool crypto_ok = false;
@@ -480,7 +490,7 @@ bool PartIsCryptoContext::verify_mode_b(
                      xnpub,
                      symmetric_key_.data()) == 0);
   }
-  if (crypto_ok && pkt.has_ed25519_sig) {
+  if (crypto_ok && header_requires_sig) {
     uint8_t sig_buf[sizeof(VertiRtaSecureHeader) + SecuredPacket::kTagBytes]{};
     std::memcpy(sig_buf, aad, sizeof(VertiRtaSecureHeader));
     std::memcpy(sig_buf + sizeof(VertiRtaSecureHeader), pkt.auth_tag.data(), SecuredPacket::kTagBytes);
@@ -492,7 +502,7 @@ bool PartIsCryptoContext::verify_mode_b(
   hmac_sha256(symmetric_key_.data(), aad, sizeof(VertiRtaSecureHeader),
               pkt.payload.data(), pkt.payload_len, expected_tag);
   crypto_ok = ct_equal(expected_tag, pkt.auth_tag.data(), 32U);
-  if (crypto_ok && pkt.has_ed25519_sig) {
+  if (crypto_ok && header_requires_sig) {
     uint8_t expected_sig[64]{};
     hmac_sha256(sign_pk_.data(), aad, sizeof(VertiRtaSecureHeader),
                 pkt.auth_tag.data(), SecuredPacket::kTagBytes, expected_sig);
@@ -523,7 +533,8 @@ PeerAnomalyAction CyberResilienceFsm::on_peer_kinematic_anomaly(
     double mahalanobis_sigma) noexcept {
   PeerAnomalyAction act{};
   act.peer_id = peer_id;
-  if (mahalanobis_sigma > kMahalanobisThresholdSigma) {
+  if (!std::isfinite(mahalanobis_sigma) || mahalanobis_sigma < 0.0 ||
+      mahalanobis_sigma > kMahalanobisThresholdSigma) {
     suspect_peer_id_ = peer_id;
     act.demote_to_non_cooperative = true;
     act.strip_priority0_rights = true;
@@ -540,12 +551,16 @@ UsspCheckAction CyberResilienceFsm::on_ussp_command_check(
     double cmd_agl_m,
     double t_s) noexcept {
   UsspCheckAction act{};
+  const bool non_finite_input =
+      (!std::isfinite(cmd_lon_deg)) || (!std::isfinite(cmd_agl_m)) || (!std::isfinite(t_s));
   const bool semantic_violation =
-      (!sig_valid) || (cmd_lon_deg >= kEasternGeofenceLonDeg) ||
+      (!sig_valid) || non_finite_input ||
+      (cmd_lon_deg < -180.0) || (cmd_lon_deg > 180.0) ||
+      (cmd_lon_deg >= kEasternGeofenceLonDeg) ||
       (cmd_agl_m > kMaxCorridorAglM) || (cmd_agl_m < 0.0);
   if (semantic_violation) {
     if (!quarantine_active_) {
-      quarantine_start_s_ = t_s;
+      quarantine_start_s_ = std::isfinite(t_s) ? t_s : 0.0;
       quarantine_active_ = true;
     }
     state_ = CyberState::SEC_USSP_QUARANTINE;
@@ -558,6 +573,12 @@ UsspCheckAction CyberResilienceFsm::on_ussp_command_check(
 RtbAction CyberResilienceFsm::step_time(double t_s, bool ussp_auth_restored) noexcept {
   RtbAction act{};
   if (state_ == CyberState::SEC_USSP_QUARANTINE && quarantine_active_) {
+    if (!std::isfinite(t_s)) {
+      state_ = CyberState::SEC_AUTONOMOUS_RTB;
+      act.elapsed_quarantine_s = kMaxRtoSeconds;
+      act.divert_to_nearest_fato_emg = true;
+      return act;
+    }
     if (ussp_auth_restored) {
       state_ = CyberState::SEC_NOMINAL;
       quarantine_active_ = false;
@@ -570,7 +591,9 @@ RtbAction CyberResilienceFsm::step_time(double t_s, bool ussp_auth_restored) noe
     }
   } else if (state_ == CyberState::SEC_AUTONOMOUS_RTB) {
     act.divert_to_nearest_fato_emg = true;
-    act.elapsed_quarantine_s = std::max(kMaxRtoSeconds, t_s - quarantine_start_s_);
+    act.elapsed_quarantine_s = std::isfinite(t_s)
+                                   ? std::max(kMaxRtoSeconds, t_s - quarantine_start_s_)
+                                   : kMaxRtoSeconds;
   }
   return act;
 }

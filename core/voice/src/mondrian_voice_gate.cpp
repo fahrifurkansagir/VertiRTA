@@ -14,10 +14,17 @@ MondrianGateConfig make_default_mondrian_config() noexcept {
 float compute_stratum_q_hat(
     std::span<const float> nonconformity_scores,
     float alpha) noexcept {
-  if (nonconformity_scores.empty()) {
+  if (nonconformity_scores.empty() || !std::isfinite(alpha)) {
     return 1.0f;
   }
-  std::vector<float> sorted(nonconformity_scores.begin(), nonconformity_scores.end());
+  std::vector<float> sorted;
+  sorted.reserve(nonconformity_scores.size());
+  for (const float s : nonconformity_scores) {
+    if (!std::isfinite(s)) {
+      return 1.0f;
+    }
+    sorted.push_back(s);
+  }
   std::sort(sorted.begin(), sorted.end());
 
   const std::size_t n = sorted.size();
@@ -29,11 +36,30 @@ float compute_stratum_q_hat(
 
 MondrianVoiceConformalGate::MondrianVoiceConformalGate(MondrianGateConfig cfg) noexcept
     : cfg_(cfg) {
-  cfg_.alpha = std::clamp(cfg_.alpha, 1e-4f, 0.50f);
+  cfg_.alpha = std::isfinite(cfg_.alpha)
+                   ? std::clamp(cfg_.alpha, 1e-4f, 0.50f)
+                   : kDefaultConformalAlpha;
   cfg_.loiter_liveness_min_soc_margin_pct =
-      std::max(kLoiterLivenessMinSocMarginPct, cfg_.loiter_liveness_min_soc_margin_pct);
+      std::isfinite(cfg_.loiter_liveness_min_soc_margin_pct)
+          ? std::max(kLoiterLivenessMinSocMarginPct, cfg_.loiter_liveness_min_soc_margin_pct)
+          : kLoiterLivenessMinSocMarginPct;
   cfg_.mayday_asymmetric_weight_floor =
-      std::max(kDefaultMaydayAsymmetricWeightFloor, cfg_.mayday_asymmetric_weight_floor);
+      std::isfinite(cfg_.mayday_asymmetric_weight_floor)
+          ? std::max(kDefaultMaydayAsymmetricWeightFloor, cfg_.mayday_asymmetric_weight_floor)
+          : kDefaultMaydayAsymmetricWeightFloor;
+  cfg_.nospeech_abstain_threshold = std::isfinite(cfg_.nospeech_abstain_threshold)
+                                        ? std::clamp(cfg_.nospeech_abstain_threshold, 0.0f, 1.0f)
+                                        : 0.70f;
+  cfg_.lambda_entropy = std::isfinite(cfg_.lambda_entropy) ? std::max(0.0f, cfg_.lambda_entropy) : 0.12f;
+  cfg_.lambda_slot_uncertainty =
+      std::isfinite(cfg_.lambda_slot_uncertainty) ? std::max(0.0f, cfg_.lambda_slot_uncertainty) : 0.18f;
+  cfg_.lambda_nospeech = std::isfinite(cfg_.lambda_nospeech) ? std::max(0.0f, cfg_.lambda_nospeech) : 0.25f;
+  for (float& q : cfg_.snr_q_hat) {
+    q = std::isfinite(q) ? std::clamp(q, 0.0f, 1.0f) : 1.0f;
+  }
+  for (float& q : cfg_.lang_q_hat) {
+    q = std::isfinite(q) ? std::clamp(q, 0.0f, 1.0f) : 1.0f;
+  }
 }
 
 MondrianGateDecision MondrianVoiceConformalGate::evaluate(
@@ -41,8 +67,29 @@ MondrianGateDecision MondrianVoiceConformalGate::evaluate(
     std::span<const VoiceCandidateScore> candidates,
     const VoiceRtaLivenessState& rta_state) const {
   MondrianGateDecision out{};
-  out.stratum = classify_snr_stratum(sig.snr_db);
   out.lang = sig.lang;
+
+  // Fail-closed finite guard on all acoustic/probability inputs BEFORE classify_snr_stratum,
+  // std::clamp, MAYDAY check, or abstain check. Never allow NaN/Inf to propagate through std::clamp
+  // or bypass abstain/MAYDAY logic.
+  const bool sig_finite =
+      std::isfinite(sig.snr_db) &&
+      std::isfinite(sig.nbest_shannon_entropy_norm) &&
+      std::isfinite(sig.min_safety_slot_prob) &&
+      std::isfinite(sig.nospeech_prob) &&
+      std::isfinite(sig.mayday_acoustic_weight);
+  if (!sig_finite) {
+    out.stratum = SnrStratum::S3_GARBLED;
+    out.effective_q_hat = 1.0f;
+    out.acoustic_penalty = 0.95f;
+    out.p_min_threshold = 1.0f;
+    out.conformal_set_size = 0U;
+    out.decision = VoiceGateAction::ABSTAIN_HOLD_SAFE;
+    out.selected_action_id = "HOLD_LOITER";
+    return out;
+  }
+
+  out.stratum = classify_snr_stratum(sig.snr_db);
 
   const auto snr_idx = static_cast<std::size_t>(out.stratum);
   const auto lang_idx = static_cast<std::size_t>(out.lang);
@@ -62,10 +109,10 @@ MondrianGateDecision MondrianVoiceConformalGate::evaluate(
   if (sig.mayday_acoustic_weight >= cfg_.mayday_asymmetric_weight_floor) {
     out.decision = VoiceGateAction::EMERGENCY_PREEMPT;
     out.p_min_threshold = 1.0f - out.effective_q_hat;
-    // Prefer highest-probability Z3-SAT candidate if supplied, else deterministic safe abort.
+    // Prefer highest-probability finite Z3-SAT candidate if supplied, else deterministic safe abort.
     const VoiceCandidateScore* best_sat = nullptr;
     for (const auto& c : candidates) {
-      if (c.z3_sat && (best_sat == nullptr || c.prob > best_sat->prob)) {
+      if (c.z3_sat && std::isfinite(c.prob) && (best_sat == nullptr || c.prob > best_sat->prob)) {
         best_sat = &c;
       }
     }
@@ -85,7 +132,7 @@ MondrianGateDecision MondrianVoiceConformalGate::evaluate(
   safe_set.reserve(candidates.size());
   all_sat.reserve(candidates.size());
   for (const auto& c : candidates) {
-    if (!c.z3_sat) {
+    if (!c.z3_sat || !std::isfinite(c.prob)) {
       continue;
     }
     all_sat.push_back(&c);
@@ -99,6 +146,13 @@ MondrianGateDecision MondrianVoiceConformalGate::evaluate(
   std::sort(safe_set.begin(), safe_set.end(), desc_prob);
   std::sort(all_sat.begin(), all_sat.end(), desc_prob);
   out.conformal_set_size = safe_set.size();
+
+  // Fail closed to abstain if battery reserve telemetry is non-finite.
+  if (!std::isfinite(rta_state.soc_pct) || !std::isfinite(rta_state.soc_reserve_floor_pct)) {
+    out.decision = VoiceGateAction::ABSTAIN_HOLD_SAFE;
+    out.selected_action_id = "HOLD_LOITER";
+    return out;
+  }
 
   // Branch 2: Deterministic < 5.0% SoC margin LIVENESS_EMERGENCY_COMMIT override (Erratum #7).
   // Never loiter or request clarification when battery reserve margin is below 5.0%.

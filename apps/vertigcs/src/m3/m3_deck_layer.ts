@@ -86,8 +86,8 @@ export function buildM3DeckLayers(snapshot: M3Snapshot) {
     data: snapshot.forwardHazard.wires,
     getPath: (w) => [w.p0, w.p1],
     getColor: (w) => wireClassColor(w),
-    getWidth: (w) => Math.max(2.5, w.radiusM * 0.75),
-    widthMinPixels: 3,
+    getWidth: (w) => Math.max(3.0, w.radiusM * 0.85),
+    widthMinPixels: 3.5,
     updateTriggers: {
       getColor: [snapshot.scenario, snapshot.forwardHazard.wireCount],
       getWidth: [snapshot.forwardHazard.grazingFallback],
@@ -105,11 +105,11 @@ export function buildM3DeckLayers(snapshot: M3Snapshot) {
     getPolygon: (d) => d.polygon,
     getFillColor: (d) =>
       d.id === "LTFJ_CTR_INFLATED"
-        ? [255, 82, 82, inflated ? 48 : 22]
-        : [255, 193, 7, inflated ? 42 : 18],
+        ? [255, 82, 82, inflated ? 62 : 24]
+        : [255, 193, 7, inflated ? 52 : 20],
     getLineColor: (d) =>
-      d.id === "LTFJ_CTR_INFLATED" ? [255, 82, 82, 235] : [255, 213, 79, 225],
-    lineWidthMinPixels: inflated ? 3 : 1.5,
+      d.id === "LTFJ_CTR_INFLATED" ? [255, 92, 92, 250] : [255, 213, 79, 240],
+    lineWidthMinPixels: inflated ? 3.5 : 2.0,
     updateTriggers: {
       getPolygon: [Math.round(snapshot.gnssDenied.ctrInflationM)],
       getFillColor: [inflated],

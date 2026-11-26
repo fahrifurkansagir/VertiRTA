@@ -450,11 +450,13 @@ def test_lift_cruise_streamlined_drag_and_forward_wire_honest_ttpla_ingestion(tm
     recs, info = ingest_real_ttpla_apache2(tmp_path / "work", data_dir=data_dir, max_samples=5)
     assert len(recs) == 1
     assert info["frames_ingested"] == 1
-    img_chw, wire_mask, junc_map, boxes, cls_ids = recs[0]
+    img_chw, wire_mask, junc_map, boxes, cls_bin = recs[0]
     assert img_chw.shape == (3, 640, 640)
     assert wire_mask.shape == (1, 640, 640) and float(wire_mask.max()) > 0.5
     assert float(junc_map[0].max()) == 1.0
-    assert int(cls_ids[0]) == 2 and float(boxes[0, 2]) > float(boxes[0, 0])
+    assert cls_bin.shape == (300, 3) and int((cls_bin > 0.5).sum()) == 1
+    pos_q = int(np.argmax(cls_bin[:, 2]))
+    assert float(cls_bin[pos_q, 2]) == 1.0 and float(boxes[pos_q, 2]) > float(boxes[pos_q, 0])
 
     # Showstopper #2: Real PIL oblique perspective augmentation preserves 512x512 shape
     rgb_p = Image.fromarray(np.full((512, 512, 3), 120, dtype=np.uint8))

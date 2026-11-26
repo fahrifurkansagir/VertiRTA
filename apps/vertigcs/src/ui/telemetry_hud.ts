@@ -1,5 +1,7 @@
 import type { TelemetrySnapshot } from "../types/telemetry";
 
+type SeverityState = "nominal" | "caution" | "danger";
+
 export class TelemetryHud {
   private readonly rotorBarEls: HTMLDivElement[] = [];
 
@@ -28,11 +30,51 @@ export class TelemetryHud {
     this.setText("hud-tmr", `${snap.tmrStatusLabel} / ${snap.chi2Residual.toFixed(2)}`);
     this.setText("hud-cbvf", `${snap.cbvfMinV >= 0 ? "+" : ""}${snap.cbvfMinV.toFixed(1)} m`);
     this.setText("hud-ctr", `${snap.ltfjMarginM.toFixed(0)} / ${snap.ltbxMarginM.toFixed(0)} m`);
+    this.setText("hud-tick", `t=${snap.simTimeS.toFixed(1)}s • #${snap.seq}`);
 
     const activeCount = countBits8(snap.activeMotorMask);
     const hexMask = `0x${(snap.activeMotorMask & 0xff).toString(16).toUpperCase().padStart(2, "0")}`;
     this.setText("hud-mask", `${hexMask} (${activeCount}/8)`);
-    this.setText("hud-cel", snap.celLatched ? "LATCHED (2.2 rad/s SPIN)" : "DISARMED");
+    this.setText("hud-cel", snap.celLatched ? "LATCHED 2.2 rad/s" : "DISARMED");
+
+    const regimeState: SeverityState = snap.celLatched
+      ? "danger"
+      : activeCount < 8 || snap.chi2Residual > 20.0
+        ? "caution"
+        : "nominal";
+    this.setState("hud-regime-card", regimeState);
+    this.setState("hud-cel-card", snap.celLatched ? "danger" : "nominal");
+    this.setState(
+      "hud-tmr-card",
+      snap.chi2Residual > 20.0 || snap.tmrStatusLabel !== "3/3_NOMINAL" ? "caution" : "nominal"
+    );
+    this.setState(
+      "hud-cbvf-card",
+      snap.cbvfMinV < 5.0 ? "danger" : snap.cbvfMinV < 12.0 ? "caution" : "nominal"
+    );
+    this.setState(
+      "hud-ctr-card",
+      snap.ltfjMarginM < 250 || snap.ltbxMarginM < 250
+        ? "danger"
+        : snap.ltfjMarginM < 600
+          ? "caution"
+          : "nominal"
+    );
+
+    const mapAlertEl = document.getElementById("map-alert-banner");
+    const mapAlertText = document.getElementById("map-alert-text");
+    if (mapAlertEl && mapAlertText) {
+      mapAlertEl.dataset.state = regimeState;
+      if (snap.celLatched) {
+        mapAlertText.textContent = `CEL SPIN LATCH ACTIVE (2.2 rad/s) • AGL ${snap.aglM.toFixed(1)} m • LTFJ ${snap.ltfjMarginM.toFixed(0)} m`;
+      } else if (activeCount < 8) {
+        mapAlertText.textContent = `DEGRADED CSFL (${activeCount}/8 ROTORS) • CBVF +${snap.cbvfMinV.toFixed(1)} m`;
+      } else if (snap.chi2Residual > 20.0) {
+        mapAlertText.textContent = `TMR IMU ISOLATION (${snap.tmrStatusLabel}) • χ²=${snap.chi2Residual.toFixed(1)}`;
+      } else {
+        mapAlertText.textContent = `RTA ENVELOPE NOMINAL • LTFJ ${snap.ltfjMarginM.toFixed(0)} m / LTBX ${snap.ltbxMarginM.toFixed(0)} m`;
+      }
+    }
 
     for (let i = 0; i < this.rotorBarEls.length; i++) {
       const rpm = snap.rotorRpm[i] ?? 0;
@@ -47,6 +89,11 @@ export class TelemetryHud {
   private setText(id: string, value: string): void {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+  }
+
+  private setState(id: string, state: SeverityState): void {
+    const el = document.getElementById(id);
+    if (el) el.dataset.state = state;
   }
 }
 
