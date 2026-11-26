@@ -60,6 +60,8 @@ def test_leakfree_14_branches_cover_100pct_of_vertibench_v2_without_peeking_at_g
 
 
 def test_layer_streaming_kv_prefix_sharing_matches_monolithic_qwen3_under_1e5() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("transformers")
     res = run_self_test_cpu()
     assert res["self_test_passed"] is True
     assert res["max_abs_diff_full_sum_lp"] < 1e-5
