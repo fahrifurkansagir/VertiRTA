@@ -16,28 +16,34 @@ namespace vertirta::perception {
 
 namespace {
 
-[[nodiscard]] bool ExtractJsonFloatField(
+enum class JsonFieldStatus : uint8_t {
+  kMissing = 0,
+  kValid = 1,
+  kInvalid = 2,
+};
+
+[[nodiscard]] JsonFieldStatus ExtractJsonFloatFieldStatus(
     std::string_view json_text,
     std::string_view key,
     float& out_val) noexcept {
   const std::string needle = "\"" + std::string(key) + "\"";
   std::size_t pos = json_text.find(needle);
   if (pos == std::string_view::npos) {
-    return false;
+    return JsonFieldStatus::kMissing;
   }
   pos += needle.size();
   while (pos < json_text.size() && std::isspace(static_cast<unsigned char>(json_text[pos]))) {
     ++pos;
   }
   if (pos >= json_text.size() || json_text[pos] != ':') {
-    return false;
+    return JsonFieldStatus::kInvalid;
   }
   ++pos;
   while (pos < json_text.size() && std::isspace(static_cast<unsigned char>(json_text[pos]))) {
     ++pos;
   }
   if (pos >= json_text.size()) {
-    return false;
+    return JsonFieldStatus::kInvalid;
   }
   char buf[64]{};
   std::size_t n = 0u;
@@ -52,16 +58,40 @@ namespace {
     }
   }
   if (n == 0u) {
-    return false;
+    return JsonFieldStatus::kInvalid;
+  }
+  while (pos < json_text.size() && std::isspace(static_cast<unsigned char>(json_text[pos]))) {
+    ++pos;
+  }
+  if (pos < json_text.size() && json_text[pos] != ',' && json_text[pos] != '}') {
+    return JsonFieldStatus::kInvalid;
   }
   buf[n] = '\0';
   char* end_ptr = nullptr;
   const double parsed = std::strtod(buf, &end_ptr);
   if (end_ptr == buf || *end_ptr != '\0' || !std::isfinite(parsed)) {
-    return false;
+    return JsonFieldStatus::kInvalid;
   }
   out_val = static_cast<float>(parsed);
-  return std::isfinite(out_val);
+  return std::isfinite(out_val) ? JsonFieldStatus::kValid : JsonFieldStatus::kInvalid;
+}
+
+[[nodiscard]] bool ExtractJsonFloatField(
+    std::string_view json_text,
+    std::string_view key,
+    float& out_val) noexcept {
+  return ExtractJsonFloatFieldStatus(json_text, key, out_val) == JsonFieldStatus::kValid;
+}
+
+[[nodiscard]] inline float SanitizeLogitValue(float v, bool& nonfinite_flag) noexcept {
+  if (std::isfinite(v)) {
+    return v;
+  }
+  nonfinite_flag = true;
+  if (std::isinf(v)) {
+    return (v > 0.0f) ? 20.0f : -20.0f;
+  }
+  return 0.0f;
 }
 
 }  // namespace
@@ -110,10 +140,22 @@ bool ParseOodCalibrationJson(std::string_view json_text, SlzOrtConfig& cfg) noex
       !std::isfinite(tau_ood)) {
     return false;
   }
+
+  float safe_bias = 0.0f;
+  const JsonFieldStatus bias_status =
+      ExtractJsonFloatFieldStatus(json_text, "safe_logit_bias_delta", safe_bias);
+  if (bias_status == JsonFieldStatus::kInvalid) {
+    return false;
+  }
+  if (bias_status == JsonFieldStatus::kValid && !(safe_bias >= -5.0f && safe_bias <= 5.0f)) {
+    return false;
+  }
+
   cfg.t_ood = t_ood;
   cfg.t_prob = t_prob;
   cfg.kappa_b = kappa_b;
   cfg.tau_ood = tau_ood;
+  cfg.safe_logit_bias_delta = (bias_status == JsonFieldStatus::kValid) ? safe_bias : 0.0f;
   return true;
 }
 
@@ -219,6 +261,153 @@ bool ApplyUpsampledBoundaryCompensation(
       const float e_in = e_raw_512[row_out + x];
       e_out_512[row_out + x] = std::isfinite(e_in) ? (e_in - kappa_b * b_up) : 0.0f;
     }
+  }
+  return true;
+}
+
+bool ApplySafeLogitBias(
+    std::span<float> seg_logits_5x512x512,
+    float safe_logit_bias_delta) noexcept {
+  if (seg_logits_5x512x512.size() != kSlzLogitsElements ||
+      !std::isfinite(safe_logit_bias_delta) ||
+      safe_logit_bias_delta < -5.0f || safe_logit_bias_delta > 5.0f) {
+    return false;
+  }
+
+  for (uint32_t c = 0u; c < 2u; ++c) {
+    float* plane = seg_logits_5x512x512.data() + static_cast<std::size_t>(c) * kSlzPixels;
+    for (std::size_t idx = 0u; idx < kSlzPixels; ++idx) {
+      const float v = plane[idx];
+      if (!std::isfinite(v)) {
+        plane[idx] = -12.0f;
+      } else {
+        const float shifted = v + safe_logit_bias_delta;
+        plane[idx] = std::isfinite(shifted) ? shifted : -12.0f;
+      }
+    }
+  }
+  return true;
+}
+
+bool Apply3DNormalAndOodVeto(
+    std::span<float> seg_logits_5x512x512,
+    std::span<const float> surf_normals_3x512x512,
+    std::span<const float> e_tilde_512,
+    std::span<const float> u_up_3,
+    float cos_threshold,
+    float tau_ood,
+    std::size_t* vetoed_pixel_count_out) noexcept {
+  if (vetoed_pixel_count_out != nullptr) {
+    *vetoed_pixel_count_out = 0u;
+  }
+  if (seg_logits_5x512x512.size() != kSlzLogitsElements ||
+      surf_normals_3x512x512.size() != kSlzNormalsElements ||
+      e_tilde_512.size() != kSlzPixels ||
+      u_up_3.size() != 3u) {
+    return false;
+  }
+
+  float* p0 = seg_logits_5x512x512.data() + 0u * kSlzPixels;
+  float* p1 = seg_logits_5x512x512.data() + 1u * kSlzPixels;
+  float* p2 = seg_logits_5x512x512.data() + 2u * kSlzPixels;
+  float* p3 = seg_logits_5x512x512.data() + 3u * kSlzPixels;
+  float* p4 = seg_logits_5x512x512.data() + 4u * kSlzPixels;
+
+  const bool u_finite = std::isfinite(u_up_3[0]) && std::isfinite(u_up_3[1]) && std::isfinite(u_up_3[2]);
+  const float u_norm = u_finite
+                           ? std::sqrt(u_up_3[0] * u_up_3[0] + u_up_3[1] * u_up_3[1] + u_up_3[2] * u_up_3[2])
+                           : 0.0f;
+  const bool params_valid = u_finite && std::isfinite(u_norm) && (u_norm >= 1e-6f) &&
+                            std::isfinite(cos_threshold) && (cos_threshold >= -1.0f && cos_threshold <= 1.0f) &&
+                            std::isfinite(tau_ood);
+
+  if (!params_valid) {
+    // Fail-closed: veto every pixel out of Safe {0, 1} when veto parameters are invalid/NaN.
+    for (std::size_t idx = 0u; idx < kSlzPixels; ++idx) {
+      bool nonfinite_logit = false;
+      const float l[5] = {
+          SanitizeLogitValue(p0[idx], nonfinite_logit),
+          SanitizeLogitValue(p1[idx], nonfinite_logit),
+          SanitizeLogitValue(p2[idx], nonfinite_logit),
+          SanitizeLogitValue(p3[idx], nonfinite_logit),
+          SanitizeLogitValue(p4[idx], nonfinite_logit),
+      };
+      uint32_t argmax_c = 0u;
+      for (uint32_t c = 1u; c < kSlzNumClasses; ++c) {
+        if (l[c] > l[argmax_c]) {
+          argmax_c = c;
+        }
+      }
+      const bool raw_is_safe = (argmax_c == 0u || argmax_c == 1u) || nonfinite_logit;
+      p0[idx] = -12.0f;
+      p1[idx] = -12.0f;
+      p2[idx] = raw_is_safe ? std::max(l[2], 6.0f) : l[2];
+      p3[idx] = l[3];
+      p4[idx] = l[4];
+    }
+    if (vetoed_pixel_count_out != nullptr) {
+      *vetoed_pixel_count_out = kSlzPixels;
+    }
+    return false;
+  }
+
+  const float inv_u = 1.0f / u_norm;
+  const float ux = u_up_3[0] * inv_u;
+  const float uy = u_up_3[1] * inv_u;
+  const float uz = u_up_3[2] * inv_u;
+
+  const float* nx_plane = surf_normals_3x512x512.data() + 0u * kSlzPixels;
+  const float* ny_plane = surf_normals_3x512x512.data() + 1u * kSlzPixels;
+  const float* nz_plane = surf_normals_3x512x512.data() + 2u * kSlzPixels;
+
+  std::size_t vetoed_count = 0u;
+  for (std::size_t idx = 0u; idx < kSlzPixels; ++idx) {
+    bool nonfinite_logit = false;
+    const float l[5] = {
+        SanitizeLogitValue(p0[idx], nonfinite_logit),
+        SanitizeLogitValue(p1[idx], nonfinite_logit),
+        SanitizeLogitValue(p2[idx], nonfinite_logit),
+        SanitizeLogitValue(p3[idx], nonfinite_logit),
+        SanitizeLogitValue(p4[idx], nonfinite_logit),
+    };
+
+    uint32_t argmax_c = 0u;
+    for (uint32_t c = 1u; c < kSlzNumClasses; ++c) {
+      if (l[c] > l[argmax_c]) {
+        argmax_c = c;
+      }
+    }
+    const bool raw_is_safe = (argmax_c == 0u || argmax_c == 1u) || nonfinite_logit;
+
+    const float nx = nx_plane[idx];
+    const float ny = ny_plane[idx];
+    const float nz = nz_plane[idx];
+    bool steep_veto = true;
+    if (std::isfinite(nx) && std::isfinite(ny) && std::isfinite(nz)) {
+      const float n_norm = std::sqrt(nx * nx + ny * ny + nz * nz);
+      if (std::isfinite(n_norm) && n_norm >= 1e-6f) {
+        const float cos_up = (nx * ux + ny * uy + nz * uz) / n_norm;
+        if (std::isfinite(cos_up) && cos_up >= cos_threshold) {
+          steep_veto = false;
+        }
+      }
+    }
+
+    const float e_t = e_tilde_512[idx];
+    const bool ood_veto = !std::isfinite(e_t) || (e_t > tau_ood);
+
+    if (steep_veto || ood_veto || nonfinite_logit) {
+      p0[idx] = -12.0f;
+      p1[idx] = -12.0f;
+      p2[idx] = raw_is_safe ? std::max(l[2], 6.0f) : l[2];
+      p3[idx] = l[3];
+      p4[idx] = l[4];
+      ++vetoed_count;
+    }
+  }
+
+  if (vetoed_pixel_count_out != nullptr) {
+    *vetoed_pixel_count_out = vetoed_count;
   }
   return true;
 }

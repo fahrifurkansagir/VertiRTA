@@ -16,8 +16,27 @@ constexpr double kDvzMax = 0.35;    // Vertical velocity uncertainty [m/s]
 constexpr double kClutterInflateM = 1.50;
 constexpr double kBrtFallbackThreshM = -0.25;
 
+[[nodiscard]] inline bool is_finite_vec3(const core::Vec3Ned& v) noexcept {
+  return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+[[nodiscard]] inline double safe_clamp(double v, double lo, double hi, double fallback) noexcept {
+  if (!std::isfinite(v)) {
+    return fallback;
+  }
+  return std::clamp(v, lo, hi);
+}
+
+[[nodiscard]] inline double sanitize_scalar(double v, double lo, double hi, double fallback = 0.0) noexcept {
+  if (!std::isfinite(v)) {
+    return fallback;
+  }
+  return std::clamp(v, lo, hi);
+}
+
 [[nodiscard]] uint8_t select_lut_regime(const core::CapabilityEnvelope& env) noexcept {
-  const bool low_vbat = (env.v_term_v < 365.0f) || (env.soc < 0.15f);
+  const bool low_vbat = !std::isfinite(env.v_term_v) || !std::isfinite(env.soc) ||
+                        (env.v_term_v < 365.0f) || (env.soc < 0.15f);
   switch (env.regime) {
     case core::FlightRegime::NOMINAL:
       return low_vbat ? 3u : 0u;
@@ -87,17 +106,24 @@ core::Vec3Ned CbvfSafetyFilter::project_to_actuator_cone(
     double a_d_min,
     double a_d_max,
     double tilt_max_rad) const noexcept {
-  const double tan_t = std::tan(std::clamp(tilt_max_rad, 0.05, 0.85));
+  if (!is_finite_vec3(w_dir) || !std::isfinite(a_xy_max) || !std::isfinite(a_d_min) ||
+      !std::isfinite(a_d_max) || !std::isfinite(tilt_max_rad)) {
+    return {0.0, 0.0, 0.0};
+  }
+  const double safe_xy = safe_clamp(a_xy_max, 0.5, 14.0, 0.5);
+  const double safe_d_min = std::min(a_d_min, a_d_max);
+  const double safe_d_max = std::max(a_d_min, a_d_max);
+  const double tan_t = std::tan(safe_clamp(tilt_max_rad, 0.05, 0.85, 0.08));
   const double w_xy = std::hypot(w_dir.x, w_dir.y);
-  const double ux = (w_xy > 1e-9) ? (w_dir.x / w_xy) : 0.0;
-  const double uy = (w_xy > 1e-9) ? (w_dir.y / w_xy) : 0.0;
+  const double ux = (std::isfinite(w_xy) && w_xy > 1e-9) ? (w_dir.x / w_xy) : 0.0;
+  const double uy = (std::isfinite(w_xy) && w_xy > 1e-9) ? (w_dir.y / w_xy) : 0.0;
 
   // Maximize w_xy * r_xy + w_dir.z * a_D over a_D in [a_d_min, a_d_max],
   // 0 <= r_xy <= min(a_xy_max * cos(pi/8), (-a_D + g) * tan(tilt_max)).
   // Piecewise-linear concave objective -> optimum lies at one of at most 3 vertices!
-  const double r_disk = a_xy_max * kCosPiOver8;
-  const double a_d_kink = std::clamp(core::params::kGravity - r_disk / tan_t, a_d_min, a_d_max);
-  const double cand_ad[3] = {a_d_min, a_d_kink, a_d_max};
+  const double r_disk = safe_xy * kCosPiOver8;
+  const double a_d_kink = safe_clamp(core::params::kGravity - r_disk / tan_t, safe_d_min, safe_d_max, 0.0);
+  const double cand_ad[3] = {safe_d_min, a_d_kink, safe_d_max};
 
   double best_val = -1e30;
   core::Vec3Ned best{0.0, 0.0, 0.0};
@@ -105,12 +131,12 @@ core::Vec3Ned CbvfSafetyFilter::project_to_actuator_cone(
     const double r_cone = std::max(0.0, (-ad + core::params::kGravity) * tan_t);
     const double r_max = std::min(r_disk, r_cone);
     const double val = w_xy * r_max + w_dir.z * ad;
-    if (val > best_val) {
+    if (std::isfinite(val) && val > best_val) {
       best_val = val;
       best = {ux * r_max, uy * r_max, ad};
     }
   }
-  return best;
+  return is_finite_vec3(best) ? best : core::Vec3Ned{0.0, 0.0, 0.0};
 }
 
 SafetyFilterOutput CbvfSafetyFilter::step_100hz(
@@ -129,23 +155,50 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
   }
   out.cel_latched = cel_latched_;
 
-  const double a_xy_max = std::clamp(static_cast<double>(env.a_xy_max), 0.5, 14.0);
-  const double tilt_max = std::clamp(static_cast<double>(env.tilt_max_rad), 0.08, 0.70);
-  const double a_up_max =
-      std::max(0.8, static_cast<double>(env.t_max_n) / core::params::kMassKg - core::params::kGravity);
+  // Fail-closed immediately if ego state is non-finite: bounded level safe hover.
+  if (!is_finite_vec3(pos_ned) || !is_finite_vec3(vel_ned)) {
+    out.a_safe_ned = {0.0, 0.0, 0.0};
+    out.yaw_rate_safe = 0.0;
+    out.slack = 0.0;
+    out.used_hj_fallback = true;
+    out.qp_exit_flag = 1;
+    out.qp_iters = 0;
+    return out;
+  }
+
+  // Sanitize nominal commands & envelope limits (std::clamp(NaN, lo, hi) returns NaN!).
+  const core::Vec3Ned a_nom_safe{
+      sanitize_scalar(a_nom_ned.x, -1e4, 1e4, 0.0),
+      sanitize_scalar(a_nom_ned.y, -1e4, 1e4, 0.0),
+      sanitize_scalar(a_nom_ned.z, -1e4, 1e4, 0.0),
+  };
+  const double yaw_nom_safe = sanitize_scalar(yaw_rate_nom, -100.0, 100.0, 0.0);
+
+  const double a_xy_max = safe_clamp(static_cast<double>(env.a_xy_max), 0.5, 14.0, 0.5);
+  const double tilt_max = safe_clamp(static_cast<double>(env.tilt_max_rad), 0.08, 0.70, 0.08);
+  const double a_up_raw = std::isfinite(env.t_max_n)
+                              ? (static_cast<double>(env.t_max_n) / core::params::kMassKg - core::params::kGravity)
+                              : 0.8;
+  const double a_up_max = safe_clamp(a_up_raw, 0.8, 30.0, 0.8);
   const double a_d_min = -a_up_max;
   const double a_d_max = 4.0;
+
+  const float v_term_safe = std::isfinite(env.v_term_v) ? env.v_term_v : 330.0f;
+  const bool spin_meas_valid = std::isfinite(env.spin_rate_meas);
+  const double spin_rate_meas = spin_meas_valid ? static_cast<double>(env.spin_rate_meas) : 0.0;
+  const double spin_rate_ref = safe_clamp(static_cast<double>(env.spin_rate_ref), -10.0, 10.0, 0.0);
 
   // 2. Latched CEL mode: 2D vertical braking barrier (Cel2DLut) + Option B1b spin authority.
   if (cel_latched_) {
     const double z_agl = std::max(0.0, -pos_ned.z);
     const double vz_up = -vel_ned.z;
-    double a_up_cmd = -a_nom_ned.z;
+    double a_up_cmd = -a_nom_safe.z;
     double a_net_avail = a_up_max - 0.50;
 
     if (cel_lut_ != nullptr && cel_lut_->is_loaded()) {
-      const Cel2DQuery cq = cel_lut_->eval(env.v_term_v, z_agl, vz_up);
-      if (cq.valid) {
+      const Cel2DQuery cq = cel_lut_->eval(v_term_safe, z_agl, vz_up);
+      if (cq.valid && std::isfinite(cq.value_m) && std::isfinite(cq.dv_dz) &&
+          std::isfinite(cq.dv_dvz) && std::isfinite(cq.d_z_max)) {
         out.cel_v_2d = cq.value_m;
         out.min_cbvf_v = cq.value_m;
         a_net_avail = cq.a_net;
@@ -155,7 +208,9 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
           const double denom = std::max(cq.dv_dvz, 0.05);
           const double a_up_req =
               (-kGammaCel * cq.value_m - cq.dv_dz * vz_up + std::abs(cq.dv_dvz) * cq.d_z_max) / denom;
-          a_up_cmd = std::max(a_up_cmd, a_up_req);
+          if (std::isfinite(a_up_req)) {
+            a_up_cmd = std::max(a_up_cmd, a_up_req);
+          }
         }
       }
     }
@@ -164,19 +219,19 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
     const double vz_sink_lim = (z_agl > 10.0) ? 2.5 : ((z_agl > 5.0) ? 1.5 : ((z_agl > 1.0) ? 0.9 : 0.6));
     if (-vz_up > vz_sink_lim) {
       a_up_cmd = std::max(a_up_cmd, 2.5 * (-vz_up - vz_sink_lim));
-    } else if (std::abs(static_cast<double>(env.spin_rate_meas)) < 1.5 && z_agl > 12.0 && -vz_up < 2.2) {
+    } else if (spin_meas_valid && std::abs(spin_rate_meas) < 1.5 && z_agl > 12.0 && -vz_up < 2.2) {
       // Controlled collective unload during high-AGL Option B1b spin-up opens differential yaw headroom.
       a_up_cmd = std::min(a_up_cmd, -0.6);
     }
     (void)a_net_avail;
 
-    const double a_up_safe = std::clamp(a_up_cmd, -a_d_max, a_up_max);
+    const double a_up_safe = safe_clamp(a_up_cmd, -a_d_max, a_up_max, 0.0);
     // Keep body level during spin-up; gentle horizontal damping only once flat spin is established.
-    const bool spin_locked = std::abs(static_cast<double>(env.spin_rate_meas)) >= 1.5;
-    const double a_n = spin_locked ? std::clamp(-0.25 * vel_ned.x, -0.5, 0.5) : 0.0;
-    const double a_e = spin_locked ? std::clamp(-0.25 * vel_ned.y, -0.5, 0.5) : 0.0;
+    const bool spin_locked = spin_meas_valid && (std::abs(spin_rate_meas) >= 1.5);
+    const double a_n = spin_locked ? safe_clamp(-0.25 * vel_ned.x, -0.5, 0.5, 0.0) : 0.0;
+    const double a_e = spin_locked ? safe_clamp(-0.25 * vel_ned.y, -0.5, 0.5, 0.0) : 0.0;
     out.a_safe_ned = {a_n, a_e, -a_up_safe};
-    out.yaw_rate_safe = static_cast<double>(env.spin_rate_ref);
+    out.yaw_rate_safe = spin_rate_ref;
     out.qp_exit_flag = 1;
     out.qp_iters = 0;
     return out;
@@ -184,9 +239,12 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
 
   // 3. CSFL mode: evaluate up to 15 closest/most-critical hazards against 4D CBVF LUT.
   const uint8_t regime_idx = select_lut_regime(env);
-  const double d_ar = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->d_ar_max() : 1.75;
-  const double d_az = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->d_az_max() : 0.75;
-  const double v_cap = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->v_cap_f(regime_idx) : 16.0;
+  const double d_ar_raw = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->d_ar_max() : 1.75;
+  const double d_az_raw = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->d_az_max() : 0.75;
+  const double v_cap_raw = (cbvf_lut_ != nullptr && cbvf_lut_->is_loaded()) ? cbvf_lut_->v_cap_f(regime_idx) : 16.0;
+  const double d_ar = safe_clamp(d_ar_raw, 0.0, 10.0, 1.75);
+  const double d_az = safe_clamp(d_az_raw, 0.0, 10.0, 0.75);
+  const double v_cap = safe_clamp(v_cap_raw, 1.0, 40.0, 16.0);
 
   constexpr std::size_t kMaxActiveHazards = 15;
   std::array<EvaluatedHazard, kMaxActiveHazards> evals{};
@@ -196,30 +254,51 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
   const double v_up = -vel_ned.z;
 
   for (const HazardPoint& h : hazards) {
-    if (!std::isfinite(h.pos_ned.x) || !std::isfinite(h.pos_ned.y) || !std::isfinite(h.pos_ned.z)) {
+    if (!is_finite_vec3(h.pos_ned)) {
       continue;
     }
     const double d_n = pos_ned.x - h.pos_ned.x;
     const double d_e = pos_ned.y - h.pos_ned.y;
     const double r_raw = std::hypot(d_n, d_e);
+    if (!std::isfinite(r_raw)) {
+      continue;
+    }
     const double r_clamped = std::max(r_raw, 0.5);
     const double er_n = (r_raw > 1e-6) ? (d_n / r_raw) : 1.0;
     const double er_e = (r_raw > 1e-6) ? (d_e / r_raw) : 0.0;
 
-    const double v_rel_n = vel_ned.x - h.vel_ned.x;
-    const double v_rel_e = vel_ned.y - h.vel_ned.y;
+    // Sanitize hazard kinematics & parameters so non-finite metadata never poisons CBVF or drops a nearby obstacle.
+    const double h_vx = sanitize_scalar(h.vel_ned.x, -1e4, 1e4, 0.0);
+    const double h_vy = sanitize_scalar(h.vel_ned.y, -1e4, 1e4, 0.0);
+    const double h_vz = sanitize_scalar(h.vel_ned.z, -1e4, 1e4, 0.0);
+    const double h_ax = sanitize_scalar(h.accel_ned.x, -1e3, 1e3, 0.0);
+    const double h_ay = sanitize_scalar(h.accel_ned.y, -1e3, 1e3, 0.0);
+    const double h_az = sanitize_scalar(h.accel_ned.z, -1e3, 1e3, 0.0);
+    const double h_rad_h = safe_clamp(h.radius_h_m, 0.0, 1e5, 0.0);
+    const double h_rad_z = safe_clamp(h.radius_z_m, 0.0, 1e5, 0.0);
+    const double h_gamma = safe_clamp(h.gamma, 0.2, 5.0, 1.2);
+
+    const double v_rel_n = vel_ned.x - h_vx;
+    const double v_rel_e = vel_ned.y - h_vy;
     const double v_r = er_n * v_rel_n + er_e * v_rel_e;
-    const double v_perp2 = std::max(0.0, v_rel_n * v_rel_n + v_rel_e * v_rel_e - v_r * v_r);
+    const double v_perp2_raw = v_rel_n * v_rel_n + v_rel_e * v_rel_e - v_r * v_r;
+    const double v_perp2 = std::isfinite(v_perp2_raw) ? std::max(0.0, v_perp2_raw) : 0.0;
 
     // Exact overhead-intruder sign preservation (DR-2 Erratum #2 & Review Focus #2):
     // p_up - p_obs_up < 0 (intruder overhead) => s_z = -1 => climbing (+v_up) gives vz_rel < 0 (closing).
     const double p_obs_up = -h.pos_ned.z;
-    const double v_obs_up = -h.vel_ned.z;
+    const double v_obs_up = -h_vz;
     const double dz_signed = p_up - p_obs_up;
+    if (!std::isfinite(dz_signed) || !std::isfinite(v_r)) {
+      continue;
+    }
     const double s_z = (dz_signed >= 0.0) ? 1.0 : -1.0;
-    const double z_eff = std::abs(dz_signed) - std::max(0.0, h.radius_z_m);
+    const double z_eff = std::abs(dz_signed) - h_rad_z;
     const double vz_rel = s_z * (v_up - v_obs_up);
-    const double r_eff = r_clamped - std::max(0.0, h.radius_h_m);
+    const double r_eff = r_clamped - h_rad_h;
+    if (!std::isfinite(z_eff) || !std::isfinite(vz_rel) || !std::isfinite(r_eff)) {
+      continue;
+    }
 
     CbvfQueryResult q{};
     if (z_eff < -5.0) {
@@ -238,7 +317,9 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
     } else {
       q = analytic_cbvf_fallback(r_eff, v_r, z_eff, vz_rel, std::max(0.5, a_xy_max - d_ar), std::max(0.5, a_up_max - d_az));
     }
-    if (!q.valid) {
+    if (!q.valid || !std::isfinite(q.value_m) ||
+        !std::isfinite(q.grad[0]) || !std::isfinite(q.grad[1]) ||
+        !std::isfinite(q.grad[2]) || !std::isfinite(q.grad[3])) {
       continue;
     }
 
@@ -253,9 +334,9 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
     eh.v_r = v_r;
     eh.v_perp2 = v_perp2;
     eh.vz_rel = vz_rel;
-    eh.a_obs_r = er_n * h.accel_ned.x + er_e * h.accel_ned.y;
-    eh.a_obs_z_up = -h.accel_ned.z;
-    eh.gamma = std::clamp(h.gamma, 0.2, 5.0);
+    eh.a_obs_r = er_n * h_ax + er_e * h_ay;
+    eh.a_obs_z_up = -h_az;
+    eh.gamma = h_gamma;
     eh.valid = true;
 
     if (n_eval < kMaxActiveHazards) {
@@ -329,7 +410,7 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
       wz = -hs.s_z * hs.grad[2];
     }
     out.a_safe_ned = project_to_actuator_cone({wx, wy, wz}, a_xy_max, a_d_min, a_d_max, tilt_max);
-    out.yaw_rate_safe = std::clamp(yaw_rate_nom, -1.5, 1.5);
+    out.yaw_rate_safe = safe_clamp(yaw_nom_safe, -1.5, 1.5, 0.0);
     out.used_hj_fallback = true;
     out.qp_exit_flag = 1;
     out.qp_iters = 0;
@@ -341,16 +422,16 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
   //    General rows: (<=14 if v_cap active else <=15) CBVF rows + 1 optional v_cap row + 12 actuator polytope rows <= 27
   //    Total rows: n(5) + m_general(<=27) <= 32.
   const double v_h = std::hypot(vel_ned.x, vel_ned.y);
-  const bool need_vcap_row = (v_h > v_cap + 0.1);
+  const bool need_vcap_row = std::isfinite(v_h) && (v_h > v_cap + 0.1) && (v_h > 1e-6);
   const std::size_t max_haz_rows = need_vcap_row ? 14u : 15u;
   const std::size_t n_haz_rows = std::min(n_eval, max_haz_rows);
 
   const double H_diag[5] = {1.0, 1.0, 2.0, 1.0, 1e4};
   const double f[5] = {
-      -a_nom_ned.x,
-      -a_nom_ned.y,
-      -2.0 * a_nom_ned.z,
-      -yaw_rate_nom,
+      -a_nom_safe.x,
+      -a_nom_safe.y,
+      -2.0 * a_nom_safe.z,
+      -yaw_nom_safe,
       1e3,
   };
   const double x_lo[5] = {-a_xy_max, -a_xy_max, a_d_min, -1.5, 0.0};
@@ -380,6 +461,9 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
         std::abs(vz_g) * kDvzMax + std::abs(vvz_g) * d_az;
 
     const double rhs = -lf_v + d_term - eh.gamma * eh.v_eff;
+    if (!std::isfinite(rhs)) {
+      continue;
+    }
 
     // L_g V * u + slack >= rhs, where d(vz_rel)/d(a_D) = -s_z
     A[row * 5 + 0] = vvr_g * eh.er_n;
@@ -441,20 +525,31 @@ SafetyFilterOutput CbvfSafetyFilter::step_100hz(
   out.qp_exit_flag = res.exit_flag;
   out.qp_iters = res.iterations;
 
-  if (!res.used_fallback) {
+  const bool qp_finite = std::isfinite(res.x[0]) && std::isfinite(res.x[1]) &&
+                         std::isfinite(res.x[2]) && std::isfinite(res.x[3]) &&
+                         std::isfinite(res.x[4]);
+  if (!res.used_fallback && qp_finite) {
     out.a_safe_ned = {res.x[0], res.x[1], res.x[2]};
     out.yaw_rate_safe = res.x[3];
     out.slack = res.x[4];
     out.used_hj_fallback = false;
   } else {
-    // Non-optimal QP -> deterministic u*_HJ cone fallback
+    // Non-optimal or non-finite QP -> deterministic u*_HJ cone fallback
     core::Vec3Ned w_dir{-vel_ned.x, -vel_ned.y, -1.0};
     if (n_eval > 0) {
       const auto& hs = evals[k_star];
       w_dir = {hs.grad[1] * hs.er_n, hs.grad[1] * hs.er_e, -hs.s_z * hs.grad[3]};
     }
     out.a_safe_ned = project_to_actuator_cone(w_dir, a_xy_max, a_d_min, a_d_max, tilt_max);
-    out.yaw_rate_safe = std::clamp(yaw_rate_nom, -1.5, 1.5);
+    out.yaw_rate_safe = safe_clamp(yaw_nom_safe, -1.5, 1.5, 0.0);
+    out.used_hj_fallback = true;
+  }
+
+  // Final defense-in-depth finiteness postcondition guarantee.
+  if (!is_finite_vec3(out.a_safe_ned) || !std::isfinite(out.yaw_rate_safe)) {
+    out.a_safe_ned = {0.0, 0.0, 0.0};
+    out.yaw_rate_safe = 0.0;
+    out.slack = 0.0;
     out.used_hj_fallback = true;
   }
 

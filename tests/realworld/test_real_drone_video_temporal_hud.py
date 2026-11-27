@@ -22,6 +22,7 @@ from scripts.realworld.run_real_drone_video_temporal_hud import (
     DEFAULT_GIF_MAX_BYTES,
     SLZ_CLASS_BGR,
     SLZ_CLASS_RGB,
+    NonRigidSurfaceMotionTracker,
     TemporalSlzStabilizer,
     _compute_binary_iou,
     apply_3d_normal_and_ood_veto,
@@ -282,6 +283,206 @@ def test_forward_domain_gate_and_unified_palette_parity() -> None:
     assert evaluate_forward_domain_gate(10.0, max_forward_pitch_deg=25.0)["in_domain"] is True
     assert np.array_equal(SLZ_CLASS_RGB, GRID_SLZ_CLASS_RGB), "HUD and validation grid palettes diverged"
     assert np.array_equal(SLZ_CLASS_BGR, SLZ_CLASS_RGB[:, ::-1]), "BGR/RGB palette mismatch"
+
+
+def test_non_rigid_surface_motion_tracker_blocks_churning_surf_and_preserves_static_roof() -> None:
+    """First-principles rigid-surface motion veto must preserve static concrete and reject churning surf."""
+    h, w = 128, 128
+    rng = np.random.default_rng(20261127)
+    base_static = np.full((h, w), 140.0, dtype=np.float32)
+    # Add mild rigid texture across the whole frame (static concrete)
+    base_static += rng.normal(0.0, 2.0, (h, w)).astype(np.float32)
+    base_static = np.clip(base_static, 0.0, 255.0)
+
+    tracker = NonRigidSurfaceMotionTracker(
+        ema_alpha=0.25, tau_nonrigid_luma=7.5, warmup_steps=4, blur_ksize=11, blur_sigma=2.5
+    )
+    eye_h = np.eye(3, dtype=np.float64)
+
+    # 1) Static rigid surface with small camera noise -> 0% non-rigid veto
+    for _ in range(8):
+        frame = np.clip(base_static + rng.normal(0.0, 1.0, (h, w)), 0.0, 255.0).astype(np.uint8)
+        res = tracker.update(frame, homography=eye_h)
+        assert res["outputs_finite"] is True
+    assert res["non_rigid_frac"] == pytest.approx(0.0, abs=1e-6)
+
+    # 2) Churning ocean surf / dynamic patch on left half [16:112, 8:56], static roof on right half [16:112, 72:120]
+    tracker.reset()
+    for step in range(12):
+        frame = base_static.copy()
+        surf_patch = rng.uniform(110.0, 250.0, size=(96, 48)).astype(np.float32)
+        if step % 2 == 1:
+            surf_patch = 255.0 - 0.5 * surf_patch
+        frame[16:112, 8:56] = surf_patch
+        res = tracker.update(np.clip(frame, 0.0, 255.0).astype(np.uint8), homography=eye_h)
+        assert res["outputs_finite"] is True
+
+    nr_mask = res["non_rigid_mask"]
+    assert float(nr_mask[24:104, 16:48].mean()) > 0.90, "Churning surf region must be vetoed as non-rigid"
+    assert float(nr_mask[24:104, 80:112].mean()) < 0.02, "Static concrete roof must remain preserved"
+
+    # Verify apply_3d_normal_and_ood_veto routes non_rigid_mask pixels from Safe -> Hazard (class 2)
+    logits = np.full((5, h, w), -2.5, dtype=np.float32)
+    logits[1, :, :] = 3.5  # Raw 2D falsely marks everything Safe_Flat_Roof (1)
+    veto = apply_3d_normal_and_ood_veto(
+        logits,
+        safe_logit_bias_delta=-0.271367,
+        steep_soft_mask=np.zeros((h, w), dtype=bool),
+        steep_hard_mask=np.zeros((h, w), dtype=bool),
+        ood_mask=np.zeros((h, w), dtype=bool),
+        non_rigid_mask=nr_mask,
+        min_slz_area_px=16,
+    )
+    assert veto["safe_vetoed_by_nonrigid_frac"] > 0.25
+    assert bool((veto["vetoed_raw_pred"][24:104, 16:48] == 2).mean() > 0.90)
+    assert bool((veto["vetoed_raw_pred"][24:104, 80:112] == 1).mean() > 0.98)
+
+    # 3) Non-finite input must fail closed (100% non-rigid veto, outputs finite)
+    nan_frame = base_static.copy()
+    nan_frame[0, 0] = np.nan
+    fail_res = tracker.update(nan_frame, homography=eye_h)
+    assert fail_res["outputs_finite"] is True
+    assert fail_res["non_rigid_frac"] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_3d_normal_veto_pure_nadir_flat_roof_zero_false_veto() -> None:
+    """Pure top-down (90 deg nadir) flat roof must yield pitch ~90 deg and ~0% false veto."""
+    h, w = 128, 128
+    disp_const = np.full((h, w), 0.75, dtype=np.float32)
+    n3d = compute_3d_surface_normals_from_disparity(disp_const, blur_ksize=5, blur_sigma=1.0)
+    assert n3d["outputs_finite"] is True
+    assert n3d["disp_input_all_finite"] is True
+    assert n3d["camera_pitch_deg"] >= 88.0
+    assert float(n3d["u_up"][2]) <= -0.99
+    assert n3d["steep_soft_frac"] == pytest.approx(0.0, abs=1e-6)
+    assert n3d["steep_hard_frac"] == pytest.approx(0.0, abs=1e-6)
+
+    # Verify flat roof Safe_Flat_Roof (class 1) is NOT falsely vetoed
+    logits = np.full((5, h, w), -2.5, dtype=np.float32)
+    logits[1, :, :] = 3.5
+    veto = apply_3d_normal_and_ood_veto(
+        logits,
+        safe_logit_bias_delta=-0.271367,
+        steep_soft_mask=n3d["steep_soft_mask"],
+        steep_hard_mask=n3d["steep_hard_mask"],
+        ood_mask=np.zeros((h, w), dtype=bool),
+        min_slz_area_px=16,
+    )
+    assert veto["safe_vetoed_by_3d_frac"] == pytest.approx(0.0, abs=1e-6)
+    assert veto["vetoed_raw_safe_frac"] == pytest.approx(1.0, abs=1e-6)
+
+    # Also verify pure-nadir flat roof with realistic random sensor noise stays ~90 deg & ~0% false veto
+    rng = np.random.default_rng(20261127)
+    disp_noisy = (0.75 + rng.normal(0.0, 0.005, (h, w))).astype(np.float32)
+    n3d_j = compute_3d_surface_normals_from_disparity(disp_noisy, blur_ksize=9, blur_sigma=2.0)
+    assert n3d_j["outputs_finite"] is True
+    assert n3d_j["camera_pitch_deg"] >= 75.0
+    assert n3d_j["steep_soft_frac"] < 0.05
+
+
+def test_3d_normal_veto_nadir_roof_plus_vertical_wall_dropoff() -> None:
+    """Pure-nadir flat roof elevated above flat ground preserves both flats while vetoing drop-off walls."""
+    h, w = 128, 128
+    disp = np.full((h, w), 0.15, dtype=np.float32)
+    disp[28:100, 28:100] = 0.85  # Elevated flat rooftop with vertical perimeter drop-off
+
+    n3d = compute_3d_surface_normals_from_disparity(disp, blur_ksize=5, blur_sigma=1.0)
+    assert n3d["outputs_finite"] is True
+    assert n3d["camera_pitch_deg"] >= 82.0
+    # Flat roof interior and flat ground interior must remain safe (~0% false veto)
+    assert float(n3d["steep_soft_mask"][38:90, 38:90].mean()) < 0.02
+    assert float(n3d["steep_soft_mask"][4:18, 4:124].mean()) < 0.02
+    # Vertical perimeter drop-off walls MUST be vetoed as steep hazards
+    top_edge = float(n3d["steep_soft_mask"][26:30, 38:90].mean())
+    bot_edge = float(n3d["steep_soft_mask"][98:102, 38:90].mean())
+    left_edge = float(n3d["steep_soft_mask"][38:90, 26:30].mean())
+    right_edge = float(n3d["steep_soft_mask"][38:90, 98:102].mean())
+    assert min(top_edge, bot_edge, left_edge, right_edge) > 0.70
+
+
+def test_3d_normal_veto_45deg_oblique_building_facade() -> None:
+    """Exact 45-deg oblique geometry recovers ~45 deg camera pitch and vetoes vertical building facade."""
+    h, w = 128, 128
+    focal_px = 420.0
+    f_eff = focal_px * (w / 512.0)
+    _, v = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+    # Exact 45-deg horizontal plane: P . (0, -cos45, -sin45) = const => Z(v) proportional to 1 / ((v-h/2)/f + 1)
+    inv_z_plane = np.clip((v - h * 0.5) / f_eff + 1.0, 0.25, 2.5)
+    z_plane = 1.0 / inv_z_plane
+    # Map z_plane to disparity in [0, 1] consistent with z_far_ratio=3.5
+    inv_z_norm = (1.0 / z_plane - 1.0 / float(z_plane.max())) / max(1e-5, (1.0 / float(z_plane.min()) - 1.0 / float(z_plane.max())))
+    disp = np.clip(inv_z_norm, 0.0, 1.0).astype(np.float32)
+    # Inject a front-facing vertical building wall whose depth increases going down (+v)
+    disp[44:92, 40:88] = 0.72 - 0.42 * np.linspace(0.0, 1.0, 48, dtype=np.float32)[:, None]
+
+    n3d = compute_3d_surface_normals_from_disparity(disp, blur_ksize=5, blur_sigma=1.0, focal_px=focal_px)
+    assert n3d["outputs_finite"] is True
+    assert 30.0 <= n3d["camera_pitch_deg"] <= 60.0
+    assert float(n3d["steep_soft_mask"][10:34, 10:118].mean()) < 0.05
+    assert float(n3d["steep_soft_mask"][52:84, 48:80].mean()) > 0.90
+
+
+def test_3d_normal_veto_forward_horizon_low_pitch_and_sky_immunity() -> None:
+    """Forward-horizon aerial scene (sky top + receding ground + vertical tower) opens forward gate <= 25 deg."""
+    h, w = 128, 128
+    disp = np.zeros((h, w), dtype=np.float32)
+    # Top 42% is constant far sky (disp=0.0); bottom 58% is flat receding ground
+    horizon_y = 54
+    ground_ramp = np.linspace(0.02, 1.0, h - horizon_y, dtype=np.float32)[:, None]
+    disp[horizon_y:, :] = ground_ramp
+    # Foreground vertical structure / tower facing camera (constant near depth)
+    disp[62:118, 54:74] = 0.88
+
+    n3d = compute_3d_surface_normals_from_disparity(disp, blur_ksize=5, blur_sigma=1.0)
+    assert n3d["outputs_finite"] is True
+    assert n3d["camera_pitch_deg"] <= 25.0
+    assert evaluate_forward_domain_gate(n3d["camera_pitch_deg"], max_forward_pitch_deg=25.0)["in_domain"] is True
+    # Flat ground beside tower must NOT be falsely vetoed
+    assert float(n3d["steep_soft_mask"][72:118, 8:42].mean()) < 0.10
+    # Foreground vertical tower facing forward camera MUST be vetoed as steep obstacle
+    assert float(n3d["steep_soft_mask"][70:110, 58:70].mean()) > 0.85
+
+
+def test_3d_normal_veto_nan_inf_disparity_fail_closed() -> None:
+    """Non-finite (NaN / Inf) disparity pixels must fail closed to steep hazard with 100% finite outputs."""
+    h, w = 64, 64
+    # Case 1: Partial NaN / +/-Inf corruption on a flat nadir roof
+    disp_partial = np.full((h, w), 0.6, dtype=np.float32)
+    disp_partial[16:32, 16:32] = np.nan
+    disp_partial[32:44, 32:44] = np.inf
+    disp_partial[44:52, 44:52] = -np.inf
+    bad_mask = ~np.isfinite(disp_partial)
+
+    n3d_p = compute_3d_surface_normals_from_disparity(disp_partial, blur_ksize=5, blur_sigma=1.0)
+    assert n3d_p["outputs_finite"] is True
+    assert n3d_p["disp_input_all_finite"] is False
+    assert bool(n3d_p["steep_soft_mask"][bad_mask].all())
+    assert bool(n3d_p["steep_hard_mask"][bad_mask].all())
+    assert float(n3d_p["cos_up"][bad_mask].max()) == pytest.approx(0.0, abs=1e-6)
+    assert float(n3d_p["world_tilt_deg"][bad_mask].min()) == pytest.approx(90.0, abs=1e-4)
+    # Valid flat region remains safe
+    assert float(n3d_p["steep_soft_mask"][0:12, 0:64].mean()) < 0.02
+
+    # Case 2: Total NaN disparity corruption -> 100% fail-closed vetoed to Hazard_Obstacle_Structure (2)
+    disp_all_nan = np.full((h, w), np.nan, dtype=np.float32)
+    n3d_all = compute_3d_surface_normals_from_disparity(disp_all_nan, blur_ksize=5, blur_sigma=1.0)
+    assert n3d_all["outputs_finite"] is True
+    assert n3d_all["disp_input_all_finite"] is False
+    assert n3d_all["steep_soft_frac"] == pytest.approx(1.0)
+    assert n3d_all["steep_hard_frac"] == pytest.approx(1.0)
+
+    logits = np.full((5, h, w), -2.0, dtype=np.float32)
+    logits[0, :, :] = 4.0  # Raw 2D claims 100% safe ground
+    veto = apply_3d_normal_and_ood_veto(
+        logits,
+        safe_logit_bias_delta=-0.271367,
+        steep_soft_mask=n3d_all["steep_soft_mask"],
+        steep_hard_mask=n3d_all["steep_hard_mask"],
+        ood_mask=np.zeros((h, w), dtype=bool),
+        min_slz_area_px=16,
+    )
+    assert veto["vetoed_raw_safe_frac"] == pytest.approx(0.0)
+    assert bool((veto["vetoed_raw_pred"] == 2).all())
 
 
 def test_smoke_cpu_offline_zero_network(tmp_path: Path) -> None:

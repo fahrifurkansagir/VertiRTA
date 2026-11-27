@@ -273,24 +273,80 @@ def compute_3d_surface_normals_from_disparity(
 
     In OpenCV pinhole coordinates (+X right, +Y down, +Z forward into scene):
       - Outward normal `n_cam = normalize((dP/dv) x (dP/du))` points TOWARD the camera (`nz <= 0`).
-      - On a downward-oblique horizontal plane (flat roof / flat ground), moving down (+v) approaches
-        the drone (`dZ/dv < 0`), so `ny < 0` (points upward toward sky).
-      - On a vertical building facade facing the oblique drone, moving down (+v) goes deeper into the
-        urban canyon (`dZ/dv > 0`), so `ny > 0` (opposite sign) or `|nx|` is large on side walls.
-      - Estimating the dominant horizontal-plane world-UP unit vector `u_up` from the upper-hemisphere
-        cluster (`ny < -0.15, |nx| < 0.45`) recovers both live camera pitch below horizontal and
-        world-frame tilt `arccos(n_cam . u_up)` cleanly without video-specific hardcoding.
+      - Across camera pitch below horizontal `theta in [0, 90] deg`, a horizontal flat plane has
+        outward normal `u_up = (0, -cos(theta), -sin(theta))`:
+          * Forward / low-oblique (`0-25 deg`): `ny ~= -1..-0.9, nz ~= 0..-0.42`
+          * Oblique (`25-75 deg`): `ny < -0.15, nz < -0.25`
+          * Near / pure nadir (`75-90 deg`): `ny ~= 0, nz ~= -1`
+      - On a vertical building facade facing an oblique drone, moving down (+v) goes deeper into
+        the urban canyon (`dZ/dv > 0`), so `ny > 0` (opposite sign) or `|nx|` is large on side walls.
+      - Estimating the dominant planar horizontal-mode world-UP unit vector `u_up` from the upper-
+        hemisphere cluster (`ny <= 0.08, |nx| < 0.45, (nz < -0.25 or ny < -0.15)`) recovers live
+        camera pitch continuously from `0` to `90 deg` without falsely vetoing pure-nadir flat roofs,
+        while failing closed (`steep=True`) on any non-finite (`NaN`/`Inf`) disparity pixels.
     """
-    disp_f = np.nan_to_num(disp_hw.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
-    p2, p98 = np.percentile(disp_f, [2.0, 98.0])
-    denom = max(float(p98 - p2), 1e-5)
-    disp_norm = np.clip((disp_f - float(p2)) / denom, 0.0, 1.0).astype(np.float32)
+    disp_raw = np.asarray(disp_hw, dtype=np.float32)
+    h, w = disp_raw.shape[:2]
+    finite_disp_mask = np.isfinite(disp_raw)
+    nonfinite_disp_mask = ~finite_disp_mask
+    finite_count = int(finite_disp_mask.sum())
+
+    if finite_count == 0:
+        if prev_u_up is not None and prev_u_up.shape == (3,) and bool(np.all(np.isfinite(prev_u_up))):
+            u_up = prev_u_up.astype(np.float32).copy()
+            u_up /= float(np.linalg.norm(u_up)) + 1e-8
+        else:
+            u_up = np.array([0.0, -0.70710677, -0.70710677], dtype=np.float32)
+        camera_pitch_deg = float(
+            np.degrees(np.arctan2(max(0.0, -float(u_up[2])), max(1e-6, -float(u_up[1]))))
+        )
+        zeros_hw = np.zeros((h, w), dtype=np.float32)
+        normals_chw = np.zeros((3, h, w), dtype=np.float32)
+        normals_chw[2, :, :] = np.float32(-1.0)
+        steep_all = np.ones((h, w), dtype=bool)
+        return {
+            "disp_norm": zeros_hw,
+            "normals_chw": normals_chw,
+            "u_up": u_up,
+            "camera_pitch_deg": camera_pitch_deg,
+            "cos_up": zeros_hw.copy(),
+            "world_tilt_deg": np.full((h, w), 90.0, dtype=np.float32),
+            "steep_soft_mask": steep_all,
+            "steep_hard_mask": steep_all.copy(),
+            "steep_soft_frac": 1.0,
+            "steep_hard_frac": 1.0,
+            "disp_input_all_finite": False,
+            "nonfinite_disp_frac": 1.0,
+            "outputs_finite": True,
+        }
+
+    finite_vals = disp_raw[finite_disp_mask]
+    if bool(nonfinite_disp_mask.any()):
+        disp_f = disp_raw.copy()
+        disp_f[nonfinite_disp_mask] = np.float32(np.median(finite_vals))
+    else:
+        disp_f = disp_raw
+
+    p2, p98 = np.percentile(finite_vals, [2.0, 98.0])
+    disp_range = float(p98 - p2)
+    # Prevent tiny sensor noise on an almost-flat pure-nadir plane from being stretched into synthetic cliffs.
+    min_rel_range = 0.20 * max(abs(float(p98)), 1.0)
+    if disp_range < min_rel_range:
+        disp_med = float(np.median(finite_vals))
+        disp_norm = np.clip(0.5 + (disp_f - disp_med) / min_rel_range, 0.0, 1.0).astype(np.float32)
+    else:
+        disp_norm = np.clip((disp_f - float(p2)) / max(disp_range, 1e-5), 0.0, 1.0).astype(np.float32)
     disp_smooth = _smooth_2d_float(disp_norm, ksize=blur_ksize, sigma=blur_sigma)
 
-    inv_far = 1.0 / max(float(z_far_ratio), 1.05)
+    # Never artificially inflate a low-relief top-down depth map beyond its observed p98/p2 ratio.
+    eff_z_far = float(z_far_ratio)
+    if float(p2) > 0.10 and float(p98) > float(p2):
+        obs_ratio = float(p98) / float(p2)
+        if obs_ratio < eff_z_far:
+            eff_z_far = max(1.02, obs_ratio)
+    inv_far = 1.0 / max(eff_z_far, 1.02)
     z_map = (1.0 / (inv_far + (1.0 - inv_far) * disp_smooth)).astype(np.float32)
 
-    h, w = z_map.shape[:2]
     f_eff = float(focal_px) * (float(w) / 512.0)
     u, v = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
     x_map = (u - w * 0.5) / max(f_eff, 1e-3) * z_map
@@ -313,17 +369,68 @@ def compute_3d_surface_normals_from_disparity(
     ny[flip] = -ny[flip]
     nz[flip] = -nz[flip]
 
-    cand = (ny < -0.15) & (np.abs(nx) < 0.45)
+    # Continuous upper-hemisphere horizontal-plane candidates across 0..90 deg pitch:
+    # includes pure nadir (ny ~= 0, nz < -0.25), oblique (ny < -0.15, nz < -0.25),
+    # and low-oblique/forward ground (ny < -0.15, nz <= 0.0) while excluding oblique walls (ny > 0.08).
+    cand = (
+        finite_disp_mask
+        & (ny <= 0.08)
+        & (np.abs(nx) < 0.45)
+        & ((nz < -0.25) | (ny < -0.15))
+    )
     min_cand = max(32, int(0.004 * h * w))
+
+    # Exclude clipped far-background sky in upper frame when genuine scene depth relief exists,
+    # so constant-depth sky (normal [0, 0, -1]) cannot hijack low-pitch forward-horizon estimation.
+    if disp_range > 1e-4:
+        non_sky_cand = cand & ~((disp_smooth < 0.08) & (v < 0.55 * float(h)))
+        if int(non_sky_cand.sum()) >= min_cand:
+            cand = non_sky_cand
+
     if int(cand.sum()) >= min_cand:
+        gnx_v, gnx_u = np.gradient(nx)
+        gny_v, gny_u = np.gradient(ny)
+        normal_var = np.sqrt(gnx_v * gnx_v + gnx_u * gnx_u + gny_v * gny_v + gny_u * gny_u)
+        planarity_w = (1.0 / (1.0 + 10.0 * normal_var)).astype(np.float32)
+
+        cand_nx = nx[cand]
+        cand_ny = ny[cand]
+        cand_nz = nz[cand]
+        cand_w = planarity_w[cand]
+        cand_pitch_deg = np.degrees(
+            np.arctan2(np.maximum(0.0, -cand_nz), np.maximum(0.0, -cand_ny))
+        )
+        hist, bin_edges = np.histogram(cand_pitch_deg, bins=18, range=(0.0, 90.0), weights=cand_w)
+        hist_smooth = np.convolve(
+            np.pad(hist, (1, 1), mode="edge"),
+            np.array([0.25, 0.5, 0.25], dtype=np.float64),
+            mode="valid",
+        )
+        peak_bin = int(np.argmax(hist_smooth))
+        peak_pitch_deg = 0.5 * (float(bin_edges[peak_bin]) + float(bin_edges[peak_bin + 1]))
+        in_mode = np.abs(cand_pitch_deg - peak_pitch_deg) <= 15.0
+        if int(in_mode.sum()) >= max(16, min_cand // 2):
+            sel_nx = cand_nx[in_mode]
+            sel_ny = cand_ny[in_mode]
+            sel_nz = cand_nz[in_mode]
+        else:
+            sel_nx, sel_ny, sel_nz = cand_nx, cand_ny, cand_nz
+
         u_obs = np.array(
             [
-                float(np.median(nx[cand])),
-                float(np.median(ny[cand])),
-                float(np.median(nz[cand])),
+                float(np.median(sel_nx)),
+                min(0.0, float(np.median(sel_ny))),
+                min(0.0, float(np.median(sel_nz))),
             ],
             dtype=np.float32,
         )
+        u_norm = float(np.linalg.norm(u_obs))
+        if u_norm > 1e-6:
+            u_obs /= u_norm
+        else:
+            u_obs = np.array([0.0, 0.0, -1.0], dtype=np.float32)
+    elif prev_u_up is not None and prev_u_up.shape == (3,) and bool(np.all(np.isfinite(prev_u_up))):
+        u_obs = prev_u_up.astype(np.float32).copy()
         u_obs /= float(np.linalg.norm(u_obs)) + 1e-8
     else:
         u_obs = np.array([0.0, -0.70710677, -0.70710677], dtype=np.float32)
@@ -334,12 +441,20 @@ def compute_3d_surface_normals_from_disparity(
     else:
         u_up = u_obs
 
-    camera_pitch_deg = float(np.degrees(np.arctan2(max(1e-6, -float(u_up[2])), max(1e-6, -float(u_up[1])))))
+    camera_pitch_deg = float(
+        np.degrees(np.arctan2(max(0.0, -float(u_up[2])), max(1e-6, -float(u_up[1]))))
+    )
     cos_up = np.clip(nx * u_up[0] + ny * u_up[1] + nz * u_up[2], -1.0, 1.0).astype(np.float32)
     world_tilt_deg = np.degrees(np.arccos(np.clip(cos_up, 0.0, 1.0))).astype(np.float32)
 
     steep_soft_mask = (cos_up < float(cos_soft_threshold)).astype(bool)
     steep_hard_mask = (cos_up < float(cos_hard_threshold)).astype(bool)
+    if bool(nonfinite_disp_mask.any()):
+        cos_up[nonfinite_disp_mask] = np.float32(0.0)
+        world_tilt_deg[nonfinite_disp_mask] = np.float32(90.0)
+        steep_soft_mask[nonfinite_disp_mask] = True
+        steep_hard_mask[nonfinite_disp_mask] = True
+
     outputs_finite = bool(
         np.all(np.isfinite(cos_up))
         and np.all(np.isfinite(world_tilt_deg))
@@ -357,8 +472,174 @@ def compute_3d_surface_normals_from_disparity(
         "steep_hard_mask": steep_hard_mask,
         "steep_soft_frac": float(steep_soft_mask.mean()),
         "steep_hard_frac": float(steep_hard_mask.mean()),
+        "disp_input_all_finite": bool(finite_disp_mask.all()),
+        "nonfinite_disp_frac": float(nonfinite_disp_mask.mean()),
         "outputs_finite": outputs_finite,
     }
+
+
+class NonRigidSurfaceMotionTracker:
+    """First-principles rigid-surface temporal stability monitor (homography photometric residual EMA).
+
+    Physical invariant: a rigid static landing surface (concrete roof, tarmac pad, flat soil)
+    obeys camera ego-motion homography H with low persistent luminance residual (~1-5 luma).
+    Non-rigid or dynamic surfaces (crashing white ocean surf, boiling water glare, moving
+    vehicles/trains) violate rigid homography persistently across frames (> 7.5 luma EMA)
+    and are vetoed fail-closed from Safe landing classes without any scene-specific rules.
+    """
+
+    def __init__(
+        self,
+        *,
+        ema_alpha: float = 0.18,
+        tau_nonrigid_luma: float = 7.5,
+        warmup_steps: int = 5,
+        blur_ksize: int = 17,
+        blur_sigma: float = 4.0,
+        decay_on_missing_h: float = 0.94,
+    ) -> None:
+        self.ema_alpha = float(ema_alpha)
+        self.tau_nonrigid_luma = float(tau_nonrigid_luma)
+        self.warmup_steps = int(warmup_steps)
+        self.blur_ksize = int(blur_ksize)
+        self.blur_sigma = float(blur_sigma)
+        self.decay_on_missing_h = float(decay_on_missing_h)
+        self._prev_gray: np.ndarray | None = None
+        self._ema_residual: np.ndarray | None = None
+        self._valid_steps: int = 0
+
+    def reset(self) -> None:
+        self._prev_gray = None
+        self._ema_residual = None
+        self._valid_steps = 0
+
+    def update(
+        self,
+        curr_gray: np.ndarray,
+        *,
+        homography: np.ndarray | None,
+    ) -> dict[str, Any]:
+        h, w = curr_gray.shape[:2]
+        gray_f = curr_gray.astype(np.float32)
+        if not bool(np.all(np.isfinite(gray_f))):
+            fail_mask = np.ones((h, w), dtype=bool)
+            return {
+                "non_rigid_mask": fail_mask,
+                "non_rigid_frac": 1.0,
+                "residual_ema_mean": 255.0,
+                "valid_steps": self._valid_steps,
+                "outputs_finite": True,
+            }
+
+        if self._prev_gray is None or self._prev_gray.shape != gray_f.shape:
+            self._prev_gray = gray_f.copy()
+            self._ema_residual = np.zeros((h, w), dtype=np.float32)
+            self._valid_steps = 0
+            return {
+                "non_rigid_mask": np.zeros((h, w), dtype=bool),
+                "non_rigid_frac": 0.0,
+                "residual_ema_mean": 0.0,
+                "valid_steps": 0,
+                "outputs_finite": True,
+            }
+
+        cv2 = _try_import_cv2()
+        warped_prev: np.ndarray | None = None
+        warped_ema: np.ndarray | None = None
+        valid_warp: np.ndarray | None = None
+
+        if homography is not None and homography.shape == (3, 3) and bool(np.all(np.isfinite(homography))):
+            det = float(np.linalg.det(homography[:2, :2]))
+            if 0.4 <= abs(det) <= 2.5:
+                if cv2 is not None:
+                    H32 = homography.astype(np.float32)
+                    ones = np.ones((h, w), dtype=np.float32)
+                    valid_warp = (
+                        cv2.warpPerspective(
+                            ones,
+                            H32,
+                            (w, h),
+                            flags=cv2.INTER_NEAREST,
+                            borderMode=cv2.BORDER_CONSTANT,
+                            borderValue=0.0,
+                        )
+                        > 0.5
+                    )
+                    if float(valid_warp.mean()) >= 0.45:
+                        warped_prev = cv2.warpPerspective(
+                            self._prev_gray,
+                            H32,
+                            (w, h),
+                            flags=cv2.INTER_LINEAR,
+                            borderMode=cv2.BORDER_REPLICATE,
+                        )
+                        assert self._ema_residual is not None
+                        warped_ema = cv2.warpPerspective(
+                            self._ema_residual,
+                            H32,
+                            (w, h),
+                            flags=cv2.INTER_LINEAR,
+                            borderMode=cv2.BORDER_CONSTANT,
+                            borderValue=0.0,
+                        )
+                else:
+                    # Pure-NumPy fallback for near-identity / pure translation in OpenCV-free CPU CI
+                    is_pure_trans = (
+                        abs(float(homography[0, 0]) - 1.0) < 1e-3
+                        and abs(float(homography[1, 1]) - 1.0) < 1e-3
+                        and abs(float(homography[0, 1])) < 1e-3
+                        and abs(float(homography[1, 0])) < 1e-3
+                        and abs(float(homography[2, 0])) < 1e-5
+                        and abs(float(homography[2, 1])) < 1e-5
+                    )
+                    if is_pure_trans:
+                        tx = int(round(float(homography[0, 2])))
+                        ty = int(round(float(homography[1, 2])))
+                        if abs(tx) < w // 2 and abs(ty) < h // 2:
+                            warped_prev = np.roll(np.roll(self._prev_gray, ty, axis=0), tx, axis=1)
+                            assert self._ema_residual is not None
+                            warped_ema = np.roll(np.roll(self._ema_residual, ty, axis=0), tx, axis=1)
+                            valid_warp = np.ones((h, w), dtype=bool)
+                            if ty > 0:
+                                valid_warp[:ty, :] = False
+                            elif ty < 0:
+                                valid_warp[h + ty :, :] = False
+                            if tx > 0:
+                                valid_warp[:, :tx] = False
+                            elif tx < 0:
+                                valid_warp[:, w + tx :] = False
+
+        assert self._ema_residual is not None
+        if warped_prev is not None and warped_ema is not None and valid_warp is not None:
+            raw_diff = np.abs(gray_f - warped_prev).astype(np.float32)
+            raw_diff[~valid_warp] = 0.0
+            diff_s = _smooth_2d_float(raw_diff, ksize=self.blur_ksize, sigma=self.blur_sigma)
+            diff_s[~valid_warp] = 0.0
+            if self._valid_steps == 0:
+                self._ema_residual = diff_s.copy()
+            else:
+                self._ema_residual = (
+                    (1.0 - self.ema_alpha) * warped_ema + self.ema_alpha * diff_s
+                ).astype(np.float32)
+            self._ema_residual[~valid_warp] = 0.0
+            self._valid_steps += 1
+        else:
+            # Choppy / unwarped frame: decay gently instead of erasing turbulent memory
+            self._ema_residual = (self._ema_residual * self.decay_on_missing_h).astype(np.float32)
+
+        self._prev_gray = gray_f.copy()
+        if self._valid_steps >= self.warmup_steps:
+            nr_mask = (self._ema_residual >= np.float32(self.tau_nonrigid_luma)).astype(bool)
+        else:
+            nr_mask = np.zeros((h, w), dtype=bool)
+
+        return {
+            "non_rigid_mask": nr_mask,
+            "non_rigid_frac": float(nr_mask.mean()),
+            "residual_ema_mean": float(np.mean(self._ema_residual)),
+            "valid_steps": int(self._valid_steps),
+            "outputs_finite": bool(np.all(np.isfinite(self._ema_residual))),
+        }
 
 
 def apply_3d_normal_and_ood_veto(
@@ -368,9 +649,10 @@ def apply_3d_normal_and_ood_veto(
     steep_soft_mask: np.ndarray,
     steep_hard_mask: np.ndarray,
     ood_mask: np.ndarray,
+    non_rigid_mask: np.ndarray | None = None,
     min_slz_area_px: int = 192,
 ) -> dict[str, Any]:
-    """Fail-closed veto rejecting steep 3D facades and OOD pixels from Safe classes before temporal EMA.
+    """Fail-closed veto rejecting steep 3D facades, OOD, and non-rigid churning surfaces from Safe classes.
 
     Preserves raw 2D Safe/Hazard masks verbatim while routing any vetoed pixel that would otherwise
     be Safe (`{0, 1}`) to `Hazard_Obstacle_Structure` (`2`), without clobbering existing Hazard
@@ -383,8 +665,19 @@ def apply_3d_normal_and_ood_veto(
     raw_2d_pred = np.argmax(logits_cal, axis=0).astype(np.uint8)
     raw_2d_safe = (raw_2d_pred == 0) | (raw_2d_pred == 1)
 
-    soft_veto = np.logical_or(steep_soft_mask.astype(bool), ood_mask.astype(bool))
-    hard_veto = np.logical_or(steep_hard_mask.astype(bool), ood_mask.astype(bool))
+    nr_mask = (
+        non_rigid_mask.astype(bool)
+        if non_rigid_mask is not None
+        else np.zeros_like(raw_2d_safe, dtype=bool)
+    )
+    soft_veto = np.logical_or(
+        np.logical_or(steep_soft_mask.astype(bool), ood_mask.astype(bool)),
+        nr_mask,
+    )
+    hard_veto = np.logical_or(
+        np.logical_or(steep_hard_mask.astype(bool), ood_mask.astype(bool)),
+        nr_mask,
+    )
 
     # Build vetoed logits in the unshifted frame so TemporalSlzStabilizer can apply safe_logit_bias_delta cleanly.
     vetoed_logits_raw = np.nan_to_num(
@@ -420,6 +713,7 @@ def apply_3d_normal_and_ood_veto(
         "safe_vetoed_total_frac": float(safe_vetoed_to_haz.mean()),
         "safe_vetoed_by_3d_frac": float((raw_2d_safe & steep_soft_mask).mean()),
         "safe_vetoed_by_ood_frac": float((raw_2d_safe & ood_mask).mean()),
+        "safe_vetoed_by_nonrigid_frac": float((raw_2d_safe & nr_mask).mean()),
     }
 
 

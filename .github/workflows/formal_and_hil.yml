@@ -21,7 +21,7 @@ jobs:
     name: "STM32H753 Bare-Metal ITCM/DTCM ELF, Veneer & Footprint Gate"
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Pinned Arm GNU Toolchain 14.2.Rel1 (x86_64) & Build Tools
         run: |
@@ -75,7 +75,7 @@ jobs:
           fi
           PYTHONPATH=. pytest tests/firmware/test_stm32h7_tcm_elf.py tests/firmware/test_hitl_profiler_and_elf.py -v
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: stm32h7-bare-metal-elf-${{ github.sha }}
           path: |
@@ -101,7 +101,7 @@ jobs:
             renode_tarball: renode-1.17.0.linux-arm64-portable.tar.gz
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Pinned Arm 14.2.Rel1 & Renode v1.17.0 .NET Portable Tarball (Zero Mono/GTK)
         run: |
@@ -150,7 +150,7 @@ jobs:
             )
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: renode-failover-sil-${{ matrix.arch }}-${{ github.sha }}
           path: |
@@ -164,7 +164,7 @@ jobs:
     # Linux ARM64 ESBMC releases fail --32 due to missing 32-bit libc headers.
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Pinned ESBMC v8.7 (x86_64) & 32-Bit Multilib Headers
         run: |
@@ -183,7 +183,7 @@ jobs:
           bash verification/formal/esbmc/run_esbmc_suite.sh --compile-only --build-dir /tmp/vertirta_v3a_formal
           bash verification/formal/esbmc/run_esbmc_suite.sh --solver bitwuzla --witness-dir formal_witnesses
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: esbmc-v8.7-witnesses-${{ github.sha }}
           path: formal_witnesses/**
@@ -193,7 +193,7 @@ jobs:
     name: "MISRA-Aligned High-Integrity C++17 Static Profile (LLVM 22 + Cppcheck 2.22)"
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Arm 14.2.Rel1, clang-tidy & Pinned Cppcheck 2.22.0
         run: |

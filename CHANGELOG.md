@@ -3,6 +3,14 @@
 All notable releases of **VertiRTA** are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added & Fixed
+- **4-Scene Real-World Drone Stress Test, Pure-Nadir 3D-Normal Fix & Rigid-Surface Motion Veto (`scripts/realworld/`):** Fixed `compute_3d_surface_normals_from_disparity()` pure-nadir (`90°`) collapse across continuous `0°–90°` pitch, added first-principles `NonRigidSurfaceMotionTracker` (homography-compensated photometric residual EMA vetoing churning ocean surf & moving obstacles without scene heuristics), and verified `720` live GTX 1650 SUPER frames across 4 permissive scenes (`artifacts/v4.0.0/realworld_multivideo_stress_proof.json`, `12/12` PASS: `NASA` oblique `25.5%` facade veto, `USDA` nadir `0.17%` false veto, `Aruba` coastal surf `44.2% -> 4.8%`, `Toronto` `180/180f` forward horizon scan `0` FP boxes).
+- **C++20 Core Safety, Spatial Radar Tracking & C++/Python SLZ Parity (`core/{rta_companion,forward_hazard,slz_bayes}/`):** Hardened `CbvfSafetyFilter`, `RobocentricEsdfMap`, `AirspaceExclusion`, and `ForwardHazardFusion` against `NaN`/`±Inf` fail-open paths (`36/36` CTest + `6/6` Debug ASan/UBSan PASS), replaced per-frame radar array-index IDs with 1-to-1 spatial nearest-neighbor association, and added `safe_logit_bias_delta` + zero-heap `Apply3DNormalAndOodVeto()` to C++ `SlzOrtRunner`.
+- **Physical `GTX 1650 SUPER` `6/6` Hardware Gate (`< 300 MiB`) & Node 24 Zero-Warning CI (`scripts/bench_gtx1650s_m3_timesliced.py`, `.github/workflows/`):** Shared single-context ORT CUDA BFC allocator + CPU-overlapped 1 Hz `xfeat_512` reduced Cruise VRAM `354 -> 274 MiB` and Peak VRAM `354 -> 286 MiB (< 300 MiB PASS)`, tightening latency to `12.30 ms` Cruise / `9.07 ms` Terminal p99 (`docs/paper_corl/` synced); upgraded all 7 GitHub Actions workflows to native Node 24 action versions (`0` Node 20 deprecation warnings).
+- **Experimental Zero-Unsafe Rust Pilot (`rust/vertirta-mavlink-shield/`):** Added standalone Apache-2.0, zero-GPL, `#![forbid(unsafe_code)]`, zero-external-dependency Rust MAVLink v2 Offboard RTA Shield with `FiniteF64` compile-time NaN prevention achieving exact `2,500`-packet live UDP parity (`0` drops/leaks, `1,181` clamped, `240` denied, `239` bad CRC rejected, `p50 = 18.0 us / p99 = 105.6 us`, `388 KiB` binary).
+
 ## [1.0.0] - 2026-11-26
 
 First stable public release of **VertiRTA** — deterministic eVTOL flight control, ASTM F3269-21 run-time assurance (RTA), bare-metal formal/SIL verification, multi-aircraft U-Space & Part-IS security, zero-GPL MAVLink v2 offboard shield, 3D-normal-vetoed perception, exact conformal co-pilot calibration, and regulatory forensics.

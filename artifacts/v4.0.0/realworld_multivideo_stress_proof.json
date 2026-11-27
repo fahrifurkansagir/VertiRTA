@@ -1,0 +1,727 @@
+{
+  "schema_version": "vertirta.realworld_multivideo_stress_proof/v4.0.0",
+  "release_version": "v1.0.0",
+  "execution_mode": "LIVE_PHYSICAL_GTX1650S_CUDA",
+  "timestamp_utc": "2026-11-27T12:52:04Z",
+  "colab_cu_spent": 0.0,
+  "host_os": "Linux 6.18.58.1-microsoft-standard-WSL2 (x86_64)",
+  "gpu": {
+    "name": "NVIDIA GeForce GTX 1650 SUPER",
+    "driver_version": "621.24",
+    "memory_total_mib": 4096,
+    "memory_free_before_mib": 1580,
+    "compute_cap": "7.5"
+  },
+  "cuda_provider_options": {
+    "device_id": "0",
+    "arena_extend_strategy": "kSameAsRequested",
+    "cudnn_conv_algo_search": "HEURISTIC",
+    "cudnn_conv_use_max_workspace": "0",
+    "enable_cuda_graph": "1"
+  },
+  "license_audit": {
+    "all_videos_permissive_verified": true,
+    "zero_sharealike_verified": true,
+    "zero_noncommercial_verified": true,
+    "scene_licenses": {
+      "scene_1_oblique_urban": "Public Domain (PD-USGov-NASA)",
+      "scene_2_topdown_nadir": "Public Domain (PD-USGov-USDA)",
+      "scene_3_coastal_water": "CC0",
+      "scene_4_forward_horizon": "CC BY 4.0"
+    },
+    "depth_model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+    "depth_model_license": "Apache-2.0",
+    "depth_model_permissive_gate_passed": true
+  },
+  "models": {
+    "pidnet_slz_v21_local_gtx": {
+      "filename": "pidnet_slz_v21_local_gtx_opset17.onnx",
+      "sha256": "a0b0b99b3f68288b5366245b3b3a711ed569479d4c26dfc44eb638e6f65679ff",
+      "active_providers": [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "cuda_graph_enabled": true,
+      "iobinding_enabled": true
+    },
+    "depth_anything_v2_small": {
+      "active": true,
+      "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+      "license": "Apache-2.0",
+      "filename": "depth_anything_v2_small_392_opset17.onnx",
+      "sha256": "ff154411da7c84c7985c597f959742c0c6f33e5ca6d2e0c83d71a53efc4610ef",
+      "input_resolution_wh": [
+        392,
+        392
+      ],
+      "active_providers": [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider"
+      ]
+    },
+    "mlsd_wireseg_v11": {
+      "active": true,
+      "filename": "mlsd_wireseg_640_v11_local_gtx_opset17.onnx",
+      "sha256": "b520d025dc881be98729b7187afc8bb93101fbc1127c0de9f67a67eb1fa54418"
+    },
+    "dfine_n_v11": {
+      "active": true,
+      "filename": "dfine_n_640_v11_local_gtx_opset17.onnx",
+      "sha256": "1d027135dd316493dd2e354a572cac5b238490b4a0d78e16aff6734ee4e14a04",
+      "decode_mode": "per_class_sigmoid_300q_nms"
+    },
+    "xfeat_optical": {
+      "active": true,
+      "filename": "xfeat_512_opset17.onnx",
+      "sha256": "5725b19ae193306af5c7584d8c71b1dbd71c0f0090b38e70fcc720ae9396bd2a"
+    },
+    "ood_calibration": {
+      "source_file": "/var/tmp/vertirta_v400_blobs/ood_calibration_v21_local_gtx.json",
+      "source_sha256": "59f9a262b4f3eba691b9348811e2d10511339373521912ac8d65feb07d34c832",
+      "T_ood": 1.0,
+      "T_prob": 0.5000056921157366,
+      "kappa_b": 1.5,
+      "tau_ood": -3.181581497192383,
+      "safe_logit_bias_delta": -0.271367
+    }
+  },
+  "scenes": [
+    {
+      "scene_id": "scene_1_oblique_urban",
+      "display_title": "Test 1/4: Urban Buildings (Oblique Camera)",
+      "category": "oblique_urban_facades",
+      "test_objective": "Sunlit white vertical concrete building walls fool a basic 2D map into marking them safe; the 3D wall safety check must reject >= 20% of false-safe facade pixels while preserving flat roofs.",
+      "video_provenance": {
+        "title": "File:Aerial Views of Goddard- Integration and Test Facilities (SVS14443).webm",
+        "commons_page_url": "https://commons.wikimedia.org/wiki/File:Aerial_Views_of_Goddard-_Integration_and_Test_Facilities_(SVS14443).webm",
+        "download_url": "https://upload.wikimedia.org/wikipedia/commons/8/85/Aerial_Views_of_Goddard-_Integration_and_Test_Facilities_%28SVS14443%29.webm",
+        "local_filename": "nasa_goddard_svs14443_drone.webm",
+        "author": "NASA's Scientific Visualization Studio / Francis Reddy, Desiree Stover, Katherine Mellos, Cecelia Vitale-Reddy",
+        "capture_date": "2023-02-07",
+        "license": "Public Domain (PD-USGov-NASA)",
+        "license_code": "pd-nasa",
+        "zero_sharealike_verified": true,
+        "zero_noncommercial_verified": true,
+        "default_start_frame": 360,
+        "sha256": "8177164a2efe24498f4e8a47d389814a6550e49ff3309c2d26bbea7c06b7a1b6",
+        "file_size_bytes": 9911834,
+        "source_resolution_wh": [
+          1920,
+          1080
+        ],
+        "source_fps": 29.97,
+        "effective_fps": 14.985,
+        "source_total_frames_approx": 2397,
+        "segment_start_frame": 120,
+        "segment_stride": 2,
+        "frames_loaded": 180,
+        "segment_duration_s": 12.012
+      },
+      "camera_geometry_and_3d_veto": {
+        "estimated_camera_pitch_deg_mean": 50.22,
+        "estimated_camera_pitch_deg_min": 47.8,
+        "estimated_camera_pitch_deg_max": 51.77,
+        "camera_angle_plain": "50 deg (Angled Down)",
+        "raw_2d_safe_area_frac_mean": 0.6082,
+        "vetoed_raw_safe_area_frac_mean": 0.3534,
+        "stabilized_vetoed_safe_area_frac_mean": 0.3305,
+        "steep_3d_normal_pixel_frac_mean": 0.3474,
+        "safe_pixels_vetoed_to_hazard_frac_mean": 0.2548,
+        "safe_pixels_vetoed_by_3d_normal_frac_mean": 0.2381,
+        "safe_pixels_vetoed_by_ood_frac_mean": 0.015,
+        "safe_pixels_vetoed_by_nonrigid_frac_mean": 0.0123,
+        "non_rigid_motion_pixel_frac_mean": 0.0372
+      },
+      "temporal_stability": {
+        "frames_evaluated": 180,
+        "raw_2d_flicker_pct_mean": 2.2054,
+        "raw_vetoed_flicker_pct_mean": 2.6564,
+        "stabilized_flicker_pct_mean": 1.2272,
+        "flicker_relative_reduction_pct": 53.8,
+        "raw_vetoed_safe_iou_mean": 0.9277,
+        "stabilized_safe_iou_mean": 0.9636,
+        "safe_iou_gain": 0.0359,
+        "raw_multiclass_5c_iou_mean": 0.8287,
+        "stabilized_multiclass_5c_iou_mean": 0.901,
+        "raw_vetoed_slz_centroid_jitter_px_mean": 33.376,
+        "stabilized_slz_centroid_jitter_px_mean": 3.58,
+        "centroid_jitter_relative_reduction_pct": 89.27,
+        "raw_centroid_samples": 179,
+        "stabilized_centroid_samples": 179,
+        "homography_warped_steps": 179,
+        "motion_reset_count": 0,
+        "ransac_3gate_pass_rate": 1.0,
+        "ransac_mean_flow_px": 0.665,
+        "ransac_inliers_mean": 297.48
+      },
+      "ood_and_class_breakdown": {
+        "ood_pixel_frac_mean": 0.0976,
+        "ood_energy_tilde_mean": -3.7435,
+        "ood_energy_tilde_p95": -3.6637,
+        "stabilized_class_pct": {
+          "Safe_Flat_Ground": 15.7,
+          "Safe_Flat_Roof": 17.36,
+          "Hazard_Obstacle_Structure": 44.33,
+          "Hazard_Dynamic_Human_Vehicle": 0.11,
+          "Hazard_Water_Vegetation": 22.51
+        }
+      },
+      "forward_detectors_and_domain_gate": {
+        "max_forward_pitch_deg": 25.0,
+        "frames_in_domain": 0,
+        "frames_gated_out_of_domain": 180,
+        "wireseg_wire_px_mean": 14.46,
+        "wireseg_wire_px_max": 41,
+        "wireseg_frames_above_120px_raw": 0,
+        "wireseg_frames_above_120px_gated": 0,
+        "dfine_total_boxes_raw": 0,
+        "dfine_frames_with_boxes_raw": 0,
+        "dfine_total_boxes_in_domain": 0,
+        "dfine_class_counts_raw": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "dfine_class_counts_in_domain": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "cbvf_speed_cap_distribution": {
+          "v_max_15_0_mps_frames": 0,
+          "v_max_22_0_mps_frames": 180
+        }
+      },
+      "hardware_performance": {
+        "pidnet_cuda_latency_ms": {
+          "mean_ms": 13.6837,
+          "p50_ms": 13.5276,
+          "p95_ms": 16.465,
+          "p99_ms": 17.9833,
+          "min_ms": 8.7464,
+          "max_ms": 18.9711,
+          "fps_mean": 73.08
+        },
+        "depth_3d_cuda_latency_ms": {
+          "mean_ms": 87.9417,
+          "p50_ms": 86.285,
+          "p95_ms": 103.4341,
+          "p99_ms": 113.1586,
+          "min_ms": 62.744,
+          "max_ms": 115.1635,
+          "fps_mean": 11.37
+        },
+        "full_stack_e2e_latency_ms": {
+          "mean_ms": 272.8258,
+          "p50_ms": 267.1839,
+          "p95_ms": 330.3539,
+          "p99_ms": 381.1611,
+          "min_ms": 213.4142,
+          "max_ms": 392.396,
+          "fps_mean": 3.67
+        },
+        "pidnet_fps_mean": 73.08,
+        "depth_3d_fps_mean": 11.37,
+        "full_stack_e2e_fps_mean": 3.67
+      },
+      "visual_outputs": {
+        "h264_mp4_rendered": true,
+        "h264_mp4_filename": "test_1_urban_buildings_oblique.mp4",
+        "h264_mp4_size_bytes": 5898870,
+        "h264_mp4_sha256": "0a827ad3e0623326daa32400eaf021565fdf817f842a73186fa09ea8901103bc",
+        "verify_png_rendered": true,
+        "verify_png_filename": "verify_1_urban_buildings_oblique.png"
+      },
+      "plain_takeaway": "3D wall check blocked 25.5% of false-safe sunlit building facades; flicker cut 53.8%.",
+      "honest_failure_and_limitation_notes": "Oblique urban benchmark (50.2 deg mean camera pitch). Raw 2D PIDNet falsely marked 60.8% of the frame safe (including bright vertical concrete facades); 3D surface-normal + OOD fail-closed veto rejected 25.5% to Obstacle/Wall (33.1% final safe) and reduced mask flicker by 53.8%. Limitation: monocular depth lacks absolute metric height."
+    },
+    {
+      "scene_id": "scene_2_topdown_nadir",
+      "display_title": "Test 2/4: Top-Down View (Nadir Angle Check)",
+      "category": "pure_nadir_topdown",
+      "test_objective": "Pure top-down aerial pass over flat farmland with a moving harvester vehicle; verifies the pure-nadir 3D-normal fix avoids the legacy 100% flat-plane false-veto collapse.",
+      "video_provenance": {
+        "title": "File:Harvest (20200823-NRCS-LSC-0897).webm",
+        "commons_page_url": "https://commons.wikimedia.org/wiki/File:Harvest_(20200823-NRCS-LSC-0897).webm",
+        "download_url": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Harvest_%2820200823-NRCS-LSC-0897%29.webm",
+        "local_filename": "nadir_usda_harvest.webm",
+        "author": "USDA Natural Resources Conservation Service (USDAgov)",
+        "capture_date": "2020-08-23",
+        "license": "Public Domain (PD-USGov-USDA)",
+        "license_code": "pd-usgov-usda",
+        "zero_sharealike_verified": true,
+        "zero_noncommercial_verified": true,
+        "sha256": "4c02776de02dbe294088b1c3bb169292c19744914d4ce927df34c32ecc65271f",
+        "file_size_bytes": 51243867,
+        "source_resolution_wh": [
+          1920,
+          1080
+        ],
+        "source_fps": 29.97,
+        "effective_fps": 14.985,
+        "source_total_frames_approx": 1837,
+        "segment_start_frame": 540,
+        "segment_stride": 2,
+        "frames_loaded": 180,
+        "segment_duration_s": 12.012
+      },
+      "camera_geometry_and_3d_veto": {
+        "estimated_camera_pitch_deg_mean": 82.08,
+        "estimated_camera_pitch_deg_min": 73.71,
+        "estimated_camera_pitch_deg_max": 86.25,
+        "camera_angle_plain": "82 deg (Top-Down)",
+        "raw_2d_safe_area_frac_mean": 0.0701,
+        "vetoed_raw_safe_area_frac_mean": 0.0684,
+        "stabilized_vetoed_safe_area_frac_mean": 0.11,
+        "steep_3d_normal_pixel_frac_mean": 0.0221,
+        "safe_pixels_vetoed_to_hazard_frac_mean": 0.0017,
+        "safe_pixels_vetoed_by_3d_normal_frac_mean": 0.0004,
+        "safe_pixels_vetoed_by_ood_frac_mean": 0.0,
+        "safe_pixels_vetoed_by_nonrigid_frac_mean": 0.0014,
+        "non_rigid_motion_pixel_frac_mean": 0.0173
+      },
+      "temporal_stability": {
+        "frames_evaluated": 180,
+        "raw_2d_flicker_pct_mean": 0.6617,
+        "raw_vetoed_flicker_pct_mean": 0.6678,
+        "stabilized_flicker_pct_mean": 0.0848,
+        "flicker_relative_reduction_pct": 87.31,
+        "raw_vetoed_safe_iou_mean": 0.9077,
+        "stabilized_safe_iou_mean": 0.9919,
+        "safe_iou_gain": 0.0842,
+        "raw_multiclass_5c_iou_mean": 0.8504,
+        "stabilized_multiclass_5c_iou_mean": 0.9319,
+        "raw_vetoed_slz_centroid_jitter_px_mean": 12.856,
+        "stabilized_slz_centroid_jitter_px_mean": 0.57,
+        "centroid_jitter_relative_reduction_pct": 95.57,
+        "raw_centroid_samples": 179,
+        "stabilized_centroid_samples": 179,
+        "homography_warped_steps": 179,
+        "motion_reset_count": 0,
+        "ransac_3gate_pass_rate": 1.0,
+        "ransac_mean_flow_px": 0.085,
+        "ransac_inliers_mean": 299.53
+      },
+      "ood_and_class_breakdown": {
+        "ood_pixel_frac_mean": 0.0,
+        "ood_energy_tilde_mean": -4.6561,
+        "ood_energy_tilde_p95": -4.6326,
+        "stabilized_class_pct": {
+          "Safe_Flat_Ground": 3.42,
+          "Safe_Flat_Roof": 7.58,
+          "Hazard_Obstacle_Structure": 0.2,
+          "Hazard_Dynamic_Human_Vehicle": 0.0,
+          "Hazard_Water_Vegetation": 88.8
+        }
+      },
+      "forward_detectors_and_domain_gate": {
+        "max_forward_pitch_deg": 25.0,
+        "frames_in_domain": 0,
+        "frames_gated_out_of_domain": 180,
+        "wireseg_wire_px_mean": 0.0,
+        "wireseg_wire_px_max": 0,
+        "wireseg_frames_above_120px_raw": 0,
+        "wireseg_frames_above_120px_gated": 0,
+        "dfine_total_boxes_raw": 0,
+        "dfine_frames_with_boxes_raw": 0,
+        "dfine_total_boxes_in_domain": 0,
+        "dfine_class_counts_raw": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "dfine_class_counts_in_domain": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "cbvf_speed_cap_distribution": {
+          "v_max_15_0_mps_frames": 10,
+          "v_max_22_0_mps_frames": 170
+        }
+      },
+      "hardware_performance": {
+        "pidnet_cuda_latency_ms": {
+          "mean_ms": 10.7988,
+          "p50_ms": 10.345,
+          "p95_ms": 14.4927,
+          "p99_ms": 15.8139,
+          "min_ms": 8.7383,
+          "max_ms": 16.7539,
+          "fps_mean": 92.6
+        },
+        "depth_3d_cuda_latency_ms": {
+          "mean_ms": 72.0959,
+          "p50_ms": 68.408,
+          "p95_ms": 90.4696,
+          "p99_ms": 97.2782,
+          "min_ms": 63.1006,
+          "max_ms": 100.0626,
+          "fps_mean": 13.87
+        },
+        "full_stack_e2e_latency_ms": {
+          "mean_ms": 211.8059,
+          "p50_ms": 203.3944,
+          "p95_ms": 259.0785,
+          "p99_ms": 292.1795,
+          "min_ms": 186.218,
+          "max_ms": 319.154,
+          "fps_mean": 4.72
+        },
+        "pidnet_fps_mean": 92.6,
+        "depth_3d_fps_mean": 13.87,
+        "full_stack_e2e_fps_mean": 4.72
+      },
+      "visual_outputs": {
+        "h264_mp4_rendered": true,
+        "h264_mp4_filename": "test_2_topdown_nadir_check.mp4",
+        "h264_mp4_size_bytes": 4991510,
+        "h264_mp4_sha256": "d7c8fa2a6154fb8b434a8dd673d3a6ed73f18e7e029da25114f1d4fe340e3158",
+        "verify_png_rendered": true,
+        "verify_png_filename": "verify_2_topdown_nadir_check.png"
+      },
+      "plain_takeaway": "Straight-down camera fix preserved flat ground (only 0.2% blocked vs 100% legacy bug).",
+      "honest_failure_and_limitation_notes": "True 90-deg pure-nadir aerial pass over harvested farmland + moving vehicle (mean estimated pitch 82.1 deg, max 86.2 deg). The pure-nadir 3D-normal fix eliminated the legacy 100% flat-plane false-veto collapse (only 0.2% safe pixels vetoed). Honest limitations: (1) Depth-Anything-V2-Small retains a mild top-to-bottom depth prior on uniform parallel crop rows, pulling estimated pitch below true 90 deg on featureless frames; (2) PIDNet-S v2.1 conservatively labels textured agricultural rows as Vegetation (88.8%), leaving only bare flat strips as Safe_Flat_Ground."
+    },
+    {
+      "scene_id": "scene_3_coastal_water",
+      "display_title": "Test 3/4: Coastline & Water (Safety Reflection Check)",
+      "category": "coastal_water_shoreline",
+      "test_objective": "Coastal shoreline analog for maritime eVTOL corridors: tests water classification, unfamiliar-surface warnings on bright breaking sea foam, and cliff steepness rejection.",
+      "video_provenance": {
+        "title": "File:Lama bruto na costa di Aruba (Noord).webm",
+        "commons_page_url": "https://commons.wikimedia.org/wiki/File:Lama_bruto_na_costa_di_Aruba_(Noord).webm",
+        "download_url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Lama_bruto_na_costa_di_Aruba_%28Noord%29.webm",
+        "local_filename": "coastal_aruba.webm",
+        "author": "Ginelly.Q",
+        "capture_date": "2021-09-01",
+        "license": "CC0",
+        "license_code": "cc0",
+        "zero_sharealike_verified": true,
+        "zero_noncommercial_verified": true,
+        "sha256": "9a83b55519df7bd6ad888732ce27a83e00b18455db08d8c4cdc4c3a2cabf92a6",
+        "file_size_bytes": 57977196,
+        "source_resolution_wh": [
+          1920,
+          1080
+        ],
+        "source_fps": 29.97,
+        "effective_fps": 14.985,
+        "source_total_frames_approx": 696,
+        "segment_start_frame": 60,
+        "segment_stride": 2,
+        "frames_loaded": 180,
+        "segment_duration_s": 12.012
+      },
+      "camera_geometry_and_3d_veto": {
+        "estimated_camera_pitch_deg_mean": 50.57,
+        "estimated_camera_pitch_deg_min": 45.38,
+        "estimated_camera_pitch_deg_max": 52.25,
+        "camera_angle_plain": "51 deg (Angled Down)",
+        "raw_2d_safe_area_frac_mean": 0.4423,
+        "vetoed_raw_safe_area_frac_mean": 0.0659,
+        "stabilized_vetoed_safe_area_frac_mean": 0.0478,
+        "steep_3d_normal_pixel_frac_mean": 0.3173,
+        "safe_pixels_vetoed_to_hazard_frac_mean": 0.3765,
+        "safe_pixels_vetoed_by_3d_normal_frac_mean": 0.0491,
+        "safe_pixels_vetoed_by_ood_frac_mean": 0.069,
+        "safe_pixels_vetoed_by_nonrigid_frac_mean": 0.3382,
+        "non_rigid_motion_pixel_frac_mean": 0.6557
+      },
+      "temporal_stability": {
+        "frames_evaluated": 180,
+        "raw_2d_flicker_pct_mean": 1.5226,
+        "raw_vetoed_flicker_pct_mean": 2.0263,
+        "stabilized_flicker_pct_mean": 1.3573,
+        "flicker_relative_reduction_pct": 33.02,
+        "raw_vetoed_safe_iou_mean": 0.7179,
+        "stabilized_safe_iou_mean": 0.7307,
+        "safe_iou_gain": 0.0128,
+        "raw_multiclass_5c_iou_mean": 0.7832,
+        "stabilized_multiclass_5c_iou_mean": 0.7905,
+        "raw_vetoed_slz_centroid_jitter_px_mean": 47.855,
+        "stabilized_slz_centroid_jitter_px_mean": 7.261,
+        "centroid_jitter_relative_reduction_pct": 84.83,
+        "raw_centroid_samples": 179,
+        "stabilized_centroid_samples": 179,
+        "homography_warped_steps": 179,
+        "motion_reset_count": 0,
+        "ransac_3gate_pass_rate": 0.7151,
+        "ransac_mean_flow_px": 1.188,
+        "ransac_inliers_mean": 246.42
+      },
+      "ood_and_class_breakdown": {
+        "ood_pixel_frac_mean": 0.1127,
+        "ood_energy_tilde_mean": -3.5843,
+        "ood_energy_tilde_p95": -3.4758,
+        "stabilized_class_pct": {
+          "Safe_Flat_Ground": 0.01,
+          "Safe_Flat_Roof": 4.77,
+          "Hazard_Obstacle_Structure": 39.13,
+          "Hazard_Dynamic_Human_Vehicle": 0.0,
+          "Hazard_Water_Vegetation": 56.09
+        }
+      },
+      "forward_detectors_and_domain_gate": {
+        "max_forward_pitch_deg": 25.0,
+        "frames_in_domain": 0,
+        "frames_gated_out_of_domain": 180,
+        "wireseg_wire_px_mean": 0.56,
+        "wireseg_wire_px_max": 27,
+        "wireseg_frames_above_120px_raw": 0,
+        "wireseg_frames_above_120px_gated": 0,
+        "dfine_total_boxes_raw": 0,
+        "dfine_frames_with_boxes_raw": 0,
+        "dfine_total_boxes_in_domain": 0,
+        "dfine_class_counts_raw": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "dfine_class_counts_in_domain": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "cbvf_speed_cap_distribution": {
+          "v_max_15_0_mps_frames": 170,
+          "v_max_22_0_mps_frames": 10
+        }
+      },
+      "hardware_performance": {
+        "pidnet_cuda_latency_ms": {
+          "mean_ms": 14.5707,
+          "p50_ms": 14.0369,
+          "p95_ms": 21.3742,
+          "p99_ms": 22.7332,
+          "min_ms": 9.6214,
+          "max_ms": 31.2629,
+          "fps_mean": 68.63
+        },
+        "depth_3d_cuda_latency_ms": {
+          "mean_ms": 92.8764,
+          "p50_ms": 91.6982,
+          "p95_ms": 124.4906,
+          "p99_ms": 140.7359,
+          "min_ms": 69.3441,
+          "max_ms": 147.4939,
+          "fps_mean": 10.77
+        },
+        "full_stack_e2e_latency_ms": {
+          "mean_ms": 297.1369,
+          "p50_ms": 289.7469,
+          "p95_ms": 364.3373,
+          "p99_ms": 469.3003,
+          "min_ms": 234.9756,
+          "max_ms": 599.3758,
+          "fps_mean": 3.37
+        },
+        "pidnet_fps_mean": 68.63,
+        "depth_3d_fps_mean": 10.77,
+        "full_stack_e2e_fps_mean": 3.37
+      },
+      "visual_outputs": {
+        "h264_mp4_rendered": true,
+        "h264_mp4_filename": "test_3_coastline_water_safety.mp4",
+        "h264_mp4_size_bytes": 13293395,
+        "h264_mp4_sha256": "f1609e09c8329480cc2df395a0b22caec10d84d0311158c8f7677b4a889c0030",
+        "verify_png_rendered": true,
+        "verify_png_filename": "verify_3_coastline_water_safety.png"
+      },
+      "plain_takeaway": "3D + motion check blocked 37.6% unsafe surf/cliff area (33.8% churning foam; safe 44.2% -> 4.8%).",
+      "honest_failure_and_limitation_notes": "Coastal shoreline stress test (50.6 deg mean pitch) over crashing ocean waves and rocky cliffs. Combining 3D surface-normal veto, Helmholtz OOD (11.3%), and first-principles rigid-surface temporal stability veto (33.8% churning whitewater rejected via homography photometric residual EMA) blocked 37.6% of false-safe surf/cliff area (cutting safe mask from 44.2% to 4.8%, flicker -33.0%). Honest limitation: brief calm glassy foam pockets or early warmup frames can still leak trace false-safe pixels before churning builds up — maritime corridor fine-tuning plus radar fusion remains recommended."
+    },
+    {
+      "scene_id": "scene_4_forward_horizon",
+      "display_title": "Test 4/4: Open Horizon (Wire & Obstacle Scan)",
+      "category": "forward_horizon_towers",
+      "test_objective": "Forward-horizon aerial flight (<= 25 deg camera angle) over rail tracks, steel truss bridge, and city towers; activates forward powerline & obstacle scanning in-domain while blocking vertical buildings.",
+      "video_provenance": {
+        "title": "File:Go Train arriving into downtown Toronto.webm",
+        "commons_page_url": "https://commons.wikimedia.org/wiki/File:Go_Train_arriving_into_downtown_Toronto.webm",
+        "download_url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Go_Train_arriving_into_downtown_Toronto.webm",
+        "local_filename": "forward_toronto.webm",
+        "author": "Lucastphotography",
+        "capture_date": "2023-10-08",
+        "license": "CC BY 4.0",
+        "license_code": "cc-by-4.0",
+        "zero_sharealike_verified": true,
+        "zero_noncommercial_verified": true,
+        "sha256": "880186a461fb7392bc61a3d8f00c2a59fe328d43798ef742798a3a746c806851",
+        "file_size_bytes": 6757984,
+        "source_resolution_wh": [
+          1920,
+          1080
+        ],
+        "source_fps": 30.0,
+        "effective_fps": 15.0,
+        "source_total_frames_approx": 728,
+        "segment_start_frame": 120,
+        "segment_stride": 2,
+        "frames_loaded": 180,
+        "segment_duration_s": 12.0
+      },
+      "camera_geometry_and_3d_veto": {
+        "estimated_camera_pitch_deg_mean": 18.75,
+        "estimated_camera_pitch_deg_min": 12.61,
+        "estimated_camera_pitch_deg_max": 23.92,
+        "camera_angle_plain": "19 deg (Forward View)",
+        "raw_2d_safe_area_frac_mean": 0.453,
+        "vetoed_raw_safe_area_frac_mean": 0.0234,
+        "stabilized_vetoed_safe_area_frac_mean": 0.0221,
+        "steep_3d_normal_pixel_frac_mean": 0.6534,
+        "safe_pixels_vetoed_to_hazard_frac_mean": 0.4296,
+        "safe_pixels_vetoed_by_3d_normal_frac_mean": 0.4153,
+        "safe_pixels_vetoed_by_ood_frac_mean": 0.293,
+        "safe_pixels_vetoed_by_nonrigid_frac_mean": 0.0529,
+        "non_rigid_motion_pixel_frac_mean": 0.0987
+      },
+      "temporal_stability": {
+        "frames_evaluated": 180,
+        "raw_2d_flicker_pct_mean": 1.0916,
+        "raw_vetoed_flicker_pct_mean": 0.8122,
+        "stabilized_flicker_pct_mean": 0.4711,
+        "flicker_relative_reduction_pct": 42.01,
+        "raw_vetoed_safe_iou_mean": 0.7055,
+        "stabilized_safe_iou_mean": 0.7977,
+        "safe_iou_gain": 0.0922,
+        "raw_multiclass_5c_iou_mean": 0.7478,
+        "stabilized_multiclass_5c_iou_mean": 0.8391,
+        "raw_vetoed_slz_centroid_jitter_px_mean": 15.862,
+        "stabilized_slz_centroid_jitter_px_mean": 2.832,
+        "centroid_jitter_relative_reduction_pct": 82.15,
+        "raw_centroid_samples": 179,
+        "stabilized_centroid_samples": 179,
+        "homography_warped_steps": 179,
+        "motion_reset_count": 0,
+        "ransac_3gate_pass_rate": 0.9777,
+        "ransac_mean_flow_px": 1.029,
+        "ransac_inliers_mean": 288.27
+      },
+      "ood_and_class_breakdown": {
+        "ood_pixel_frac_mean": 0.301,
+        "ood_energy_tilde_mean": -3.8688,
+        "ood_energy_tilde_p95": -3.7666,
+        "stabilized_class_pct": {
+          "Safe_Flat_Ground": 0.22,
+          "Safe_Flat_Roof": 1.99,
+          "Hazard_Obstacle_Structure": 43.37,
+          "Hazard_Dynamic_Human_Vehicle": 0.0,
+          "Hazard_Water_Vegetation": 54.42
+        }
+      },
+      "forward_detectors_and_domain_gate": {
+        "max_forward_pitch_deg": 25.0,
+        "frames_in_domain": 180,
+        "frames_gated_out_of_domain": 0,
+        "wireseg_wire_px_mean": 0.56,
+        "wireseg_wire_px_max": 16,
+        "wireseg_frames_above_120px_raw": 0,
+        "wireseg_frames_above_120px_gated": 0,
+        "dfine_total_boxes_raw": 0,
+        "dfine_frames_with_boxes_raw": 0,
+        "dfine_total_boxes_in_domain": 0,
+        "dfine_class_counts_raw": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "dfine_class_counts_in_domain": {
+          "Bird": 0,
+          "Rogue_UAV": 0,
+          "Tower_Crane": 0
+        },
+        "cbvf_speed_cap_distribution": {
+          "v_max_15_0_mps_frames": 180,
+          "v_max_22_0_mps_frames": 0
+        }
+      },
+      "hardware_performance": {
+        "pidnet_cuda_latency_ms": {
+          "mean_ms": 15.0828,
+          "p50_ms": 15.5801,
+          "p95_ms": 18.7432,
+          "p99_ms": 20.1254,
+          "min_ms": 9.1094,
+          "max_ms": 22.7556,
+          "fps_mean": 66.3
+        },
+        "depth_3d_cuda_latency_ms": {
+          "mean_ms": 93.8742,
+          "p50_ms": 97.3081,
+          "p95_ms": 112.8346,
+          "p99_ms": 123.2331,
+          "min_ms": 59.4507,
+          "max_ms": 125.6528,
+          "fps_mean": 10.65
+        },
+        "full_stack_e2e_latency_ms": {
+          "mean_ms": 292.4296,
+          "p50_ms": 293.6783,
+          "p95_ms": 361.7738,
+          "p99_ms": 400.3961,
+          "min_ms": 203.1279,
+          "max_ms": 446.9631,
+          "fps_mean": 3.42
+        },
+        "pidnet_fps_mean": 66.3,
+        "depth_3d_fps_mean": 10.65,
+        "full_stack_e2e_fps_mean": 3.42
+      },
+      "visual_outputs": {
+        "h264_mp4_rendered": true,
+        "h264_mp4_filename": "test_4_open_horizon_wires_obstacles.mp4",
+        "h264_mp4_size_bytes": 5844087,
+        "h264_mp4_sha256": "56a409d3679365e444937c5c1f72d708f39ea64fd5ac2a1395e13712f7b83141",
+        "verify_png_rendered": true,
+        "verify_png_filename": "verify_4_open_horizon_wires_obstacles.png"
+      },
+      "plain_takeaway": "Low 19 deg angle opened forward wire/obstacle scan (180f in-domain) & blocked 43.0% skyline walls.",
+      "honest_failure_and_limitation_notes": "Forward-horizon rail corridor & skyline flight (18.8 deg mean pitch; 180/180 frames <= 25 deg in-domain). M-LSD-WireSeg v1.1 (mean 0.6 px, 0 alerts > 120 px) and D-FINE-N v1.1 (0 in-domain boxes) ran with zero false-alarm spam. 3D-normal + OOD (30.1% on misty haze) blocked 43.0% of vertical buildings and sky (45.3% -> 2.2%). Honest limitation: thin dark overhead rail catenaries at low contrast against hazy buildings remain below current 640px wire recall."
+    }
+  ],
+  "combined_visual_outputs": {
+    "highlight_reel_mp4": {
+      "rendered": true,
+      "filename": "vertirta_4scene_stress_test_reel.mp4",
+      "size_bytes": 18208795,
+      "sha256": "e9f2fcebd69b827af022581215dd21eb031448cc10f6fa57f24cb120ce43019d"
+    },
+    "diagnostic_contact_sheet_png": {
+      "rendered": true,
+      "filename": "vertirta_4scene_diagnostic_summary.png",
+      "size_bytes": 3164976,
+      "sha256": "0f43eb93387d629e658d873971748bfe9a2ea5c66073cad53f8c7abdeddd16cb"
+    },
+    "plain_english_overlay_standard": true
+  },
+  "cross_scene_summary": {
+    "scenes_evaluated": 4,
+    "total_frames_evaluated": 720,
+    "oblique_urban_facade_veto_pct": 25.48,
+    "topdown_nadir_false_veto_pct": 0.17,
+    "forward_detector_frames_in_domain_total": 180,
+    "forward_detector_frames_gated_total": 540,
+    "mean_flicker_reduction_pct": 54.04,
+    "mean_pidnet_fps": 75.15,
+    "cuda_vram_delta_mib": 840.0,
+    "peak_vram_mib": 855.0,
+    "nadir_3d_normal_bugfix_verified": true
+  },
+  "gates": {
+    "all_4_scenes_evaluated": true,
+    "all_outputs_finite": true,
+    "zero_nan_inf": true,
+    "all_licenses_permissive": true,
+    "depth_model_apache2_verified": true,
+    "cuda_ep_active": true,
+    "depth_3d_cuda_ep_active": true,
+    "oblique_urban_facade_veto_ge_20pct": true,
+    "topdown_nadir_no_false_collapse": true,
+    "forward_domain_gate_exercised_both_states": true,
+    "temporal_flicker_reduced_all_scenes": true,
+    "demo_outputs_rendered_if_requested": true
+  },
+  "wall_clock_s": 266.081,
+  "report_sha256": "7f19ed504dc2fa3bf6d021379cb8d1931c0880698fb42fbabaad1ff247199715"
+}

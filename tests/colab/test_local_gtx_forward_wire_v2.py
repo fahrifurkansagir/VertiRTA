@@ -202,8 +202,23 @@ def test_committed_local_forward_wire_v2_and_timesliced_artifacts() -> None:
     # Verify refreshed timesliced edge gate references active recovered local GTX v1.1 models
     ts_doc = _verify_canonical_report_sha256(TIMESLICED_GATE_JSON)
     assert ts_doc["model_profile"] == "local_gtx_v11"
-    assert ts_doc["gates"]["onnx_sha256_all_verified"] is True
-    assert ts_doc["gates"]["all_trained_outputs_finite_and_nondegenerate"] is True
+    gates = ts_doc["gates"]
+    assert gates["onnx_sha256_all_verified"] is True
+    assert gates["empirical_fp32_vs_fp16_logged"] is True
+    assert gates["timesliced_peak_vram_lt_300mb"] is True
+    assert gates["pidnet_v21_p99_lt_12ms"] is True
+    assert gates["cruise_combined_p99_lt_25ms"] is True
+    assert gates["all_trained_outputs_finite_and_nondegenerate"] is True
+
+    pb = ts_doc["phase_b_timesliced_schedule"]
+    assert pb["shared_cuda_env_allocator"] is True
+    assert pb["xfeat_1hz_execution_provider"] == "CPUExecutionProvider"
+    assert pb["phase_b_isolated_subprocess"] is True
+    assert pb["timesliced_peak_vram_mib"] < 300.0
+    assert pb["cruise_vram_delta_mib"] < 300.0
+    assert pb["terminal_vram_delta_mib"] < 300.0
+    assert pb["cruise_30hz_with_1hz_xfeat"]["p99_ms"] < 25.0
+    assert pb["terminal_pidnet_v21"]["p99_ms"] < 12.0
 
     pid_doc = json.loads(LOCAL_PIDNET_METRICS.read_text(encoding="utf-8"))
     xfeat_doc = json.loads(G4_PIDNET_XFEAT_METRICS.read_text(encoding="utf-8"))

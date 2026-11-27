@@ -19,6 +19,7 @@ struct ForwardFusionConfig {
   double v_max_radar_degraded_mps{kCanonicalRadarDegradedVMaxMps};
   double dfine_hover_assoc_px{45.0};
   double min_radar_snr_db{10.0};
+  double radar_assoc_gate_m{15.0};
 };
 
 // Concrete 30 Hz forward wire + intruder radar-vision fusion implementation of IForwardHazardProvider.

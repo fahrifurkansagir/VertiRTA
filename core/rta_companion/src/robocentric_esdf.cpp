@@ -13,10 +13,19 @@ constexpr uint8_t kFlagInInsertQ = 1u << 1;
 constexpr uint8_t kFlagInDeleteQ = 1u << 2;
 constexpr uint8_t kFlagInUpdateQ = 1u << 3;
 constexpr uint16_t kMaxDistMm = 16000u;  // 16 m wave propagation cap keeps < 2 ms budget
+constexpr double kMaxCoordM = 1.0e7;     // +/-10,000 km local ENU bound prevents int32 overflow UB
 
 constexpr int32_t kNbDx[6] = {+1, -1, 0, 0, 0, 0};
 constexpr int32_t kNbDy[6] = {0, 0, +1, -1, 0, 0};
 constexpr int32_t kNbDz[6] = {0, 0, 0, 0, +1, -1};
+
+[[nodiscard]] inline bool is_valid_coord(double v) noexcept {
+  return std::isfinite(v) && std::abs(v) <= kMaxCoordM;
+}
+
+[[nodiscard]] inline bool is_valid_enu(const core::Vec3Enu& p) noexcept {
+  return is_valid_coord(p.x) && is_valid_coord(p.y) && is_valid_coord(p.z);
+}
 
 [[nodiscard]] inline int32_t floor_div2(int32_t v) noexcept {
   return (v >= 0) ? (v >> 1) : -(((-v) + 1) >> 1);
@@ -34,10 +43,12 @@ RobocentricEsdfMap::RobocentricEsdfMap() noexcept {
 }
 
 void RobocentricEsdfMap::reset(const core::Vec3Enu& center_enu) noexcept {
+  const core::Vec3Enu safe_center =
+      is_valid_enu(center_enu) ? center_enu : core::Vec3Enu{0.0, 0.0, 0.0};
   cfg_ = SlidingConfig{};
-  cfg_.origin_ix = static_cast<int32_t>(std::floor(center_enu.x)) - (kEsdfNx / 2);
-  cfg_.origin_iy = static_cast<int32_t>(std::floor(center_enu.y)) - (kEsdfNy / 2);
-  cfg_.origin_iz = static_cast<int32_t>(std::floor(center_enu.z)) - (kEsdfNz / 2);
+  cfg_.origin_ix = static_cast<int32_t>(std::floor(safe_center.x)) - (kEsdfNx / 2);
+  cfg_.origin_iy = static_cast<int32_t>(std::floor(safe_center.y)) - (kEsdfNy / 2);
+  cfg_.origin_iz = static_cast<int32_t>(std::floor(safe_center.z)) - (kEsdfNz / 2);
   cfg_.safe_margin_i = 0;
 
   occ_logodds_.fill(-20);
@@ -79,6 +90,9 @@ void RobocentricEsdfMap::clear_esdf_cell(uint32_t idx) noexcept {
 }
 
 void RobocentricEsdfMap::slide_to(const core::Vec3Enu& new_center_enu) noexcept {
+  if (!is_valid_enu(new_center_enu)) {
+    return;
+  }
   const int32_t new_ox = static_cast<int32_t>(std::floor(new_center_enu.x)) - (kEsdfNx / 2);
   const int32_t new_oy = static_cast<int32_t>(std::floor(new_center_enu.y)) - (kEsdfNy / 2);
   const int32_t new_oz = static_cast<int32_t>(std::floor(new_center_enu.z)) - (kEsdfNz / 2);
@@ -315,7 +329,7 @@ void RobocentricEsdfMap::insert_point_cloud(
     uint64_t stamp_ns) noexcept {
   (void)sensor_enu;
   for (const core::Vec3Enu& pt : points_enu) {
-    if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z)) {
+    if (!is_valid_enu(pt)) {
       continue;
     }
     const int32_t gx = static_cast<int32_t>(std::floor(pt.x / kOccResM));
@@ -331,7 +345,7 @@ bool RobocentricEsdfMap::query_dist_grad(
     const core::Vec3Enu& pos_enu,
     double& dist_m_out,
     core::Vec3Enu& grad_unit_out) const noexcept {
-  if (!std::isfinite(pos_enu.x) || !std::isfinite(pos_enu.y) || !std::isfinite(pos_enu.z)) {
+  if (!is_valid_enu(pos_enu)) {
     return false;
   }
 
@@ -389,7 +403,7 @@ bool RobocentricEsdfMap::query_dist_grad(
 std::size_t RobocentricEsdfMap::extract_nearest_hazards(
     const core::Vec3Enu& pos_enu,
     std::span<HazardPoint> out) const noexcept {
-  if (out.empty()) {
+  if (out.empty() || !is_valid_enu(pos_enu)) {
     return 0;
   }
   double dist = 0.0;

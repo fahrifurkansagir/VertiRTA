@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -333,4 +334,161 @@ TEST_CASE("TU116 CUDA EP tuning, OOD calibration JSON loader, fail-closed mock, 
   const std::size_t target_idx = 8u * 16u + 12u;
   REQUIRE(pts[target_idx].y == Approx(-xu_true * 20.0).margin(1e-3));
   REQUIRE(pts[target_idx].z == Approx(0.0).margin(1e-5));
+}
+
+TEST_CASE("OOD calibration safe_logit_bias_delta parity, ApplySafeLogitBias, and Apply3DNormalAndOodVeto",
+          "[slz_bayes][v352][3d_veto][zero_heap]") {
+  constexpr float kNaNf = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kInff = std::numeric_limits<float>::infinity();
+
+  // 1) ParseOodCalibrationJson backwards compatibility + optional safe_logit_bias_delta validation
+  {
+    SlzOrtConfig legacy_cfg{};
+    legacy_cfg.safe_logit_bias_delta = -0.5f;
+    const std::string legacy_json = R"({
+      "T_ood": 1.0,
+      "T_prob": 1.25,
+      "kappa_b": 1.5,
+      "tau_ood": -3.2959
+    })";
+    REQUIRE(ParseOodCalibrationJson(legacy_json, legacy_cfg));
+    REQUIRE(legacy_cfg.safe_logit_bias_delta == Approx(0.0f));
+
+    SlzOrtConfig cal_cfg{};
+    const std::string v2_json = R"({
+      "T_ood": 1.0,
+      "T_prob": 1.9686,
+      "kappa_b": 1.5,
+      "tau_ood": -3.2959,
+      "safe_logit_bias_delta": -0.271367
+    })";
+    REQUIRE(ParseOodCalibrationJson(v2_json, cal_cfg));
+    REQUIRE(cal_cfg.safe_logit_bias_delta == Approx(-0.271367f).margin(1e-6f));
+
+    // Malformed / out-of-range optional safe_logit_bias_delta MUST fail closed and leave cfg unchanged.
+    const float saved_bias = cal_cfg.safe_logit_bias_delta;
+    const float saved_tau = cal_cfg.tau_ood;
+    REQUIRE_FALSE(ParseOodCalibrationJson(
+        R"({"T_ood": 1.0, "T_prob": 1.25, "kappa_b": 1.5, "tau_ood": -2.0, "safe_logit_bias_delta": -6.5})",
+        cal_cfg));
+    REQUIRE_FALSE(ParseOodCalibrationJson(
+        R"({"T_ood": 1.0, "T_prob": 1.25, "kappa_b": 1.5, "tau_ood": -2.0, "safe_logit_bias_delta": "bad"})",
+        cal_cfg));
+    REQUIRE_FALSE(ParseOodCalibrationJson(
+        R"({"T_ood": 1.0, "T_prob": 1.25, "kappa_b": 1.5, "tau_ood": -2.0, "safe_logit_bias_delta": 1.2abc})",
+        cal_cfg));
+    REQUIRE(cal_cfg.safe_logit_bias_delta == Approx(saved_bias));
+    REQUIRE(cal_cfg.tau_ood == Approx(saved_tau));
+  }
+
+  const std::size_t P = vertirta::perception::kSlzPixels;
+  std::vector<float> logits(vertirta::perception::kSlzLogitsElements, -4.0f);
+  std::vector<float> normals(vertirta::perception::kSlzNormalsElements, 0.0f);
+  std::vector<float> e_tilde(P, -10.0f);
+
+  auto set_pixel_logits = [&](std::size_t idx, float l0, float l1, float l2, float l3, float l4) {
+    logits[0u * P + idx] = l0;
+    logits[1u * P + idx] = l1;
+    logits[2u * P + idx] = l2;
+    logits[3u * P + idx] = l3;
+    logits[4u * P + idx] = l4;
+  };
+  auto set_pixel_normal = [&](std::size_t idx, float nx, float ny, float nz) {
+    normals[0u * P + idx] = nx;
+    normals[1u * P + idx] = ny;
+    normals[2u * P + idx] = nz;
+  };
+  auto argmax_pixel = [&](std::size_t idx) -> uint32_t {
+    uint32_t best = 0u;
+    for (uint32_t c = 1u; c < vertirta::perception::kSlzNumClasses; ++c) {
+      if (logits[static_cast<std::size_t>(c) * P + idx] > logits[static_cast<std::size_t>(best) * P + idx]) {
+        best = c;
+      }
+    }
+    return best;
+  };
+
+  // Fill baseline: flat nadir roof (n = (0, 0, 1)), safe class 1 dominant.
+  for (std::size_t idx = 0; idx < P; ++idx) {
+    set_pixel_logits(idx, -1.0f, 10.0f, -3.0f, -4.0f, -5.0f);
+    set_pixel_normal(idx, 0.0f, 0.0f, 1.0f);
+  }
+
+  // 2) ApplySafeLogitBias: shifts classes {0, 1}, leaves {2, 3, 4} unchanged, fails closed on NaN logit.
+  logits[0u * P + 7u] = kNaNf;
+  REQUIRE_FALSE(vertirta::perception::ApplySafeLogitBias(logits, kNaNf));
+  REQUIRE_FALSE(vertirta::perception::ApplySafeLogitBias(logits, 6.0f));
+  REQUIRE(vertirta::perception::ApplySafeLogitBias(logits, -0.271367f));
+  REQUIRE(logits[0u * P + 0u] == Approx(-1.271367f).margin(1e-5f));
+  REQUIRE(logits[1u * P + 0u] == Approx(9.728633f).margin(1e-5f));
+  REQUIRE(logits[2u * P + 0u] == Approx(-3.0f));
+  REQUIRE(logits[0u * P + 7u] == Approx(-12.0f));
+
+  // 3) Apply3DNormalAndOodVeto — Nadir case + steep facade + OOD + NaN fail-closed + hazard preservation.
+  // Pixel 0: flat roof, in-distribution -> stays Safe class 1.
+  // Pixel 1: steep vertical wall n=(1, 0, 0) -> vetoed to Hazard class 2.
+  set_pixel_normal(1u, 1.0f, 0.0f, 0.0f);
+  // Pixel 2: flat roof, OOD e_tilde = -1.0 > -3.3 -> vetoed to Hazard class 2.
+  set_pixel_logits(2u, 9.0f, -1.0f, -3.0f, -4.0f, -5.0f);
+  e_tilde[2u] = -1.0f;
+  // Pixel 3: NaN surface normal -> fail-closed vetoed to Hazard class 2.
+  set_pixel_normal(3u, kNaNf, 0.0f, 1.0f);
+  // Pixel 4: NaN e_tilde -> fail-closed vetoed to Hazard class 2.
+  e_tilde[4u] = kNaNf;
+  // Pixel 5: steep wall on existing Dynamic Hazard (class 3) -> suppress {0,1} to -12, preserve class 3!
+  set_pixel_logits(5u, -1.0f, -2.0f, -4.0f, 10.0f, -5.0f);
+  set_pixel_normal(5u, 1.0f, 0.0f, 0.0f);
+  // Pixel 8: degenerate zero normal -> fail-closed vetoed to Hazard class 2.
+  set_pixel_normal(8u, 0.0f, 0.0f, 0.0f);
+
+  const std::array<float, 3> u_up_nadir = {0.0f, 0.0f, 1.0f};
+  std::size_t vetoed_nadir = 0u;
+  {
+    vertirta::test::ScopedZeroHeapGuard guard;
+    REQUIRE(vertirta::perception::ApplySafeLogitBias(logits, 0.0f));
+    // Pixel 6: inject non-finite logit directly into Apply3DNormalAndOodVeto -> fail-closed to Hazard class 2.
+    set_pixel_logits(6u, -1.0f, kInff, -3.0f, -4.0f, -5.0f);
+    REQUIRE(vertirta::perception::Apply3DNormalAndOodVeto(
+        logits, normals, e_tilde, u_up_nadir, 0.866f, -3.3f, &vetoed_nadir));
+    REQUIRE(guard.alloc_count() == 0u);
+    REQUIRE(guard.bytes_allocated() == 0u);
+  }
+  REQUIRE(vetoed_nadir == 7u);
+  REQUIRE(argmax_pixel(0u) == 1u);
+  REQUIRE(argmax_pixel(1u) == 2u);
+  REQUIRE(logits[0u * P + 1u] == Approx(-12.0f));
+  REQUIRE(logits[1u * P + 1u] == Approx(-12.0f));
+  REQUIRE(logits[2u * P + 1u] >= 6.0f);
+  REQUIRE(argmax_pixel(2u) == 2u);
+  REQUIRE(argmax_pixel(3u) == 2u);
+  REQUIRE(argmax_pixel(4u) == 2u);
+  REQUIRE(argmax_pixel(5u) == 3u);  // Existing Dynamic Hazard preserved!
+  REQUIRE(logits[0u * P + 5u] == Approx(-12.0f));
+  REQUIRE(logits[1u * P + 5u] == Approx(-12.0f));
+  REQUIRE(argmax_pixel(6u) == 2u);
+  REQUIRE(std::isfinite(logits[1u * P + 6u]));
+  REQUIRE(argmax_pixel(8u) == 2u);
+
+  // 4) Oblique 45 deg drone camera parity (OpenCV camera frame: u_up = (0, -0.7071, -0.7071)).
+  const float s45 = 0.70710678f;
+  const std::array<float, 3> u_up_oblique = {0.0f, -s45, -s45};
+  for (std::size_t idx = 0; idx < P; ++idx) {
+    set_pixel_logits(idx, -1.0f, 10.0f, -3.0f, -4.0f, -5.0f);
+    set_pixel_normal(idx, 0.0f, -s45, -s45);  // Horizontal flat roof in oblique view
+    e_tilde[idx] = -10.0f;
+  }
+  // Pixel 10: vertical building facade facing oblique camera (n_cam = (0, +0.7071, -0.7071) -> cos_up = 0).
+  set_pixel_normal(10u, 0.0f, +s45, -s45);
+  std::size_t vetoed_oblique = 0u;
+  REQUIRE(vertirta::perception::Apply3DNormalAndOodVeto(
+      logits, normals, e_tilde, u_up_oblique, 0.866f, -3.3f, &vetoed_oblique));
+  REQUIRE(vetoed_oblique == 1u);
+  REQUIRE(argmax_pixel(0u) == 1u);
+  REQUIRE(argmax_pixel(10u) == 2u);
+
+  // 5) Invalid/NaN global u_up_3 fails closed (returns false AND vetoes Safe pixels to class 2).
+  const std::array<float, 3> u_up_nan = {kNaNf, 0.0f, 1.0f};
+  REQUIRE_FALSE(vertirta::perception::Apply3DNormalAndOodVeto(
+      logits, normals, e_tilde, u_up_nan, 0.866f, -3.3f));
+  REQUIRE(argmax_pixel(0u) == 2u);
 }

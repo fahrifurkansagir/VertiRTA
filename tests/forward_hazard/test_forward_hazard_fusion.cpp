@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "vertirta/forward_hazard/forward_hazard_fusion.hpp"
 #include "vertirta/forward_hazard/horizon_split_stack.hpp"
@@ -318,4 +319,203 @@ TEST_CASE("ForwardHazardFusion stress caps strictly at <= 64 WireCapsules and <=
   REQUIRE(out.intruder_tracker.active_count() <= 16u);
   REQUIRE(out.active_wire_capsules == out.wire_capsules.size());
   REQUIRE(out.active_intruders == out.intruder_tracker.active_count());
+}
+
+TEST_CASE("ForwardHazardFusion guards NaN radar bypasses and OnnxForwardDetectors enforces honest ORT flag & bounds",
+          "[forward_hazard][nan_hardening]") {
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+
+  // 1) Honest used_onnx_runtime flag & strict coordinate bounds on OnnxForwardDetectors.
+  {
+    ForwardOnnxConfig cfg{};
+    cfg.use_deterministic_mock = false;
+    OnnxForwardDetectors det(cfg);
+
+    ForwardSensorBundle b{};
+    b.camera_healthy = true;
+    b.wire_line_count = 6;
+    b.wire_lines[0] = {-10.0, 360.0, 100.0, 360.0, 0.90, 1u};     // negative u0 -> reject
+    b.wire_lines[1] = {100.0, 360.0, 5000.0, 360.0, 0.90, 1u};    // huge u1 -> reject
+    b.wire_lines[2] = {100.0, kNaN, 200.0, 360.0, 0.90, 1u};      // NaN v0 -> reject
+    b.wire_lines[3] = {100.0, 360.0, 200.0, 360.0, 1.50, 1u};     // score > 1 -> reject
+    b.wire_lines[4] = {100.0, 360.0, 200.0, 360.0, kNaN, 1u};     // NaN score -> reject
+    b.wire_lines[5] = {200.0, 360.0, 320.0, 360.0, 0.85, 1u};     // valid
+
+    b.intruder_box_count = 5;
+    b.intruder_boxes[0] = {-5.0, 360.0, 20.0, 20.0, 0.90, 0u};    // negative cx -> reject
+    b.intruder_boxes[1] = {640.0, 360.0, 2000.0, 20.0, 0.90, 0u}; // huge width -> reject
+    b.intruder_boxes[2] = {640.0, 360.0, kInf, 20.0, 0.90, 0u};   // Inf width -> reject
+    b.intruder_boxes[3] = {640.0, 360.0, 20.0, 20.0, -0.1, 0u};   // negative score -> reject
+    b.intruder_boxes[4] = {640.0, 360.0, 24.0, 18.0, 0.85, 0u};   // valid
+
+    ForwardDetectorRawOutput out{};
+    REQUIRE(det.infer_from_bundle(b, out));
+    REQUIRE_FALSE(out.used_onnx_runtime);
+    REQUIRE(out.wire_line_count == 1u);
+    REQUIRE(out.intruder_box_count == 1u);
+  }
+
+  // 2) NaN in radar snr_db / az_rad / el_rad / residual_doppler_mps / range_m must be rejected cleanly.
+  {
+    ForwardHazardFusion fusion{};
+    TimedPoseSe3 pose{};
+    pose.stamp_ns = 1'000'000'000ULL;
+    pose.pos_ned = {0.0, 0.0, -40.0};
+    pose.vel_ned = {12.0, 0.0, 0.0};
+    pose.q_frd_to_ned = {1.0, 0.0, 0.0, 0.0};
+    pose.valid = true;
+    fusion.push_pose_200hz(pose);
+
+    ForwardSensorBundle b{};
+    b.frame_stamp_ns = pose.stamp_ns;
+    b.radar_stamp_ns = pose.stamp_ns;
+    b.radar_healthy = true;
+    b.camera_healthy = true;
+    b.radar_point_count = 5;
+    // NaN snr_db previously bypassed (NaN < min_radar_snr_db == false)!
+    b.radar_points[0] = {50.0, 0.1, 0.0, -10.0, -3.0, kNaN, -10.0, RadarDopplerClass::kDynamicIntruder, true};
+    b.radar_points[1] = {50.0, kNaN, 0.0, -10.0, -3.0, 18.0, -10.0, RadarDopplerClass::kDynamicIntruder, true};
+    b.radar_points[2] = {50.0, 0.1, kInf, -10.0, -3.0, 18.0, -10.0, RadarDopplerClass::kDynamicIntruder, true};
+    b.radar_points[3] = {50.0, 0.1, 0.0, -10.0, kNaN, 18.0, -10.0, RadarDopplerClass::kDynamicIntruder, true};
+    b.radar_points[4] = {kNaN, 0.1, 0.0, -10.0, -3.0, 18.0, -10.0, RadarDopplerClass::kDynamicIntruder, true};
+
+    ForwardHazardOutput out{};
+    REQUIRE(fusion.step(b, out));
+    REQUIRE(out.active_intruders == 0u);
+    REQUIRE(out.active_wire_spans == 0u);
+  }
+}
+
+TEST_CASE("ForwardHazardFusion spatial nearest-neighbor radar association prevents track-ID scrambling on swapped array order",
+          "[forward_hazard][spatial_assoc]") {
+  ForwardHazardFusion fusion{};
+
+  // Helper building a spherical radar detection from a world NED intruder state relative to ownship.
+  auto make_radar_det = [](const vertirta::core::Vec3Ned& own_ned,
+                           const vertirta::core::Vec3Ned& tgt_ned,
+                           const vertirta::core::Vec3Ned& tgt_vel_ned) -> RadarPointDetection {
+    const double dx = tgt_ned.x - own_ned.x;
+    const double dy = tgt_ned.y - own_ned.y;
+    const double dz = tgt_ned.z - own_ned.z;
+    const double range = std::sqrt(dx * dx + dy * dy + dz * dz);
+    const double az = std::atan2(dy, dx);
+    const double el = std::asin(std::clamp(dz / range, -1.0, 1.0));
+    const double vr_res = (dx * tgt_vel_ned.x + dy * tgt_vel_ned.y + dz * tgt_vel_ned.z) / range;
+    return RadarPointDetection{
+        .range_m = range,
+        .az_rad = az,
+        .el_rad = el,
+        .radial_vel_mps = vr_res,
+        .residual_doppler_mps = vr_res,
+        .snr_db = 18.0,
+        .rcs_dbsm = -10.0,
+        .doppler_class = RadarDopplerClass::kDynamicIntruder,
+        .valid = true,
+    };
+  };
+
+  const vertirta::core::Vec3Ned own_pos{0.0, 0.0, -40.0};
+  const vertirta::core::Vec3Ned vel_a{+2.0, 0.0, 0.0};
+  const vertirta::core::Vec3Ned vel_b{-3.0, 0.0, 0.0};
+
+  uint32_t id_a = 0u;
+  uint32_t id_b = 0u;
+
+  // Run 10 frames at 20 Hz, swapping [A, B] <-> [B, A] in radar_points on every odd frame!
+  for (int k = 0; k < 10; ++k) {
+    const double t_s = 0.05 * static_cast<double>(k);
+    const uint64_t t_ns = 1'000'000'000ULL + static_cast<uint64_t>(k) * 50'000'000ULL;
+
+    TimedPoseSe3 pose{};
+    pose.stamp_ns = t_ns;
+    pose.pos_ned = own_pos;
+    pose.vel_ned = {0.0, 0.0, 0.0};
+    pose.q_frd_to_ned = {1.0, 0.0, 0.0, 0.0};
+    pose.valid = true;
+    fusion.push_pose_200hz(pose);
+
+    const vertirta::core::Vec3Ned pos_a{60.0 + vel_a.x * t_s, -18.0, -40.0};
+    const vertirta::core::Vec3Ned pos_b{95.0 + vel_b.x * t_s, +22.0, -35.0};
+    const RadarPointDetection det_a = make_radar_det(own_pos, pos_a, vel_a);
+    const RadarPointDetection det_b = make_radar_det(own_pos, pos_b, vel_b);
+
+    ForwardSensorBundle b{};
+    b.frame_stamp_ns = t_ns;
+    b.radar_stamp_ns = t_ns;
+    b.radar_healthy = true;
+    b.camera_healthy = true;
+    b.radar_point_count = 2;
+    if ((k % 2) == 0) {
+      b.radar_points[0] = det_a;
+      b.radar_points[1] = det_b;
+    } else {
+      b.radar_points[0] = det_b;
+      b.radar_points[1] = det_a;
+    }
+
+    ForwardHazardOutput out{};
+    REQUIRE(fusion.step(b, out));
+    REQUIRE(out.active_intruders == 2u);
+
+    const auto pos_a_enu = vertirta::core::ned_to_enu(pos_a);
+    const auto pos_b_enu = vertirta::core::ned_to_enu(pos_b);
+    const auto match_a = out.intruder_tracker.match_nearest_track_id(pos_a_enu, t_ns, 5.0);
+    const auto match_b = out.intruder_tracker.match_nearest_track_id(pos_b_enu, t_ns, 5.0);
+    REQUIRE(match_a.has_value());
+    REQUIRE(match_b.has_value());
+    REQUIRE(*match_a != *match_b);
+
+    if (k == 0) {
+      id_a = *match_a;
+      id_b = *match_b;
+    } else {
+      // Exact track IDs preserved across array-order swaps!
+      REQUIRE(*match_a == id_a);
+      REQUIRE(*match_b == id_b);
+    }
+
+    const auto* tr_a = out.intruder_tracker.find_track(id_a);
+    const auto* tr_b = out.intruder_tracker.find_track(id_b);
+    REQUIRE(tr_a != nullptr);
+    REQUIRE(tr_b != nullptr);
+
+    const double err_a = std::hypot(tr_a->x_enu[0] - pos_a_enu.x, tr_a->x_enu[1] - pos_a_enu.y);
+    const double err_b = std::hypot(tr_b->x_enu[0] - pos_b_enu.x, tr_b->x_enu[1] - pos_b_enu.y);
+    const double spd_a = std::sqrt(tr_a->x_enu[3] * tr_a->x_enu[3] + tr_a->x_enu[4] * tr_a->x_enu[4] + tr_a->x_enu[5] * tr_a->x_enu[5]);
+    const double spd_b = std::sqrt(tr_b->x_enu[3] * tr_b->x_enu[3] + tr_b->x_enu[4] * tr_b->x_enu[4] + tr_b->x_enu[5] * tr_b->x_enu[5]);
+    REQUIRE(err_a < 1.0);
+    REQUIRE(err_b < 1.0);
+    REQUIRE(spd_a < 6.0);  // Zero velocity spike!
+    REQUIRE(spd_b < 6.0);
+  }
+
+  // Frame 10: two detections arrive near Intruder A within the same frame -> 1-to-1 matching
+  // ensures only one claims id_a while the second allocates a fresh track ID (active_intruders == 3).
+  {
+    const uint64_t t_ns = 1'500'000'000ULL;
+    TimedPoseSe3 pose{};
+    pose.stamp_ns = t_ns;
+    pose.pos_ned = own_pos;
+    pose.vel_ned = {0.0, 0.0, 0.0};
+    pose.q_frd_to_ned = {1.0, 0.0, 0.0, 0.0};
+    pose.valid = true;
+    fusion.push_pose_200hz(pose);
+
+    ForwardSensorBundle b{};
+    b.frame_stamp_ns = t_ns;
+    b.radar_stamp_ns = t_ns;
+    b.radar_healthy = true;
+    b.camera_healthy = true;
+    b.radar_point_count = 3;
+    b.radar_points[0] = make_radar_det(own_pos, {61.0, -18.0, -40.0}, vel_a);
+    b.radar_points[1] = make_radar_det(own_pos, {65.0, -15.0, -40.0}, vel_a);  // Second close target
+    b.radar_points[2] = make_radar_det(own_pos, {93.5, +22.0, -35.0}, vel_b);
+
+    ForwardHazardOutput out{};
+    REQUIRE(fusion.step(b, out));
+    REQUIRE(out.active_intruders == 3u);
+    REQUIRE(out.intruder_tracker.find_track(id_a) != nullptr);
+    REQUIRE(out.intruder_tracker.find_track(id_b) != nullptr);
+  }
 }

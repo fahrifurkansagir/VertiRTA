@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 
 #include "vertirta/core/frames.hpp"
@@ -74,6 +75,18 @@ class IntruderTrackerKf {
   [[nodiscard]] std::size_t extract_hazards(
       uint64_t now_ns,
       std::span<HazardPoint> out) const noexcept;
+
+  // Read-only spatial nearest-neighbor association against active, non-expired tracks
+  // forward-predicted to now_ns. Excludes any track IDs in excluded_ids for 1-to-1 frame matching.
+  [[nodiscard]] std::optional<uint32_t> match_nearest_track_id(
+      const core::Vec3Enu& pos_enu,
+      uint64_t now_ns,
+      double max_gate_m,
+      std::span<const uint32_t> excluded_ids = {},
+      double* matched_dist_m_out = nullptr) const noexcept;
+
+  // Read-only lookup for an active track by ID (returns nullptr if inactive/absent).
+  [[nodiscard]] const IntruderTrack* find_track(uint32_t track_id) const noexcept;
 
   [[nodiscard]] std::size_t active_count() const noexcept;
 

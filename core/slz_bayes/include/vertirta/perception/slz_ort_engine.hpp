@@ -48,6 +48,7 @@ struct SlzOrtConfig {
   float t_prob{1.25f};
   float kappa_b{1.5f};
   float tau_ood{-8.0f};
+  float safe_logit_bias_delta{0.0f};
 };
 
 struct CudaProviderTuning {
@@ -68,13 +69,14 @@ struct CudaProviderTuning {
 #endif
 ) noexcept;
 
-// Parses ood_calibration.json text (T_ood, T_prob, kappa_b, tau_ood) into cfg with finite bounds checks.
+// Parses ood_calibration.json text (T_ood, T_prob, kappa_b, tau_ood, plus optional
+// safe_logit_bias_delta in [-5.0, 5.0]) into cfg with finite bounds checks.
 // Zero external JSON dependencies; leaves cfg unchanged and returns false on any malformed/out-of-range value.
 [[nodiscard]] bool ParseOodCalibrationJson(
     std::string_view json_text,
     SlzOrtConfig& cfg) noexcept;
 
-// Loads ood_calibration.json from disk and updates cfg.{t_ood, t_prob, kappa_b, tau_ood}.
+// Loads ood_calibration.json from disk and updates cfg.{t_ood, t_prob, kappa_b, tau_ood, safe_logit_bias_delta}.
 [[nodiscard]] bool LoadOodCalibrationJson(
     const std::string& path,
     SlzOrtConfig& cfg);
@@ -94,6 +96,30 @@ struct CudaProviderTuning {
     std::span<const float> bdry_64,
     float kappa_b,
     std::span<float> e_out_512) noexcept;
+
+// Applies calibrated safe-class logit bias delta in [-5.0, 5.0] to Safe classes {0, 1}
+// in-place on NCHW seg_logits [5, 512, 512]. Zero heap allocations; non-finite safe logits
+// fail closed to -12.0f.
+[[nodiscard]] bool ApplySafeLogitBias(
+    std::span<float> seg_logits_5x512x512,
+    float safe_logit_bias_delta) noexcept;
+
+// Fail-closed 3D surface-normal steep-facade & OOD free-energy veto on NCHW seg_logits [5, 512, 512].
+// Matches Python apply_3d_normal_and_ood_veto() semantics (zero heap allocations):
+//   - Vetoed pixels (steep facade dot(n_unit, u_up_unit) < cos_threshold, OOD e_tilde > tau_ood,
+//     or any non-finite normal / energy / logit) have Safe classes {0, 1} suppressed to -12.0f;
+//     pixels that would otherwise be Safe {0, 1} are routed to Hazard_Obstacle_Structure (class 2,
+//     raised to max(logit[2], 6.0f)), preserving existing Hazard sub-classes {3, 4}.
+//   - If u_up_3 (size 3), cos_threshold, or tau_ood is non-finite/degenerate, fails closed by
+//     vetoing all Safe pixels (when seg_logits span has valid size) and returning false.
+[[nodiscard]] bool Apply3DNormalAndOodVeto(
+    std::span<float> seg_logits_5x512x512,
+    std::span<const float> surf_normals_3x512x512,
+    std::span<const float> e_tilde_512,
+    std::span<const float> u_up_3,
+    float cos_threshold,
+    float tau_ood,
+    std::size_t* vetoed_pixel_count_out = nullptr) noexcept;
 
 // Non-copyable, non-movable RAII ONNX Runtime / TensorRT V2 inference engine.
 // Guarantees session & I/O binding teardown strictly BEFORE CUDA stream destruction.

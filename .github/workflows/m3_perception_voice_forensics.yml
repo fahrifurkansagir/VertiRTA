@@ -119,7 +119,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install C++20 Toolchain, pkg-config & Native libz3-dev (NEVER vulnerable apt libsodium 1.0.18)
         run: |
@@ -128,7 +128,7 @@ jobs:
 
       - name: Cache Pinned Immutable libsodium 1.0.22 Build
         id: cache_sodium
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/vertirta-libsodium-1.0.22
           key: libsodium-${{ runner.os }}-${{ matrix.arch }}-1.0.22-adbdd8f16149
@@ -186,7 +186,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Host, Z3, ARM Bare-Metal & Python Toolchains
         run: |
@@ -198,7 +198,7 @@ jobs:
 
       - name: Cache Pinned Immutable libsodium 1.0.22 Build
         id: cache_sodium_san
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/vertirta-libsodium-1.0.22
           key: libsodium-${{ runner.os }}-x86_64-1.0.22-adbdd8f16149
@@ -354,7 +354,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
         run: |
@@ -386,10 +386,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"

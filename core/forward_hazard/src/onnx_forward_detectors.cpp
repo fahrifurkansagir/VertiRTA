@@ -7,20 +7,37 @@ namespace vertirta::forward_hazard {
 
 namespace {
 
-[[nodiscard]] bool is_valid_line(const WireLineDetection2D& line) noexcept {
+[[nodiscard]] bool is_valid_line(
+    const WireLineDetection2D& line,
+    double img_w,
+    double img_h) noexcept {
   if (!std::isfinite(line.u0_px) || !std::isfinite(line.v0_px) ||
       !std::isfinite(line.u1_px) || !std::isfinite(line.v1_px) ||
-      !std::isfinite(line.score)) {
+      !std::isfinite(line.score) || line.score < 0.0 || line.score > 1.0) {
+    return false;
+  }
+  if (line.u0_px < 0.0 || line.u0_px > img_w || line.u1_px < 0.0 || line.u1_px > img_w ||
+      line.v0_px < 0.0 || line.v0_px > img_h || line.v1_px < 0.0 || line.v1_px > img_h) {
     return false;
   }
   const double len = std::hypot(line.u1_px - line.u0_px, line.v1_px - line.v0_px);
-  return len >= 4.0;
+  return std::isfinite(len) && len >= 4.0;
 }
 
-[[nodiscard]] bool is_valid_box(const IntruderBoxDetection2D& box) noexcept {
-  return std::isfinite(box.cx_px) && std::isfinite(box.cy_px) &&
-         std::isfinite(box.width_px) && std::isfinite(box.height_px) &&
-         std::isfinite(box.score) && box.width_px > 1.0 && box.height_px > 1.0;
+[[nodiscard]] bool is_valid_box(
+    const IntruderBoxDetection2D& box,
+    double img_w,
+    double img_h) noexcept {
+  if (!std::isfinite(box.cx_px) || !std::isfinite(box.cy_px) ||
+      !std::isfinite(box.width_px) || !std::isfinite(box.height_px) ||
+      !std::isfinite(box.score) || box.score < 0.0 || box.score > 1.0) {
+    return false;
+  }
+  if (box.cx_px < 0.0 || box.cx_px > img_w || box.cy_px < 0.0 || box.cy_px > img_h) {
+    return false;
+  }
+  return box.width_px > 1.0 && box.width_px <= img_w &&
+         box.height_px > 1.0 && box.height_px <= img_h;
 }
 
 [[nodiscard]] double line_midpoint_dist(
@@ -58,12 +75,16 @@ bool OnnxForwardDetectors::infer_from_bundle(
 
   // Enforce < 300 MiB time-sliced TU116 VRAM budget accounting (M-LSD-WireSeg ~88 MiB + D-FINE-N ~112 MiB).
   out.estimated_vram_mib = std::min<uint32_t>(cfg_.vram_budget_mib, 200u);
-  out.used_onnx_runtime = compiled_with_onnxruntime() && !cfg_.use_deterministic_mock;
+  // infer_from_bundle() performs pre-extracted bundle filtering & seam deduplication only (no Ort::Session invoke).
+  out.used_onnx_runtime = false;
+
+  const double img_w = static_cast<double>(split_stack_.config().intrinsics.width_px);
+  const double img_h = static_cast<double>(split_stack_.config().intrinsics.height_px);
 
   const std::size_t n_lines = std::min(bundle.wire_line_count, kMaxForwardLineDetections);
   for (std::size_t i = 0; i < n_lines; ++i) {
     const WireLineDetection2D& cand = bundle.wire_lines[i];
-    if (!is_valid_line(cand) || cand.score < cfg_.wire_score_thresh) {
+    if (!is_valid_line(cand, img_w, img_h) || cand.score < cfg_.wire_score_thresh) {
       continue;
     }
 
@@ -88,7 +109,7 @@ bool OnnxForwardDetectors::infer_from_bundle(
   const std::size_t n_boxes = std::min(bundle.intruder_box_count, kMaxForwardBoxDetections);
   for (std::size_t i = 0; i < n_boxes; ++i) {
     const IntruderBoxDetection2D& box = bundle.intruder_boxes[i];
-    if (!is_valid_box(box) || box.score < cfg_.intruder_score_thresh) {
+    if (!is_valid_box(box, img_w, img_h) || box.score < cfg_.intruder_score_thresh) {
       continue;
     }
     if (out.intruder_box_count < kMaxForwardBoxDetections) {

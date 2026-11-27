@@ -27,6 +27,7 @@ Implements 01-DR08-13 Override #6, Spec Invariant I6, and DR-10 §1.3:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 from datetime import datetime, timezone
 import gc
 import json
@@ -288,22 +289,57 @@ def verify_onnx_sha256_parity(
     return verified
 
 
+def _register_shared_cuda_env_allocator() -> bool:
+    """Register one process-wide ORT CUDA BFC arena shared across flight-phase sessions.
+
+    Eliminates redundant per-session CUDA BFC arenas across sequential Cruise
+    (M-LSD-WireSeg -> D-FINE-N) and Terminal (PIDNet-S v2.1) sessions within a
+    single CUDA context (Spec Invariant I6).
+    """
+    import onnxruntime as ort
+
+    if not hasattr(ort, "create_and_register_allocator_v2"):
+        return False
+    try:
+        mem_info = ort.OrtMemoryInfo(
+            "Cuda",
+            ort.OrtAllocatorType.ORT_ARENA_ALLOCATOR,
+            0,
+            ort.OrtMemType.DEFAULT,
+        )
+        # arena_extend_strategy=1 -> kSameAsRequested
+        arena_cfg = ort.OrtArenaCfg({"arena_extend_strategy": 1})
+        ort.create_and_register_allocator_v2("CUDAExecutionProvider", mem_info, {}, arena_cfg)
+        return True
+    except Exception as exc:
+        if "already registered" in str(exc).lower():
+            return True
+        return False
+
+
 def _make_ort_session(
     onnx_path: Path,
     *,
     use_cuda: bool,
     cuda_graph: bool,
     max_workspace_override: bool | None = None,
+    cudnn_algo_search_override: str | None = None,
+    use_env_allocators: bool = False,
+    cpu_intra_op_threads: int = 2,
 ) -> Any:
     import onnxruntime as ort
 
     opts = ort.SessionOptions()
     opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    opts.intra_op_num_threads = 1 if use_cuda else 2
+    opts.intra_op_num_threads = 1 if use_cuda else int(cpu_intra_op_threads)
     if use_cuda:
+        if use_env_allocators:
+            opts.add_session_config_entry("session.use_env_allocators", "1")
         cuda_opts = select_platform_cuda_provider_options(enable_cuda_graph=cuda_graph)
         if max_workspace_override is not None:
             cuda_opts["cudnn_conv_use_max_workspace"] = "1" if max_workspace_override else "0"
+        if cudnn_algo_search_override is not None:
+            cuda_opts["cudnn_conv_algo_search"] = str(cudnn_algo_search_override)
         sess = ort.InferenceSession(
             str(onnx_path),
             sess_options=opts,
@@ -397,36 +433,52 @@ def _run_phase_b_timesliced(
     cruise_use_cg: dict[str, bool],
     rng: np.random.Generator,
 ) -> dict[str, Any]:
-    """Execute Phase B single-context flight-phase time-slicing (Cruise -> Evict -> Terminal)."""
+    """Execute Phase B single-context flight-phase time-slicing (Cruise -> Evict -> Terminal).
+
+    Uses one shared ORT environment CUDA BFC arena across sequential flight-phase GPU sessions
+    (M-LSD-WireSeg -> D-FINE-N -> evict -> PIDNet-S v2.1) and runs the 330 KB 1 Hz grayscale
+    XFeat branch on CPUExecutionProvider overlapped with the 30 Hz GPU Cruise pass.
+    """
     mem_before = _query_cuda_mem_safe() if use_cuda else None
     pid = os.getpid()
+    shared_cuda_arena = _register_shared_cuda_env_allocator() if use_cuda else False
 
-    # 1) Cruise Phase: M-LSD-WireSeg + D-FINE-N @ 30 Hz + XFeat @ 1 Hz (1/30 frames)
-    #    Use max_workspace_override=False for the 3 lightweight Cruise models so cuDNN does not
-    #    allocate 3x redundant max workspaces simultaneously, and run proper warmup + IoBinding.
+    # 1) Cruise Phase: M-LSD-WireSeg + D-FINE-N @ 30 Hz (shared CUDA BFC arena) +
+    #    XFeat (330 KB, independent gray_nchw input) @ 1 Hz (1/30 frames) on CPUExecutionProvider.
+    effective_cruise_cg = {
+        "mlsd_wireseg": bool(use_cuda and cruise_use_cg.get("mlsd_wireseg", False)),
+        "dfine_n": bool(use_cuda and cruise_use_cg.get("dfine_n", True)),
+        "xfeat_512": False,
+    }
+    # Use bounded-workspace EXHAUSTIVE cuDNN search inside the shared CUDA BFC arena:
+    # cudnn_conv_use_max_workspace=0 caps scratch VRAM while selecting fastest TU116 kernels.
     sess_wire = _make_ort_session(
         blob_dir / verified["mlsd_wireseg"]["filename"],
         use_cuda=use_cuda,
-        cuda_graph=bool(use_cuda and cruise_use_cg.get("mlsd_wireseg", False)),
+        cuda_graph=effective_cruise_cg["mlsd_wireseg"],
         max_workspace_override=False if use_cuda else None,
+        cudnn_algo_search_override="EXHAUSTIVE" if use_cuda else None,
+        use_env_allocators=shared_cuda_arena,
     )
     sess_dfine = _make_ort_session(
         blob_dir / verified["dfine_n"]["filename"],
         use_cuda=use_cuda,
-        cuda_graph=bool(use_cuda and cruise_use_cg.get("dfine_n", True)),
+        cuda_graph=effective_cruise_cg["dfine_n"],
         max_workspace_override=False if use_cuda else None,
+        cudnn_algo_search_override="EXHAUSTIVE" if use_cuda else None,
+        use_env_allocators=shared_cuda_arena,
     )
     sess_xfeat = _make_ort_session(
         blob_dir / verified["xfeat_512"]["filename"],
-        use_cuda=use_cuda,
-        cuda_graph=bool(use_cuda and cruise_use_cg.get("xfeat_512", True)),
-        max_workspace_override=False if use_cuda else None,
+        use_cuda=False,
+        cuda_graph=False,
+        cpu_intra_op_threads=2,
     )
 
     x_fwd = rng.standard_normal((1, 3, 640, 640), dtype=np.float32)
     x_gray = rng.standard_normal((1, 1, 512, 512), dtype=np.float32)
-    cruise_warmup = 2 if not use_cuda else 30
-    cruise_frames = 6 if not use_cuda else 120
+    cruise_warmup = 2 if not use_cuda else 50
+    cruise_frames = 6 if not use_cuda else 180
     cruise_ms: list[float] = []
     cruise_finite = True
 
@@ -444,37 +496,41 @@ def _run_phase_b_timesliced(
         for out_meta in sess_dfine.get_outputs():
             io_dfine.bind_output(out_meta.name, "cuda", 0)
 
-        io_xfeat = sess_xfeat.io_binding()
-        x_gray_ort = ort.OrtValue.ortvalue_from_numpy(x_gray, "cuda", 0)
-        io_xfeat.bind_ortvalue_input("gray_nchw", x_gray_ort)
-        for out_meta in sess_xfeat.get_outputs():
-            io_xfeat.bind_output(out_meta.name, "cuda", 0)
-
         for w_idx in range(cruise_warmup):
             sess_wire.run_with_iobinding(io_wire)
             sess_dfine.run_with_iobinding(io_dfine)
             if w_idx % 10 == 0:
-                sess_xfeat.run_with_iobinding(io_xfeat)
+                sess_xfeat.run(None, {"gray_nchw": x_gray})
         io_wire.synchronize_outputs()
         io_dfine.synchronize_outputs()
-        io_xfeat.synchronize_outputs()
 
-        for f_idx in range(cruise_frames):
-            tf0 = time.perf_counter()
-            sess_wire.run_with_iobinding(io_wire)
-            sess_dfine.run_with_iobinding(io_dfine)
-            if f_idx % 30 == 0:
-                sess_xfeat.run_with_iobinding(io_xfeat)
-                io_xfeat.synchronize_outputs()
-            io_wire.synchronize_outputs()
-            io_dfine.synchronize_outputs()
-            cruise_ms.append((time.perf_counter() - tf0) * 1000.0)
+        xfeat_last_outs: list[np.ndarray] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as xfeat_pool:
+            for f_idx in range(cruise_frames):
+                tf0 = time.perf_counter()
+                xfeat_fut = (
+                    xfeat_pool.submit(sess_xfeat.run, None, {"gray_nchw": x_gray})
+                    if (f_idx % 30 == 0)
+                    else None
+                )
+                sess_wire.run_with_iobinding(io_wire)
+                sess_dfine.run_with_iobinding(io_dfine)
+                io_wire.synchronize_outputs()
+                io_dfine.synchronize_outputs()
+                if xfeat_fut is not None:
+                    xfeat_last_outs = xfeat_fut.result()
+                cruise_ms.append((time.perf_counter() - tf0) * 1000.0)
 
-        for io_obj in (io_wire, io_dfine, io_xfeat):
+        for io_obj in (io_wire, io_dfine):
             for arr in io_obj.copy_outputs_to_cpu():
-                if not np.all(np.isfinite(arr)):
+                if arr.size == 0 or not np.all(np.isfinite(arr)):
                     cruise_finite = False
-        del io_wire, io_dfine, io_xfeat, x_fwd_ort, x_gray_ort
+        if not xfeat_last_outs:
+            cruise_finite = False
+        for arr in xfeat_last_outs:
+            if arr.size == 0 or not np.all(np.isfinite(arr)):
+                cruise_finite = False
+        del io_wire, io_dfine, x_fwd_ort
     else:
         for _ in range(cruise_warmup):
             sess_wire.run(None, {"rgb_split_nchw": x_fwd})
@@ -487,7 +543,7 @@ def _run_phase_b_timesliced(
             x_out = sess_xfeat.run(None, {"gray_nchw": x_gray}) if (f_idx % 30 == 0) else []
             cruise_ms.append((time.perf_counter() - tf0) * 1000.0)
             for arr in (*w_out, *d_out, *x_out):
-                if not np.all(np.isfinite(arr)):
+                if arr.size == 0 or not np.all(np.isfinite(arr)):
                     cruise_finite = False
 
     cruise_vram_delta = 0.0
@@ -501,11 +557,14 @@ def _run_phase_b_timesliced(
     del sess_wire, sess_dfine, sess_xfeat
     gc.collect()
 
-    # 2) Terminal Approach Phase: PIDNet-S v2.1 (512x512) inside same CUDA context
+    # 2) Terminal Approach Phase: PIDNet-S v2.1 (512x512) reuses the shared CUDA BFC arena
     sess_pidnet = _make_ort_session(
         blob_dir / verified["pidnet_slz_v21"]["filename"],
         use_cuda=use_cuda,
         cuda_graph=use_cuda,
+        max_workspace_override=False if use_cuda else None,
+        cudnn_algo_search_override="EXHAUSTIVE" if use_cuda else None,
+        use_env_allocators=shared_cuda_arena,
     )
     term_stats, term_finite = _run_timed_session(
         sess_pidnet, "rgb_nchw", (1, 3, 512, 512), warmup=warmup, iters=iters, use_cuda=use_cuda, rng=rng
@@ -536,50 +595,34 @@ def _run_phase_b_timesliced(
         "terminal_vram_delta_mib": round(term_vram_delta, 2),
         "cruise_process_vram_mib": round(float(cruise_proc_vram or 0.0), 2),
         "terminal_process_vram_mib": round(float(term_proc_vram or 0.0), 2),
+        "cruise_cuda_graph_selected": effective_cruise_cg,
+        "shared_cuda_env_allocator": bool(shared_cuda_arena),
+        "xfeat_1hz_execution_provider": "CPUExecutionProvider",
+        "xfeat_1hz_overlapped_with_gpu_cruise": bool(use_cuda),
         "timesliced_peak_vram_mib": peak_vram_mib,
-        "cruise_cuda_graph_selected": dict(cruise_use_cg),
         "phase_b_outputs_finite": bool(cruise_finite and term_finite),
     }
 
 
-def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
+def _run_phase_a_empirical(
+    specs: tuple[dict[str, Any], ...],
+    verified: dict[str, dict[str, Any]],
+    blob_dir: Path,
+    *,
+    use_cuda: bool,
+    warmup: int,
+    iters: int,
+    rng: np.random.Generator,
+) -> tuple[dict[str, Any], bool]:
+    """Execute Phase A per-model empirical FP32 vs FP32+CUDA-Graph vs FP16 gate."""
     import shutil
-    import subprocess
 
-    t0 = time.perf_counter()
-    use_cuda = not args.smoke_cpu
-    if use_cuda:
-        _register_nvidia_dll_dirs()
-        _preload_linux_nvidia_libs()
-
-    model_profile = getattr(args, "model_profile", "g4")
-    specs = get_model_specs(model_profile)
-    verified = verify_onnx_sha256_parity(args.blob_dir, args.artifacts_dir, model_profile=model_profile)
-    rng = np.random.default_rng(20261124)
-    warmup = 2 if args.smoke_cpu else int(args.warmup)
-    iters = 5 if args.smoke_cpu else int(args.iters)
-
-    if getattr(args, "phase_b_only", False):
-        cg_map = json.loads(args.cruise_cg_json) if getattr(args, "cruise_cg_json", "") else {}
-        phase_b = _run_phase_b_timesliced(
-            verified,
-            args.blob_dir,
-            use_cuda=use_cuda,
-            warmup=warmup,
-            iters=iters,
-            cruise_use_cg=cg_map,
-            rng=rng,
-        )
-        write_canonical_json(args.out_json, phase_b)
-        return phase_b
-
-    # Phase A: Per-model empirical FP32 vs FP32+CUDA-Graph vs FP16 gate
     phase_a: dict[str, Any] = {}
     all_finite = True
-    fp16_tmp_dir = args.blob_dir / "_fp16_bench_tmp"
+    fp16_tmp_dir = blob_dir / "_fp16_bench_tmp"
     try:
         for spec in specs:
-            onnx_path = args.blob_dir / verified[spec["key"]]["filename"]
+            onnx_path = blob_dir / verified[spec["key"]]["filename"]
             sess_fp32 = _make_ort_session(onnx_path, use_cuda=use_cuda, cuda_graph=False)
             fp32_stats, fin32 = _run_timed_session(
                 sess_fp32, spec["input_name"], spec["input_shape"], warmup=warmup, iters=iters, use_cuda=use_cuda, rng=rng
@@ -631,12 +674,96 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             }
     finally:
         shutil.rmtree(fp16_tmp_dir, ignore_errors=True)
+    return phase_a, all_finite
 
-    # Select empirically faster CUDA-Graph setting per Cruise model from Phase A
+
+def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
+    import subprocess
+
+    t0 = time.perf_counter()
+    use_cuda = not args.smoke_cpu
+    is_phase_a_worker = bool(getattr(args, "phase_a_only", False))
+    is_phase_b_worker = bool(getattr(args, "phase_b_only", False))
+    if use_cuda and (is_phase_a_worker or is_phase_b_worker):
+        _register_nvidia_dll_dirs()
+        _preload_linux_nvidia_libs()
+
+    model_profile = getattr(args, "model_profile", "g4")
+    specs = get_model_specs(model_profile)
+    verified = verify_onnx_sha256_parity(args.blob_dir, args.artifacts_dir, model_profile=model_profile)
+    rng = np.random.default_rng(20261124)
+    warmup = 2 if args.smoke_cpu else int(args.warmup)
+    iters = 5 if args.smoke_cpu else int(args.iters)
+
+    if is_phase_a_worker:
+        phase_a, phase_a_finite = _run_phase_a_empirical(
+            specs, verified, args.blob_dir, use_cuda=use_cuda, warmup=warmup, iters=iters, rng=rng
+        )
+        out = {"phase_a": phase_a, "all_finite": phase_a_finite}
+        write_canonical_json(args.out_json, out)
+        return out
+
+    if is_phase_b_worker:
+        cg_map = json.loads(args.cruise_cg_json) if getattr(args, "cruise_cg_json", "") else {}
+        phase_b = _run_phase_b_timesliced(
+            verified,
+            args.blob_dir,
+            use_cuda=use_cuda,
+            warmup=warmup,
+            iters=iters,
+            cruise_use_cg=cg_map,
+            rng=rng,
+        )
+        write_canonical_json(args.out_json, phase_b)
+        return phase_b
+
+    # Phase A: For live CUDA, execute inside its own isolated child subprocess so the parent
+    # process NEVER opens a CUDA context and Phase A's 12 sessions tear down 100% of their
+    # GPU/WDDM state cleanly before Phase B starts.
+    if use_cuda:
+        phase_a_tmp = args.out_json.with_suffix(".phase_a_tmp.json")
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--blob-dir",
+                    str(args.blob_dir),
+                    "--artifacts-dir",
+                    str(args.artifacts_dir),
+                    "--out-json",
+                    str(phase_a_tmp),
+                    "--model-profile",
+                    str(model_profile),
+                    "--warmup",
+                    str(warmup),
+                    "--iters",
+                    str(iters),
+                    "--phase-a-only",
+                ],
+                check=True,
+            )
+            pa_doc = json.loads(phase_a_tmp.read_text(encoding="utf-8"))
+            phase_a = pa_doc["phase_a"]
+            all_finite = bool(pa_doc["all_finite"])
+        finally:
+            if phase_a_tmp.exists():
+                phase_a_tmp.unlink()
+    else:
+        phase_a, all_finite = _run_phase_a_empirical(
+            specs, verified, args.blob_dir, use_cuda=False, warmup=warmup, iters=iters, rng=rng
+        )
+
+    # Select empirically faster CUDA-Graph setting per Cruise GPU model from Phase A
+    # (allow 2% median tolerance so a single WDDM jitter spike cannot disable CUDA Graph).
     cruise_use_cg = {
-        k: bool(phase_a[k]["fp32_cuda_graph"]["p99_ms"] <= phase_a[k]["fp32"]["p99_ms"])
-        for k in ("mlsd_wireseg", "dfine_n", "xfeat_512")
+        k: bool(
+            phase_a[k]["fp32_cuda_graph"]["p99_ms"] <= phase_a[k]["fp32"]["p99_ms"]
+            or phase_a[k]["fp32_cuda_graph"]["p50_ms"] <= phase_a[k]["fp32"]["p50_ms"] * 1.02
+        )
+        for k in ("mlsd_wireseg", "dfine_n")
     }
+    cruise_use_cg["xfeat_512"] = False
 
     # Phase B: Run inside a clean isolated child subprocess for live CUDA so Phase A's 12
     # benchmark sessions do not pollute Phase B's single-context VRAM or WDDM arena state.
@@ -685,6 +812,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     term_stats = phase_b["terminal_pidnet_v21"]
     peak_vram_mib = float(phase_b["timesliced_peak_vram_mib"])
     cuda_opts_used = select_platform_cuda_provider_options(enable_cuda_graph=True)
+    if use_cuda:
+        cuda_opts_used["cudnn_conv_algo_search"] = "EXHAUSTIVE"
+        cuda_opts_used["cudnn_conv_use_max_workspace"] = "0"
 
     payload = {
         "schema_version": "vertirta.local_gtx1650s_m3_timesliced_proof/v4.0.0",
@@ -704,6 +834,13 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "cruise_process_vram_mib": phase_b.get("cruise_process_vram_mib", 0.0),
             "terminal_process_vram_mib": phase_b.get("terminal_process_vram_mib", 0.0),
             "cruise_cuda_graph_selected": phase_b.get("cruise_cuda_graph_selected", cruise_use_cg),
+            "shared_cuda_env_allocator": bool(phase_b.get("shared_cuda_env_allocator", False)),
+            "xfeat_1hz_execution_provider": str(
+                phase_b.get("xfeat_1hz_execution_provider", "CPUExecutionProvider")
+            ),
+            "xfeat_1hz_overlapped_with_gpu_cruise": bool(
+                phase_b.get("xfeat_1hz_overlapped_with_gpu_cruise", False)
+            ),
             "phase_b_isolated_subprocess": bool(use_cuda),
             "timesliced_peak_vram_mib": peak_vram_mib,
         },
@@ -738,6 +875,7 @@ def main() -> int:
     )
     parser.add_argument("--warmup", type=int, default=200)
     parser.add_argument("--iters", type=int, default=500)
+    parser.add_argument("--phase-a-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--phase-b-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--cruise-cg-json", type=str, default="", help=argparse.SUPPRESS)
     args = parser.parse_args()

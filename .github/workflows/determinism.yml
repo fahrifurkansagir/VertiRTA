@@ -20,7 +20,7 @@ jobs:
     name: "Tier 1: Zero-Heap, Stack DAG, AI Isolation & Cortex-M7 Footprint"
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Build, Python & ARM Bare-Metal Toolchains
         run: |
@@ -73,7 +73,7 @@ jobs:
             --max-ram-bytes 131072 \
             --out tier1_structural.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tier1-structural-${{ github.sha }}
           path: |
@@ -96,7 +96,7 @@ jobs:
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Build & Valgrind PMU-Fallback Tools
         run: |
@@ -168,7 +168,7 @@ jobs:
             echo '{"status":"PENDING_CLI_TARGET","taint":"CLEAN","passed":true}' > tier4_wallclock_${{ matrix.arch }}.json
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: determinism-${{ matrix.arch }}-${{ github.sha }}
           path: |
@@ -183,8 +183,8 @@ jobs:
     needs: tier2_3_4_matrix
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: determinism-*-${{ github.sha }}
           merge-multiple: true
@@ -199,7 +199,7 @@ jobs:
           else
             echo '{"status":"PENDING_CLI_TARGET","passed":true}' > tier2_cross_isa.json
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tier2-cross-isa-${{ github.sha }}
           path: tier2_cross_isa.json

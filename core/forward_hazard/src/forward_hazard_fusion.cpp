@@ -1,7 +1,10 @@
 #include "vertirta/forward_hazard/forward_hazard_fusion.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <optional>
+#include <span>
 
 namespace vertirta::forward_hazard {
 
@@ -85,26 +88,41 @@ bool ForwardHazardFusion::step(
   }
 
   // 3. Ingest 15-20 Hz 77 GHz mmWave radar points:
-  //    - Dynamic Doppler returns -> IntruderTrackerKf (<=16 tracks).
+  //    - Dynamic Doppler returns -> IntruderTrackerKf (<=16 tracks) via 1-to-1 spatial association.
   //    - Static-gate returns matched to D-FINE-N drone/bird box -> rescued into IntruderTrackerKf!
   //    - Remaining static-gate returns -> WireSpanEkfBank (3D wire glint/Bragg fusion).
   const std::size_t n_rad = std::min(bundle.radar_point_count, kMaxRadarDetections);
   uint32_t valid_radar_pts = 0u;
   uint32_t hover_rescued = 0u;
-  uint32_t dynamic_idx = 0u;
+
+  struct PendingRadarIntruder {
+    core::Vec3Enu pos_enu{};
+    core::Vec3Enu vel_enu{};
+    uint32_t track_id{0u};
+    bool assigned{false};
+  };
+  std::array<PendingRadarIntruder, kMaxRadarDetections> pending_intruders{};
+  std::size_t pending_count = 0u;
+  const uint64_t radar_ts = (bundle.radar_stamp_ns > 0ULL) ? bundle.radar_stamp_ns : bundle.frame_stamp_ns;
 
   if (bundle.radar_healthy) {
     for (std::size_t i = 0; i < n_rad; ++i) {
       const RadarPointDetection& rp = bundle.radar_points[i];
-      if (!rp.valid || !std::isfinite(rp.range_m) || rp.range_m < 2.0 ||
-          rp.snr_db < cfg_.min_radar_snr_db) {
+      if (!rp.valid ||
+          !std::isfinite(rp.range_m) || rp.range_m < 2.0 || rp.range_m > 2000.0 ||
+          !std::isfinite(rp.az_rad) || !std::isfinite(rp.el_rad) ||
+          !std::isfinite(rp.snr_db) || rp.snr_db < cfg_.min_radar_snr_db ||
+          !std::isfinite(rp.residual_doppler_mps)) {
         continue;
       }
-      ++valid_radar_pts;
 
       const core::Vec3Frd pt_frd = spherical_radar_to_frd(rp.range_m, rp.az_rad, rp.el_rad);
       const core::Vec3Ned pt_ned =
           radar_pose.pos_ned + Se3PoseRingBuffer::rotate_frd_to_ned(radar_pose.q_frd_to_ned, pt_frd);
+      if (!pt_frd.is_finite() || !pt_ned.is_finite()) {
+        continue;
+      }
+      ++valid_radar_pts;
 
       // Check whether this static-gate radar return projects onto a D-FINE-N drone/bird/aircraft box.
       bool matched_dfine_intruder = false;
@@ -133,22 +151,74 @@ bool ForwardHazardFusion::step(
         const core::Vec3Frd u_frd = pt_frd * (1.0 / std::max(rp.range_m, 1.0));
         const core::Vec3Ned u_ned = Se3PoseRingBuffer::rotate_frd_to_ned(radar_pose.q_frd_to_ned, u_frd);
         const core::Vec3Ned vel_est_ned = u_ned * rp.residual_doppler_mps;
-        const uint32_t trk_id = 1000u + (dynamic_idx++ % static_cast<uint32_t>(rta::IntruderTrackerKf::kMaxTracks));
-        intruder_kf_.update_measurement(
-            trk_id,
-            core::ned_to_enu(pt_ned),
-            core::ned_to_enu(vel_est_ned),
-            bundle.radar_stamp_ns > 0ULL ? bundle.radar_stamp_ns : bundle.frame_stamp_ns);
+        if (vel_est_ned.is_finite() && pending_count < kMaxRadarDetections) {
+          pending_intruders[pending_count++] = PendingRadarIntruder{
+              .pos_enu = core::ned_to_enu(pt_ned),
+              .vel_enu = core::ned_to_enu(vel_est_ned),
+              .track_id = 0u,
+              .assigned = false,
+          };
+        }
       } else {
         // Static wire glint/Bragg point -> horizontal lateral tangent hint in NED.
         const core::Vec3Ned lateral_hint =
             Se3PoseRingBuffer::rotate_frd_to_ned(radar_pose.q_frd_to_ned, {0.0, 1.0, 0.0});
         wire_ekf_.ingest_radar_wire_point(
-            bundle.radar_stamp_ns > 0ULL ? bundle.radar_stamp_ns : bundle.frame_stamp_ns,
+            radar_ts,
             pt_ned,
             lateral_hint,
             rp.snr_db);
       }
+    }
+
+    // One-to-one globally-closest spatial nearest-neighbor association against active KF tracks.
+    const double gate_m = (std::isfinite(cfg_.radar_assoc_gate_m) && cfg_.radar_assoc_gate_m > 0.0)
+                              ? cfg_.radar_assoc_gate_m
+                              : 15.0;
+    std::array<uint32_t, rta::IntruderTrackerKf::kMaxTracks> claimed_ids{};
+    std::size_t claimed_count = 0u;
+
+    while (claimed_count < rta::IntruderTrackerKf::kMaxTracks) {
+      std::size_t best_det_idx = kMaxRadarDetections;
+      uint32_t best_trk_id = 0u;
+      double best_dist_m = gate_m + 1.0;
+
+      const std::span<const uint32_t> excluded(claimed_ids.data(), claimed_count);
+      for (std::size_t d = 0; d < pending_count; ++d) {
+        if (pending_intruders[d].assigned) {
+          continue;
+        }
+        double dist_m = 0.0;
+        const std::optional<uint32_t> cand = intruder_kf_.match_nearest_track_id(
+            pending_intruders[d].pos_enu, radar_ts, gate_m, excluded, &dist_m);
+        if (cand.has_value() && dist_m < best_dist_m) {
+          best_dist_m = dist_m;
+          best_det_idx = d;
+          best_trk_id = *cand;
+        }
+      }
+
+      if (best_det_idx >= pending_count) {
+        break;
+      }
+      pending_intruders[best_det_idx].track_id = best_trk_id;
+      pending_intruders[best_det_idx].assigned = true;
+      claimed_ids[claimed_count++] = best_trk_id;
+    }
+
+    for (std::size_t d = 0; d < pending_count; ++d) {
+      if (!pending_intruders[d].assigned) {
+        if (next_radar_track_id_ < 1000u) {
+          next_radar_track_id_ = 1000u;
+        }
+        pending_intruders[d].track_id = next_radar_track_id_++;
+        pending_intruders[d].assigned = true;
+      }
+      intruder_kf_.update_measurement(
+          pending_intruders[d].track_id,
+          pending_intruders[d].pos_enu,
+          pending_intruders[d].vel_enu,
+          radar_ts);
     }
   }
 

@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build dependencies
         run: |
@@ -24,7 +24,7 @@ jobs:
           sudo apt-get install -y cmake ninja-build g++ python3
 
       - name: Setup pinned Emscripten SDK
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@v16
         with:
           version: "4.0.4"
 
@@ -57,7 +57,7 @@ jobs:
           ctest --test-dir /tmp/vertirta_wasm_host --output-on-failure
 
       - name: Setup uv and run WASM contract tests
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.4.0
       - run: uv run --no-project --python 3.12 --with pytest pytest tests/wasm/test_wasm_build_contracts.py -v
 
   vertigcs_frontend:
@@ -65,10 +65,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -101,7 +101,7 @@ jobs:
           PY
 
       - name: Upload static VertiGCS bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vertigcs-static-dist
           path: apps/vertigcs/dist
@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install CMake/Ninja/C++ toolchain
         run: |
@@ -134,7 +134,7 @@ jobs:
           ctest --test-dir /tmp/vertirta_consumer_build --output-on-failure
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Build native nanobind wheel (cp312-abi3) and run SDK pytest suite
         run: |
@@ -149,13 +149,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate hardened docker-compose.yml schema
         run: docker compose -f docker/docker-compose.yml config --quiet
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Run Docker, Paper 1 RA-L governance, and workflow contract tests
         run: |

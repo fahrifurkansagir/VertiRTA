@@ -67,12 +67,20 @@ struct Pt2 {
 }  // namespace
 
 StalenessPolicy compute_staleness_policy(double age_s) noexcept {
-  StalenessPolicy pol{};
-  if (!std::isfinite(age_s) || age_s <= 0.25) {
-    return pol;
-  }
   constexpr double kVUnc = 15.0;  // [m/s] worst-case unmonitored intruder speed
   constexpr double kAUnc = 3.0;   // [m/s^2] worst-case unmonitored intruder accel
+  constexpr double kMaxDtEff = 1.5 - 0.25;
+  StalenessPolicy pol{};
+  if (!std::isfinite(age_s)) {
+    // Fail-closed on NaN/Inf staleness age: maximum inflation, degraded speed cap, and SLZ divert.
+    pol.delta_r_stale_m = kVUnc * kMaxDtEff + 0.5 * kAUnc * kMaxDtEff * kMaxDtEff;
+    pol.v_cap_mps = 8.0;
+    pol.divert_to_slz = true;
+    return pol;
+  }
+  if (age_s < 0.0 || age_s <= 0.25) {
+    return pol;
+  }
   const double dt_eff = std::min(age_s, 1.5) - 0.25;
   pol.delta_r_stale_m = kVUnc * dt_eff + 0.5 * kAUnc * dt_eff * dt_eff;
   if (age_s > 1.0) {
@@ -88,7 +96,13 @@ double AirspaceExclusion::signed_margin_ltfj_m(
     double lat_deg,
     double lon_deg,
     double alt_amsl_m) noexcept {
+  if (!std::isfinite(lat_deg) || !std::isfinite(lon_deg) || !std::isfinite(alt_amsl_m)) {
+    return -1e6;
+  }
   const Pt2 p = ll_to_local_xy(lat_deg, lon_deg);
+  if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
+    return -1e6;
+  }
   const Pt2 arp = ll_to_local_xy(kLtfjArpLat, kLtfjArpLon);
   const double sd_arc = std::hypot(p.x - arp.x, p.y - arp.y) - kLtfjRadiusM;
 
@@ -102,23 +116,29 @@ double AirspaceExclusion::signed_margin_ltfj_m(
   const double sd_poly = signed_dist_convex_poly(p, nw_poly, 4u);
   const double sd_horiz = std::min(sd_arc, sd_poly);
 
-  if (alt_amsl_m > kLtfjCeilAmslM) {
-    return std::max(sd_horiz, alt_amsl_m - kLtfjCeilAmslM);
-  }
-  return sd_horiz;
+  const double margin = (alt_amsl_m > kLtfjCeilAmslM)
+                            ? std::max(sd_horiz, alt_amsl_m - kLtfjCeilAmslM)
+                            : sd_horiz;
+  return std::isfinite(margin) ? margin : -1e6;
 }
 
 double AirspaceExclusion::signed_margin_ltbx_m(
     double lat_deg,
     double lon_deg,
     double alt_amsl_m) noexcept {
+  if (!std::isfinite(lat_deg) || !std::isfinite(lon_deg) || !std::isfinite(alt_amsl_m)) {
+    return -1e6;
+  }
   const Pt2 p = ll_to_local_xy(lat_deg, lon_deg);
+  if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
+    return -1e6;
+  }
   const Pt2 arp = ll_to_local_xy(kLtbxArpLat, kLtbxArpLon);
   const double sd_horiz = std::hypot(p.x - arp.x, p.y - arp.y) - kLtbxRadiusM;
-  if (alt_amsl_m > kLtbxCeilAmslM) {
-    return std::max(sd_horiz, alt_amsl_m - kLtbxCeilAmslM);
-  }
-  return sd_horiz;
+  const double margin = (alt_amsl_m > kLtbxCeilAmslM)
+                            ? std::max(sd_horiz, alt_amsl_m - kLtbxCeilAmslM)
+                            : sd_horiz;
+  return std::isfinite(margin) ? margin : -1e6;
 }
 
 std::size_t AirspaceExclusion::extract_ctr_hazards(
@@ -127,18 +147,49 @@ std::size_t AirspaceExclusion::extract_ctr_hazards(
     double alt_amsl_m,
     const core::Vec3Ned& own_pos_ned,
     std::span<HazardPoint> out) noexcept {
+  if (out.empty() || !std::isfinite(own_pos_ned.x) || !std::isfinite(own_pos_ned.y) ||
+      !std::isfinite(own_pos_ned.z)) {
+    return 0u;
+  }
+  if (!std::isfinite(lat_deg) || !std::isfinite(lon_deg) || !std::isfinite(alt_amsl_m)) {
+    // Fail-closed: emit conservative zero-margin CTR wall hazard at own_pos_ned.
+    out[0] = HazardPoint{
+        .pos_ned = own_pos_ned,
+        .vel_ned = {},
+        .accel_ned = {},
+        .radius_h_m = 0.0,
+        .radius_z_m = 700.0,
+        .gamma = 1.5,
+        .kind = 3u,
+    };
+    return 1u;
+  }
+
   std::size_t n = 0;
   const Pt2 p = ll_to_local_xy(lat_deg, lon_deg);
+  if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
+    out[0] = HazardPoint{
+        .pos_ned = own_pos_ned,
+        .vel_ned = {},
+        .accel_ned = {},
+        .radius_h_m = 0.0,
+        .radius_z_m = 700.0,
+        .gamma = 1.5,
+        .kind = 3u,
+    };
+    return 1u;
+  }
 
   const double m_ltfj = signed_margin_ltfj_m(lat_deg, lon_deg, alt_amsl_m);
-  if (n < out.size() && m_ltfj < 500.0) {
+  if (n < out.size() && (!std::isfinite(m_ltfj) || m_ltfj < 500.0)) {
     const Pt2 arp = ll_to_local_xy(kLtfjArpLat, kLtfjArpLon);
     const double dx = arp.x - p.x;
     const double dy = arp.y - p.y;
     const double d = std::max(1.0, std::hypot(dx, dy));
     // Place virtual wall point along direction toward LTFJ CTR at distance max(m_ltfj, 0)
-    const double wall_e = (dx / d) * std::max(m_ltfj, 0.5);
-    const double wall_n = (dy / d) * std::max(m_ltfj, 0.5);
+    const double clamped_m = std::isfinite(m_ltfj) ? std::max(m_ltfj, 0.5) : 0.0;
+    const double wall_e = std::isfinite(d) ? ((dx / d) * clamped_m) : 0.0;
+    const double wall_n = std::isfinite(d) ? ((dy / d) * clamped_m) : 0.0;
     out[n++] = HazardPoint{
         .pos_ned = {own_pos_ned.x + wall_n, own_pos_ned.y + wall_e, own_pos_ned.z},
         .vel_ned = {},
@@ -151,13 +202,14 @@ std::size_t AirspaceExclusion::extract_ctr_hazards(
   }
 
   const double m_ltbx = signed_margin_ltbx_m(lat_deg, lon_deg, alt_amsl_m);
-  if (n < out.size() && m_ltbx < 500.0) {
+  if (n < out.size() && (!std::isfinite(m_ltbx) || m_ltbx < 500.0)) {
     const Pt2 arp = ll_to_local_xy(kLtbxArpLat, kLtbxArpLon);
     const double dx = arp.x - p.x;
     const double dy = arp.y - p.y;
     const double d = std::max(1.0, std::hypot(dx, dy));
-    const double wall_e = (dx / d) * std::max(m_ltbx, 0.5);
-    const double wall_n = (dy / d) * std::max(m_ltbx, 0.5);
+    const double clamped_m = std::isfinite(m_ltbx) ? std::max(m_ltbx, 0.5) : 0.0;
+    const double wall_e = std::isfinite(d) ? ((dx / d) * clamped_m) : 0.0;
+    const double wall_n = std::isfinite(d) ? ((dy / d) * clamped_m) : 0.0;
     out[n++] = HazardPoint{
         .pos_ned = {own_pos_ned.x + wall_n, own_pos_ned.y + wall_e, own_pos_ned.z},
         .vel_ned = {},
@@ -315,6 +367,74 @@ std::size_t IntruderTrackerKf::extract_hazards(
     };
   }
   return n;
+}
+
+std::optional<uint32_t> IntruderTrackerKf::match_nearest_track_id(
+    const core::Vec3Enu& pos_enu,
+    uint64_t now_ns,
+    double max_gate_m,
+    std::span<const uint32_t> excluded_ids,
+    double* matched_dist_m_out) const noexcept {
+  if (!std::isfinite(pos_enu.x) || !std::isfinite(pos_enu.y) || !std::isfinite(pos_enu.z) ||
+      !std::isfinite(max_gate_m) || max_gate_m <= 0.0) {
+    return std::nullopt;
+  }
+
+  const double max_gate_sq = max_gate_m * max_gate_m;
+  double best_dist_sq = max_gate_sq;
+  std::optional<uint32_t> best_id = std::nullopt;
+
+  for (std::size_t i = 0; i < kMaxTracks; ++i) {
+    const IntruderTrack& tr = tracks_[i];
+    if (!tr.active) {
+      continue;
+    }
+    const double dt = (now_ns >= tr.last_meas_ns)
+                          ? (static_cast<double>(now_ns - tr.last_meas_ns) * 1e-9)
+                          : 0.0;
+    if (dt > 5.0) {
+      continue;  // Expired ghost track
+    }
+    bool is_excluded = false;
+    for (uint32_t ex_id : excluded_ids) {
+      if (tr.track_id == ex_id) {
+        is_excluded = true;
+        break;
+      }
+    }
+    if (is_excluded) {
+      continue;
+    }
+
+    const double px = tr.x_enu[0] + dt * tr.x_enu[3];
+    const double py = tr.x_enu[1] + dt * tr.x_enu[4];
+    const double pz = tr.x_enu[2] + dt * tr.x_enu[5];
+    const double dx = pos_enu.x - px;
+    const double dy = pos_enu.y - py;
+    const double dz = pos_enu.z - pz;
+    const double d2 = dx * dx + dy * dy + dz * dz;
+    if (!std::isfinite(d2)) {
+      continue;
+    }
+    if ((!best_id.has_value() && d2 <= best_dist_sq) || (best_id.has_value() && d2 < best_dist_sq)) {
+      best_dist_sq = d2;
+      best_id = tr.track_id;
+    }
+  }
+
+  if (best_id.has_value() && matched_dist_m_out != nullptr) {
+    *matched_dist_m_out = std::sqrt(best_dist_sq);
+  }
+  return best_id;
+}
+
+const IntruderTrack* IntruderTrackerKf::find_track(uint32_t track_id) const noexcept {
+  for (const auto& tr : tracks_) {
+    if (tr.active && tr.track_id == track_id) {
+      return &tr;
+    }
+  }
+  return nullptr;
 }
 
 std::size_t IntruderTrackerKf::active_count() const noexcept {

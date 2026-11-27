@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -172,5 +173,119 @@ TEST_CASE("SlzReachRanker implements ISlzPriorProvider, vetoes LTFJ J2 / roughne
     REQUIRE(snap.priors[i].sigma_z_m <= 0.15f);
     REQUIRE(snap.priors[i].theta_max_deg <= 8.0f);
     REQUIRE(snap.priors[i].clearance_r_m >= 5.0f);
+  }
+}
+
+TEST_CASE("RobocentricEsdfMap NaN/Inf/overflow guards, AirspaceExclusion CTR NaN fail-closed, staleness & spatial KF match",
+          "[esdf][ctr][nan_hardening]") {
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+
+  // 1) RobocentricEsdfMap must never invoke float->int32 UB on NaN/Inf/huge inputs.
+  {
+    auto map = std::make_unique<RobocentricEsdfMap>();
+    map->reset({kNaN, kInf, -kInf});
+    REQUIRE(map->config().origin_ix == -(RobocentricEsdfMap::kEsdfNx / 2));
+    REQUIRE(map->config().origin_iy == -(RobocentricEsdfMap::kEsdfNy / 2));
+    REQUIRE(map->config().origin_iz == -(RobocentricEsdfMap::kEsdfNz / 2));
+
+    map->reset({1.0e20, -1.0e20, 0.0});
+    REQUIRE(map->config().origin_ix == -(RobocentricEsdfMap::kEsdfNx / 2));
+
+    map->reset({10.0, 20.0, 5.0});
+    const SlidingConfig saved_cfg = map->config();
+    map->slide_to({kNaN, 20.0, 5.0});
+    map->slide_to({10.0, kInf, 5.0});
+    map->slide_to({1.0e20, 20.0, 5.0});
+    REQUIRE(map->config().origin_ix == saved_cfg.origin_ix);
+    REQUIRE(map->config().origin_iy == saved_cfg.origin_iy);
+    REQUIRE(map->config().origin_iz == saved_cfg.origin_iz);
+
+    const std::array<Vec3Enu, 4> mixed_pts = {{
+        {kNaN, 0.0, 0.0},
+        {0.0, kInf, 0.0},
+        {1.0e20, 0.0, 0.0},
+        {15.0, 20.0, 5.0},
+    }};
+    map->insert_point_cloud({kNaN, 0.0, 0.0}, mixed_pts, 1'000'000'000ULL);
+
+    double dist = 0.0;
+    Vec3Enu grad{};
+    REQUIRE_FALSE(map->query_dist_grad({kNaN, 20.0, 5.0}, dist, grad));
+    REQUIRE_FALSE(map->query_dist_grad({1.0e20, 20.0, 5.0}, dist, grad));
+    REQUIRE(map->query_dist_grad({10.0, 20.0, 5.0}, dist, grad));
+    REQUIRE_THAT(dist, WithinAbs(5.0, 1.25));
+
+    std::array<HazardPoint, 2> haz{};
+    REQUIRE(map->extract_nearest_hazards({kNaN, 20.0, 5.0}, haz) == 0u);
+    REQUIRE(map->extract_nearest_hazards({10.0, 20.0, 5.0}, haz) == 1u);
+  }
+
+  // 2) AirspaceExclusion fails closed (-1e6 margin + zero-margin CTR wall hazard at own_pos_ned).
+  {
+    REQUIRE(AirspaceExclusion::signed_margin_ltfj_m(kNaN, 29.1880, 50.0) == -1e6);
+    REQUIRE(AirspaceExclusion::signed_margin_ltfj_m(40.8860, kInf, 50.0) == -1e6);
+    REQUIRE(AirspaceExclusion::signed_margin_ltfj_m(40.8860, 29.1880, kNaN) == -1e6);
+    REQUIRE(AirspaceExclusion::signed_margin_ltbx_m(kNaN, 29.1880, 50.0) == -1e6);
+    REQUIRE(AirspaceExclusion::signed_margin_ltbx_m(40.8860, -kInf, 50.0) == -1e6);
+    REQUIRE(AirspaceExclusion::signed_margin_ltbx_m(40.8860, 29.1880, kInf) == -1e6);
+
+    const Vec3Ned own_pos{12.0, -34.0, -45.0};
+    std::array<HazardPoint, 2> ctr_haz{};
+    const std::size_t n_ctr = AirspaceExclusion::extract_ctr_hazards(
+        kNaN, 29.1880, 50.0, own_pos, ctr_haz);
+    REQUIRE(n_ctr == 1u);
+    REQUIRE(ctr_haz[0].kind == 3u);
+    REQUIRE(ctr_haz[0].pos_ned.x == own_pos.x);
+    REQUIRE(ctr_haz[0].pos_ned.y == own_pos.y);
+    REQUIRE(ctr_haz[0].pos_ned.z == own_pos.z);
+    REQUIRE(ctr_haz[0].radius_z_m >= 600.0);
+
+    // If own_pos_ned itself is non-finite, do not emit a NaN hazard.
+    REQUIRE(AirspaceExclusion::extract_ctr_hazards(kNaN, 29.1880, 50.0, {kNaN, 0.0, 0.0}, ctr_haz) == 0u);
+  }
+
+  // 3) compute_staleness_policy fails closed on NaN/Inf and handles negative finite age safely.
+  {
+    const StalenessPolicy p_nan = compute_staleness_policy(kNaN);
+    REQUIRE(std::isfinite(p_nan.delta_r_stale_m));
+    REQUIRE(p_nan.delta_r_stale_m > 20.0);
+    REQUIRE_THAT(p_nan.v_cap_mps, WithinAbs(8.0, 1e-9));
+    REQUIRE(p_nan.divert_to_slz);
+
+    const StalenessPolicy p_inf = compute_staleness_policy(kInf);
+    REQUIRE_THAT(p_inf.v_cap_mps, WithinAbs(8.0, 1e-9));
+    REQUIRE(p_inf.divert_to_slz);
+
+    const StalenessPolicy p_neg = compute_staleness_policy(-0.5);
+    REQUIRE(p_neg.delta_r_stale_m == 0.0);
+    REQUIRE_THAT(p_neg.v_cap_mps, WithinAbs(22.0, 1e-9));
+    REQUIRE_FALSE(p_neg.divert_to_slz);
+  }
+
+  // 4) IntruderTrackerKf::match_nearest_track_id spatial gating, exclusion, and expiry.
+  {
+    IntruderTrackerKf kf;
+    const uint64_t t0 = 1'000'000'000ULL;
+    kf.update_measurement(1001u, {10.0, 50.0, 40.0}, {2.0, 0.0, 0.0}, t0);
+    kf.update_measurement(1002u, {20.0, 50.0, 40.0}, {-2.0, 0.0, 0.0}, t0);
+
+    const uint64_t t1 = t0 + 500'000'000ULL;  // +0.5 s -> 1001 predicted at x=11, 1002 at x=19
+    double matched_d = 0.0;
+    const auto m1 = kf.match_nearest_track_id({11.2, 50.0, 40.0}, t1, 10.0, {}, &matched_d);
+    REQUIRE(m1.has_value());
+    REQUIRE(*m1 == 1001u);
+    REQUIRE_THAT(matched_d, WithinAbs(0.2, 1e-6));
+
+    // Excluding 1001 forces association to 1002 (within 10 m gate).
+    const std::array<uint32_t, 1> excl = {1001u};
+    const auto m2 = kf.match_nearest_track_id({11.2, 50.0, 40.0}, t1, 10.0, excl);
+    REQUIRE(m2.has_value());
+    REQUIRE(*m2 == 1002u);
+
+    // Outside gate, expired (>5 s), or NaN query returns nullopt.
+    REQUIRE_FALSE(kf.match_nearest_track_id({100.0, 50.0, 40.0}, t1, 10.0).has_value());
+    REQUIRE_FALSE(kf.match_nearest_track_id({11.0, 50.0, 40.0}, t0 + 6'000'000'000ULL, 10.0).has_value());
+    REQUIRE_FALSE(kf.match_nearest_track_id({kNaN, 50.0, 40.0}, t1, 10.0).has_value());
   }
 }

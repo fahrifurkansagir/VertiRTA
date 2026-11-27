@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -150,5 +151,140 @@ TEST_CASE("Overhead intruder climb brakes, clutter inflates 1.5 m, BRT-outside u
         {0.0, 0.0, -15.0}, {0.0, 0.0, 1.0}, {0.0, 0.0, 0.0}, 0.0, env_nom, {});
     REQUIRE(out_flicker.cel_latched);
     REQUIRE(filter.is_cel_latched());
+  }
+}
+
+TEST_CASE("CbvfSafetyFilter fails closed on NaN/Inf in ego state, nominal cmd, envelope, hazards, and CEL",
+          "[cbvf][nan_hardening]") {
+  MmapCbvf4DLut lut;
+  Cel2DLut cel;
+  REQUIRE(lut.load(fixture_path("tests/fixtures/quick_test.vrta_lut")));
+  REQUIRE(cel.load(fixture_path("tests/fixtures/quick_test.vrta_cel2d")));
+
+  CbvfSafetyFilter filter(&lut, &cel);
+  const CapabilityEnvelope env_nom =
+      CoaxEffectiveness::compute_envelope(0x00, 0, 0x07, 400.0f, 92.0f, 0.80f, 0.0f, 0.0f, 0.0f, 0);
+
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+  constexpr float kNaNf = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kInff = std::numeric_limits<float>::infinity();
+
+  auto require_all_finite = [](const SafetyFilterOutput& o) {
+    REQUIRE(std::isfinite(o.a_safe_ned.x));
+    REQUIRE(std::isfinite(o.a_safe_ned.y));
+    REQUIRE(std::isfinite(o.a_safe_ned.z));
+    REQUIRE(std::isfinite(o.yaw_rate_safe));
+    REQUIRE(std::isfinite(o.slack));
+    REQUIRE(std::isfinite(o.min_cbvf_v));
+    REQUIRE(std::isfinite(o.cel_v_2d));
+  };
+
+  // 1) Non-finite ego pos_ned or vel_ned -> immediate fail-closed safe hover fallback.
+  {
+    const auto o_pos_nan = filter.step_100hz(
+        {kNaN, 0.0, -20.0}, {5.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, 0.2, env_nom, {});
+    require_all_finite(o_pos_nan);
+    REQUIRE(o_pos_nan.used_hj_fallback);
+    REQUIRE(o_pos_nan.a_safe_ned.x == 0.0);
+    REQUIRE(o_pos_nan.a_safe_ned.y == 0.0);
+    REQUIRE(o_pos_nan.a_safe_ned.z == 0.0);
+    REQUIRE(o_pos_nan.yaw_rate_safe == 0.0);
+
+    const auto o_vel_inf = filter.step_100hz(
+        {0.0, 0.0, -20.0}, {0.0, -kInf, 0.0}, {1.0, 0.0, 0.0}, 0.2, env_nom, {});
+    require_all_finite(o_vel_inf);
+    REQUIRE(o_vel_inf.used_hj_fallback);
+    REQUIRE(o_vel_inf.a_safe_ned.x == 0.0);
+    REQUIRE(o_vel_inf.a_safe_ned.y == 0.0);
+    REQUIRE(o_vel_inf.a_safe_ned.z == 0.0);
+    REQUIRE(o_vel_inf.yaw_rate_safe == 0.0);
+  }
+
+  // 2) Non-finite a_nom_ned & yaw_rate_nom sanitized to 0 before QP -> 100% finite outputs.
+  {
+    const std::array<HazardPoint, 1> haz = {{
+        HazardPoint{.pos_ned = {15.0, 0.0, -20.0}, .vel_ned = {0.0, 0.0, 0.0}, .kind = 0},
+    }};
+    const auto o_nom = filter.step_100hz(
+        {0.0, 0.0, -20.0}, {4.0, 0.0, 0.0}, {kNaN, kInf, -kInf}, kNaN, env_nom, haz);
+    require_all_finite(o_nom);
+    REQUIRE(std::abs(o_nom.yaw_rate_safe) <= 1.5);
+  }
+
+  // 3) Corrupted CapabilityEnvelope fields (std::clamp(NaN, lo, hi) trap!) -> conservative finite bounds.
+  {
+    CapabilityEnvelope env_bad = env_nom;
+    env_bad.a_xy_max = kNaNf;
+    env_bad.tilt_max_rad = kNaNf;
+    env_bad.t_max_n = kInff;
+    env_bad.v_term_v = kNaNf;
+    env_bad.soc = kNaNf;
+    env_bad.spin_rate_meas = kNaNf;
+    env_bad.spin_rate_ref = kNaNf;
+
+    const std::array<HazardPoint, 1> haz = {{
+        HazardPoint{.pos_ned = {12.0, 0.0, -20.0}, .vel_ned = {0.0, 0.0, 0.0}, .kind = 0},
+    }};
+    const auto o_env = filter.step_100hz(
+        {0.0, 0.0, -20.0}, {3.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, 0.1, env_bad, haz);
+    require_all_finite(o_env);
+    REQUIRE(std::hypot(o_env.a_safe_ned.x, o_env.a_safe_ned.y) <= 0.55);
+  }
+
+  // 4) Non-finite fields inside HazardPoint (pos_ned NaN skipped; vel/accel/radius/gamma NaN sanitized).
+  {
+    const std::array<HazardPoint, 2> bad_haz = {{
+        HazardPoint{
+            .pos_ned = {kNaN, 0.0, -20.0},
+            .vel_ned = {0.0, 0.0, 0.0},
+            .accel_ned = {0.0, 0.0, 0.0},
+            .radius_h_m = 0.0,
+            .radius_z_m = 0.0,
+            .gamma = 1.2,
+            .kind = 0,
+        },
+        HazardPoint{
+            .pos_ned = {6.0, 0.0, -20.0},
+            .vel_ned = {kNaN, kInf, 0.0},
+            .accel_ned = {kNaN, 0.0, -kInf},
+            .radius_h_m = kNaN,
+            .radius_z_m = kInf,
+            .gamma = kNaN,
+            .kind = 2,
+        },
+    }};
+    const auto o_haz = filter.step_100hz(
+        {0.0, 0.0, -20.0}, {6.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, 0.0, env_nom, bad_haz);
+    require_all_finite(o_haz);
+    REQUIRE(o_haz.active_hazards == 1u);
+    REQUIRE(o_haz.a_safe_ned.x < 1.0);  // Valid-position obstacle still actively avoided!
+  }
+
+  // 5) Latched CEL mode with NaN a_nom_ned & NaN env fields (and NaN pos_ned), verified zero-heap!
+  {
+    CapabilityEnvelope env_cel =
+        CoaxEffectiveness::compute_envelope(0x11, 0, 0x07, 350.0f, 140.0f, 0.30f, -2.2f, -2.1f, 0.0f, 45);
+    env_cel.v_term_v = kNaNf;
+    env_cel.t_max_n = kNaNf;
+    env_cel.spin_rate_meas = kNaNf;
+    env_cel.spin_rate_ref = kNaNf;
+
+    ScopedZeroHeapGuard guard;
+    const auto o_cel = filter.step_100hz(
+        {0.0, 0.0, -4.0}, {1.0, -1.0, +3.5}, {kNaN, kNaN, kNaN}, kNaN, env_cel, {});
+    require_all_finite(o_cel);
+    REQUIRE(o_cel.cel_latched);
+    REQUIRE(o_cel.a_safe_ned.x == 0.0);
+    REQUIRE(o_cel.a_safe_ned.y == 0.0);
+    REQUIRE(o_cel.yaw_rate_safe == 0.0);
+
+    const auto o_cel_nan_pos = filter.step_100hz(
+        {0.0, 0.0, kNaN}, {0.0, 0.0, 2.0}, {0.0, 0.0, 0.0}, 0.0, env_cel, {});
+    require_all_finite(o_cel_nan_pos);
+    REQUIRE(o_cel_nan_pos.cel_latched);
+    REQUIRE(o_cel_nan_pos.used_hj_fallback);
+    REQUIRE(o_cel_nan_pos.a_safe_ned.z == 0.0);
+    REQUIRE(guard.alloc_count() == 0u);
   }
 }
